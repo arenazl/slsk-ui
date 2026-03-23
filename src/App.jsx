@@ -485,15 +485,17 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [customGenre, setCustomGenre] = useState('')
   const ctxRef = useRef(null)
 
+  const fetchIdRef = useRef(0)
   const fetchLibrary = useCallback(async () => {
+    const id = ++fetchIdRef.current
     try {
       const res = await fetch(`${libApi}/api/library`)
       const data = await res.json()
-      setFiles(data)
+      if (id === fetchIdRef.current) setFiles(data)
     } catch (e) {
       console.error('Failed to fetch library', e)
     } finally {
-      setLoading(false)
+      if (id === fetchIdRef.current) setLoading(false)
     }
   }, [libApi])
 
