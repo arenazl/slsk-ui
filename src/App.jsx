@@ -104,8 +104,8 @@ function TrackRow({ track }) {
 const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://slsk-backend-7da97b8a965d.herokuapp.com'
 const AGENT_BASE = 'http://localhost:9900'
 
-function getAudioUrl(file) {
-  const base = API_BASE + '/audio/'
+function getAudioUrl(file, useAgent) {
+  const base = (useAgent ? AGENT_BASE : API_BASE) + '/audio/'
   if (file.in_subfolder && file.subfolder) {
     return base + encodeURIComponent(file.subfolder) + '/' + encodeURIComponent(file.filename)
   }
@@ -1753,7 +1753,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                   key={t.filename}
                   draggable
                   onDragStart={(e) => {
-                    const url = getAudioUrl(t)
+                    const url = getAudioUrl(t, agentConnected)
                     e.dataTransfer.effectAllowed = 'copy'
                     e.dataTransfer.setData('text/uri-list', url)
                     e.dataTransfer.setData('text/plain', url)
@@ -2173,10 +2173,10 @@ function App() {
     if (audioRef.current) {
       audioRef.current.pause()
     }
-    const audio = new Audio(getAudioUrl(file))
+    const audio = new Audio(getAudioUrl(file, agentConnected))
     audio.preload = 'auto'
     audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-    audio.onerror = (e) => { console.error('Audio error:', audio.error, getAudioUrl(file)); setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+    audio.onerror = (e) => { console.error('Audio error:', audio.error, getAudioUrl(file, agentConnected)); setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
     audio.play().catch(() => {})
     audioRef.current = audio
     setPlayingFile(file.filename)
@@ -2222,7 +2222,7 @@ function App() {
     const file = list[idx]
     if (audioRef.current) audioRef.current.pause()
 
-    const audio = new Audio(getAudioUrl(file))
+    const audio = new Audio(getAudioUrl(file, agentConnected))
     audio.preload = 'auto'
     audio.oncanplaythrough = () => {
       const startTime = audio.duration > 120 ? 60 : audio.duration * 0.3
