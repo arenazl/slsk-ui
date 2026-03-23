@@ -2762,9 +2762,6 @@ function App() {
         onPlayPause={handleAppPlayPause}
         onStop={handleAppStop}
       />
-      <div className="flex-shrink-0 flex items-center justify-center gap-3 px-4 py-1 bg-[var(--bg-panel)] border-t border-[var(--border-color)]/30 text-[10px] text-gray-600">
-        <span>Key & BPM data by <a href="https://getsongbpm.com" target="_blank" className="text-gray-500 hover:text-gray-400 underline">GetSongBPM</a></span>
-      </div>
     </div>
   )
 }
@@ -2797,29 +2794,57 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     return () => document.removeEventListener('mousedown', handleClick)
   }, [discoverCtx])
 
-  const loadRadio = async (track, source) => {
+  const radioListenerRef = useRef(null)
+
+  const radioTracksRef = useRef([])
+
+  const loadRadio = (track) => {
     setDiscoverCtx(null)
     setRadioLoading(true)
     setRadioTracks([])
+    radioTracksRef.current = []
     setRadioSeed(`${track.artist} - ${track.title}`)
-    setRadioSource(source)
-    try {
-      const seedKey = track.key || ''
-      const params = `?artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}${seedKey ? `&seed_key=${encodeURIComponent(seedKey)}` : ''}`
-      const res = await fetch(`${API_BASE}/api/radio/${source}${params}`)
-      const data = await res.json()
-      if (data.error) {
-        setRadioTracks([])
-        setRadioSeed(`${track.artist} - ${track.title} — ${data.error}`)
-      } else {
-        setRadioTracks(data.tracks || [])
-      }
-    } catch (e) {
-      console.error('Radio error:', e)
-      setRadioTracks([])
-    } finally {
-      setRadioLoading(false)
+    setRadioSource('radio')
+
+    const ws = wsRef?.current
+    if (!ws || ws.readyState !== 1) return
+
+    // Remove previous listener
+    if (radioListenerRef.current) {
+      ws.removeEventListener('message', radioListenerRef.current)
     }
+
+    // Create new listener
+    const handler = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (data.type === 'radio_start') {
+          radioTracksRef.current = []
+          setRadioTracks([])
+        } else if (data.type === 'radio_count') {
+          setRadioSource(`${data.total} tracks`)
+        } else if (data.type === 'radio_track') {
+          radioTracksRef.current = [...radioTracksRef.current, data.track]
+            .sort((a, b) => (b.match || 0) - (a.match || 0) || (a.key_compat ?? 99) - (b.key_compat ?? 99))
+          radioTracksRef.current.forEach((tr, i) => { tr.position = i + 1 })
+          setRadioTracks([...radioTracksRef.current])
+        } else if (data.type === 'radio_done') {
+          setRadioLoading(false)
+        } else if (data.type === 'radio_error') {
+          setRadioLoading(false)
+        }
+      } catch {}
+    }
+    radioListenerRef.current = handler
+    ws.addEventListener('message', handler)
+
+    // Send request
+    ws.send(JSON.stringify({
+      type: 'radio',
+      artist: track.artist,
+      title: track.title,
+      seed_key: track.key || '',
+    }))
   }
 
   // Load genres
@@ -2828,13 +2853,14 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }, [])
 
   // Load chart when genre changes
-  const loadChart = async (genre) => {
+  const loadChart = async (genre, force = false) => {
     setSelectedGenre(genre)
     setLoading(true)
     setTracks([])
     try {
       const params = genre ? `?genre_id=${genre.beatport_id}&slug=${genre.slug}` : ''
-      const res = await fetch(`${API_BASE}/api/discover/chart${params}`)
+      const forceParam = force ? `${params ? '&' : '?'}force=1` : ''
+      const res = await fetch(`${API_BASE}/api/discover/chart${params}${forceParam}`)
       const data = await res.json()
       setTracks(data.tracks || [])
     } catch (e) {
@@ -3010,7 +3036,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[var(--bg-app)] relative">
       {/* Header with artwork mosaic background */}
-      <div className="flex-shrink-0 relative overflow-hidden h-44">
+      <div className="flex-shrink-0 relative overflow-hidden h-36">
         {/* Artwork mosaic background from first tracks */}
         <div className="absolute inset-0 flex flex-wrap opacity-30">
           {tracks.slice(0, 20).map((t, i) => t.artwork_url && (
@@ -3022,16 +3048,28 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         {/* Blur overlay for smoothness */}
         <div className="absolute inset-0 backdrop-blur-sm" />
 
-        <div className="relative h-full flex flex-col justify-between px-8 pt-5 pb-4">
+        <div className="relative h-full flex flex-col justify-end gap-3 px-8 pb-4">
           <div className="flex items-start justify-between">
             <div>
               <span className="text-xs font-medium uppercase tracking-widest" style={{color: `${accentColor}`}}>Beatport Charts</span>
-              <h1 className="text-3xl font-bold text-white tracking-tight mt-1">
-                {selectedGenre ? selectedGenre.name : 'Top 100'}
-              </h1>
-              <p className="text-sm text-white/50 mt-1">
-                {tracks.length > 0 ? `${tracks.length} tracks` : ''}{loading ? 'Cargando...' : ''}
-              </p>
+              <div className="flex items-center gap-5 mt-1">
+                <h1 className="text-3xl font-bold text-white tracking-tight">
+                  {selectedGenre ? selectedGenre.name : 'Top 100'}
+                </h1>
+                {tracks.length > 0 && <span className="text-sm text-white/40">{tracks.length} tracks</span>}
+                {loading && <span className="text-sm text-white/40">Cargando...</span>}
+                {!loading && (
+                  <button
+                    onClick={() => loadChart(selectedGenre, true)}
+                    className="p-2 rounded-lg hover:bg-white/20 transition-all active:scale-95"
+                    title="Actualizar chart"
+                  >
+                    <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
             {/* Featured artwork */}
             {tracks[0]?.artwork_url && (
@@ -3046,25 +3084,28 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             )}
           </div>
 
-          {/* Genre pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Genre pills - single line with horizontal scroll */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full">
             <button
               onClick={() => loadChart(null)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 border ${
-                !selectedGenre ? 'bg-white/20 text-white border-white/30 font-semibold backdrop-blur-md' : 'text-white/60 border-white/10 hover:bg-white/10 hover:text-white'
+              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                !selectedGenre ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
               }`}
+              style={!selectedGenre ? { background: `rgba(${GENRE_COLORS[0].rgb}, 0.3)` } : {}}
             >
               All
             </button>
-            {genres.map(g => {
+            {genres.map((g, gi) => {
               const isActive = selectedGenre?.name === g.name
+              const c = GENRE_COLORS[gi % GENRE_COLORS.length]
               return (
                 <button
                   key={g.name}
                   onClick={() => loadChart(g)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 border ${
-                    isActive ? 'bg-white/20 text-white border-white/30 font-semibold backdrop-blur-md' : 'text-white/60 border-white/10 hover:bg-white/10 hover:text-white'
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                    isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
                   }`}
+                  style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
                 >
                   {g.name}
                 </button>
@@ -3236,25 +3277,16 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-[var(--text-primary)]">Radio</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-gray-400 uppercase tracking-wider">{radioSource}</span>
+                  {radioLoading && <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5 truncate">Similar a: {radioSeed}</div>
               </div>
             </div>
           </div>
           {/* Radio tracks */}
-          {radioLoading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-4 text-gray-400">
-                <div className="w-8 h-8 border-3 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm">Buscando similares...</span>
-              </div>
-            </div>
-          ) : radioTracks.length === 0 ? (
+          {!radioLoading && radioTracks.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-gray-600">
-              <div className="text-center space-y-2">
-                <p className="text-lg">No se encontraron tracks similares</p>
-                <p className="text-sm">Probá con el otro servicio</p>
-              </div>
+              <p className="text-lg">No se encontraron tracks similares</p>
             </div>
           ) : (
             <div className="flex-1 min-h-0 overflow-y-auto">
@@ -3302,10 +3334,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                         <div className="text-xs text-gray-500 truncate mt-0.5">{t.artist}</div>
                       </div>
                       <div className="hidden xl:flex items-center gap-2 flex-shrink-0">
-                        {t.label && <span className="px-2 py-0.5 rounded-full bg-white/5 text-xs text-gray-500 max-w-28 truncate">{t.label}</span>}
-                        {t.match > 0 && <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-xs text-green-400">{t.match}%</span>}
+                        {t.genre && <span className="px-2 py-0.5 rounded-full bg-white/5 text-xs text-gray-400">{t.genre}</span>}
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
+                        {t.match > 0 && <span className="text-[10px] text-gray-600 w-8 text-center">{t.match}%</span>}
+                        <span className="text-xs text-gray-500 font-mono w-8 text-center">{t.bpm || '-'}</span>
+                        <span className={`text-xs font-mono px-2 py-0.5 rounded w-20 text-center ${t.key ? (t.key_compat <= 2 ? 'bg-green-500/20 text-green-400' : t.key_compat <= 4 ? 'bg-amber-500/10 text-amber-400' : 'bg-white/5 text-gray-400') : 'text-gray-700'}`}>{t.key || '-'}</span>
                         <span className="text-xs text-gray-600 w-10 text-center">{formatDuration(t.duration_ms)}</span>
                       </div>
                       {(() => {
@@ -3351,7 +3385,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             {discoverCtx.track?.artist} - {discoverCtx.track?.title}
           </div>
           <button
-            onClick={() => loadRadio(discoverCtx.track, 'lastfm')}
+            onClick={() => loadRadio(discoverCtx.track)}
             className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
           >
             <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
