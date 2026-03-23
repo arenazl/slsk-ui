@@ -2038,6 +2038,8 @@ function App() {
   const [searchResults, setSearchResults] = useState(null) // null = no search, [] = empty results
   const [searchStatus, setSearchStatus] = useState('idle') // idle, connecting, searching
   const [searchDlStatus, setSearchDlStatus] = useState({}) // { filename: 'downloading'|'completed'|'error' }
+  const [pendingTracks, setPendingTracks] = useState([]) // tracks that failed to download
+  const [pendingExpanded, setPendingExpanded] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(null)
   const [playingFile, setPlayingFile] = useState(null)
   const [nowPlaying, setNowPlaying] = useState(null)
@@ -2126,6 +2128,50 @@ function App() {
       }
     }
   }, [])
+
+  // Load pending tracks from Cloudinary on mount
+  useEffect(() => {
+    if (!username) return
+    fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(username)}`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setPendingTracks(data) })
+      .catch(() => {})
+  }, [username])
+
+  const savePending = (tracks) => {
+    setPendingTracks(tracks)
+    fetch(`${API_BASE}/api/pending`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: username, tracks }),
+    }).catch(() => {})
+  }
+
+  const addToPending = (track) => {
+    setPendingTracks(prev => {
+      const exists = prev.some(t => t.artist === track.artist && t.title === track.title)
+      if (exists) return prev
+      const updated = [...prev, { artist: track.artist || '', title: track.title || '', query: track.query || `${track.artist} - ${track.title}`, source: track.source || 'manual', addedAt: new Date().toISOString() }]
+      fetch(`${API_BASE}/api/pending`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: username, tracks: updated }),
+      }).catch(() => {})
+      return updated
+    })
+  }
+
+  const removeFromPending = (idx) => {
+    setPendingTracks(prev => {
+      const updated = prev.filter((_, i) => i !== idx)
+      fetch(`${API_BASE}/api/pending`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: username, tracks: updated }),
+      }).catch(() => {})
+      return updated
+    })
+  }
 
   useEffect(() => {
     connectWs()
@@ -2655,6 +2701,45 @@ function App() {
             </div>
           )}
 
+          {/* Pending tracks banner */}
+          {pendingTracks.length > 0 && !searchResults && (
+            <div className="flex-shrink-0 border-b border-[var(--border-color)] bg-yellow-500/5">
+              <button
+                onClick={() => setPendingExpanded(prev => !prev)}
+                className="w-full px-4 py-2 flex items-center justify-between text-sm hover:bg-yellow-500/10 transition-colors"
+              >
+                <span className="flex items-center gap-2 text-yellow-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  {pendingTracks.length} pendiente{pendingTracks.length > 1 ? 's' : ''}
+                </span>
+                <svg className={`w-4 h-4 text-gray-400 transition-transform ${pendingExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {pendingExpanded && (
+                <div className="px-4 pb-3 space-y-1">
+                  {pendingTracks.map((t, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg bg-[var(--bg-input)] text-xs">
+                      <span className="truncate min-w-0 text-[var(--text-primary)]">{t.artist} - {t.title}</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => { setDlSearch(`${t.artist} - ${t.title}`); handleSearchSlsk() }}
+                          className="px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-80 transition-opacity"
+                        >Buscar</button>
+                        <button
+                          onClick={() => removeFromPending(idx)}
+                          className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                        >✕</button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => savePending([])}
+                    className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-1"
+                  >Limpiar todos</button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Track list / Search results */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             {searchResults !== null ? (
@@ -3075,6 +3160,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             }))
           } else {
             setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
+            addToPending({ artist: track.artist, title: track.title, source: 'discover' })
           }
           wsRef.current.removeEventListener('message', handler)
         }
@@ -3088,6 +3174,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               wsRef.current.removeEventListener('message', handler)
             } else if (data.status === 'error') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: 'Error al descargar' } }))
+              addToPending({ artist: track.artist, title: track.title, source: 'discover' })
               wsRef.current.removeEventListener('message', handler)
             }
           }
@@ -3109,6 +3196,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         const curr = prev[track.id]
         if (curr?.status === 'searching') {
           wsRef.current?.removeEventListener('message', handler)
+          addToPending({ artist: track.artist, title: track.title, source: 'discover' })
           return { ...prev, [track.id]: { status: 'not_found', message: 'No encontrado' } }
         }
         return prev
