@@ -1502,6 +1502,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 })
 
 function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected }) {
+  const setApi = agentConnected ? AGENT_BASE : API_BASE
   const [minStars, setMinStars] = useState(3)
   const [duration, setDuration] = useState(60)
   const [method, setMethod] = useState('camelot')
@@ -1521,7 +1522,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   // Fetch genres that have tracks with >= minStars
   useEffect(() => {
     if (page !== 'set') return
-    fetch(`${API_BASE}/api/library`).then(r => r.json()).then(tracks => {
+    fetch(`${setApi}/api/library`).then(r => r.json()).then(tracks => {
       const genreCounts = {}
       tracks.forEach(t => {
         if ((t.rating || 0) >= minStars && t.genre && t.key) {
