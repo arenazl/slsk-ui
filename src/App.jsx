@@ -1489,7 +1489,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   )
 })
 
-function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop }) {
+function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected }) {
   const [minStars, setMinStars] = useState(3)
   const [duration, setDuration] = useState(60)
   const [method, setMethod] = useState('camelot')
@@ -1602,11 +1602,21 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop }) {
     const name = setName.trim() || `Set ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}`
     setExporting(true)
     try {
-      await fetch(`${API_BASE}/api/export-set`, {
+      const exportApi = agentConnected ? AGENT_BASE : API_BASE
+      const res = await fetch(`${exportApi}/api/export-set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, tracks: setTracks.map(t => ({ filename: t.filename, artist: t.artist || '', title: t.title || t.filename })) }),
       })
+      if (agentConnected && res.ok) {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${name}.zip`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
     } catch (e) {
       console.error('Failed to export set', e)
     } finally {
@@ -2761,7 +2771,7 @@ function App() {
       </div>
 
       {/* Set Builder page */}
-      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} />
+      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} />
 
       {/* Discover page */}
       <div className={`flex-1 flex flex-col min-h-0 ${page !== 'discover' ? 'hidden' : ''}`}>
