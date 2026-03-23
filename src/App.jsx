@@ -260,7 +260,7 @@ const GENRE_COLORS = [
   { bg: 'bg-slate-400', rgb: '148,163,184' },
 ]
 
-function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop }) {
+function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop, agentConnected }) {
   const canvasRef = useRef(null)
   const waveformRef = useRef(null) // Float32Array of peaks
   const animFrameRef = useRef(null)
@@ -280,7 +280,7 @@ function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop }) {
 
     const params = new URLSearchParams({ file: file.filename })
     if (file.subfolder) params.set('subfolder', file.subfolder)
-    fetch(`${API_BASE}/api/waveform?${params}`)
+    fetch(`${agentConnected ? AGENT_BASE : API_BASE}/api/waveform?${params}`)
       .then(r => r.json())
       .then(peaks => {
         if (Array.isArray(peaks)) waveformRef.current = new Float32Array(peaks)
@@ -562,7 +562,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   }
 
   const downloadGenreZip = (genre) => {
-    window.open(`${API_BASE}/api/download-genre?genre=${encodeURIComponent(genre)}`, '_blank')
+    window.open(`${libApi}/api/download-genre?genre=${encodeURIComponent(genre)}`, '_blank')
   }
 
   const openFolder = async (folder) => {
@@ -592,7 +592,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const organizeAll = async () => {
     setOrganizing(true)
     try {
-      await fetch(`${API_BASE}/api/organize`, {
+      await fetch(`${libApi}/api/organize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -621,7 +621,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     if (!confirm(`Borrar ${dupeKeys.size} duplicados? Se mantienen los de mejor rating/calidad.`)) return
     setDeletingDupes(true)
     try {
-      const res = await fetch(`${API_BASE}/api/delete-dupes`, { method: 'POST' })
+      const res = await fetch(`${libApi}/api/delete-dupes`, { method: 'POST' })
       const data = await res.json()
       if (data.deleted > 0) fetchLibrary()
     } catch (e) {
@@ -690,7 +690,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     setExporting(true)
     try {
       const filesToExport = finalList.map(f => f.filename)
-      const res = await fetch(`${API_BASE}/api/export`, {
+      const res = await fetch(`${libApi}/api/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: exportName.trim(), files: filesToExport }),
@@ -913,7 +913,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               } else {
                 // Second click: auto-delete all inferior dupes
                 const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                await fetch(`${API_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
+                await fetch(`${libApi}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                 fetchLibrary()
                 setShowDupes(false)
               }
@@ -1104,7 +1104,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               <button
                 onClick={async () => {
                   const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                  await fetch(`${API_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
+                  await fetch(`${libApi}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                   fetchLibrary()
                   setShowDupes(false)
                 }}
@@ -1141,7 +1141,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         if (isBest) return
                         e.preventDefault()
                         if (confirm(`Borrar "${f.filename}"?`)) {
-                          fetch(`${API_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
+                          fetch(`${libApi}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             .then(() => fetchLibrary())
                         }
                       }}
@@ -1172,7 +1172,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       ) : (
                         <button
                           onClick={async () => {
-                            await fetch(`${API_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
+                            await fetch(`${libApi}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             fetchLibrary()
                           }}
                           className="flex-shrink-0 px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded font-medium hover:bg-red-500/40 transition-all duration-200 active:scale-95 text-center"
@@ -2856,6 +2856,7 @@ function App() {
         audio={audioRef.current}
         onPlayPause={handleAppPlayPause}
         onStop={handleAppStop}
+        agentConnected={agentConnected}
       />
     </div>
   )
