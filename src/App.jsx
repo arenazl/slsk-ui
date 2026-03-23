@@ -102,6 +102,7 @@ function TrackRow({ track }) {
 }
 
 const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://slsk-backend-7da97b8a965d.herokuapp.com'
+const AGENT_BASE = 'http://localhost:9900'
 
 function getAudioUrl(file) {
   const base = API_BASE + '/audio/'
@@ -460,7 +461,8 @@ function useQS(key, defaultVal) {
   return [val, set]
 }
 
-const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode }, ref) {
+const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected }, ref) {
+  const libApi = agentConnected ? AGENT_BASE : API_BASE
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [classifying, setClassifying] = useState(false)
@@ -485,7 +487,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const fetchLibrary = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/library`)
+      const res = await fetch(`${libApi}/api/library`)
       const data = await res.json()
       setFiles(data)
     } catch (e) {
@@ -493,7 +495,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [libApi])
 
   useEffect(() => { fetchLibrary() }, [fetchLibrary])
 
@@ -534,7 +536,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     setCtxMenu(null)
     setFiles(prev => prev.filter(f => f.filename !== file.filename))
     try {
-      await fetch(`${API_BASE}/api/delete`, {
+      await fetch(`${libApi}/api/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename }),
@@ -550,11 +552,15 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   }
 
   const openFolder = async (folder) => {
-    await fetch(`${API_BASE}/api/open-folder`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: folder || '' }),
-    })
+    if (agentConnected) {
+      await fetch(`${AGENT_BASE}/api/open-folder?folder=${encodeURIComponent(folder || '')}`)
+    } else {
+      await fetch(`${API_BASE}/api/open-folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: folder || '' }),
+      })
+    }
   }
 
   const classifyWithAI = async () => {
@@ -619,7 +625,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       f.filename === file.filename ? { ...f, genre: newGenre, in_subfolder: !!newGenre, subfolder: newGenre } : f
     ))
     try {
-      const res = await fetch(`${API_BASE}/api/move-file`, {
+      const res = await fetch(`${libApi}/api/move-file`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename, genre: newGenre }),
@@ -655,7 +661,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       f.filename === file.filename ? { ...f, rating } : f
     ))
     try {
-      await fetch(`${API_BASE}/api/rate`, {
+      await fetch(`${libApi}/api/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename, rating }),
@@ -2495,6 +2501,7 @@ function App() {
           onStartPreviewMode={startPreviewModeApp}
           previewMode={previewMode}
           onStopPreviewMode={stopPreviewModeApp}
+          agentConnected={agentConnected}
         />
       </div>
 
