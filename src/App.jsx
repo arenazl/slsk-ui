@@ -2134,6 +2134,25 @@ function App() {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
 
+  // Global spacebar → play/pause
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.code !== 'Space') return
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
+      if (!audioRef.current) return
+      e.preventDefault()
+      if (audioRef.current.paused) {
+        audioRef.current.play().catch(() => {})
+        setIsAudioPlaying(true)
+      } else {
+        audioRef.current.pause()
+        setIsAudioPlaying(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   const handleStart = () => {
     if (!wsRef.current || !inputText.trim() || !username || !password) return
     setSummary(null)
