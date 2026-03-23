@@ -2763,7 +2763,7 @@ function App() {
         onStop={handleAppStop}
       />
       <div className="flex-shrink-0 flex items-center justify-center gap-3 px-4 py-1 bg-[var(--bg-panel)] border-t border-[var(--border-color)]/30 text-[10px] text-gray-600">
-        <span>Key & BPM data by <a href="https://getsongbpm.com" target="_blank" rel="noopener" className="text-gray-500 hover:text-gray-400 underline">GetSongBPM</a></span>
+        <span>Key & BPM data by <a href="https://getsongbpm.com" target="_blank" className="text-gray-500 hover:text-gray-400 underline">GetSongBPM</a></span>
       </div>
     </div>
   )
