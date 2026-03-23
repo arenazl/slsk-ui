@@ -105,11 +105,23 @@ const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http
 const AGENT_BASE = 'http://localhost:9900'
 
 function getAudioUrl(file, useAgent) {
-  const base = (useAgent ? AGENT_BASE : API_BASE) + '/audio/'
+  const base = useAgent ? AGENT_BASE + '/api/audio/' : API_BASE + '/audio/'
   if (file.in_subfolder && file.subfolder) {
     return base + encodeURIComponent(file.subfolder) + '/' + encodeURIComponent(file.filename)
   }
   return base + encodeURIComponent(file.filename)
+}
+
+async function createAudioElement(file, useAgent) {
+  const url = getAudioUrl(file, useAgent)
+  if (!useAgent) return new Audio(url)
+  // Fetch as blob to avoid Mixed Content (HTTPS page → HTTP localhost)
+  const res = await fetch(url)
+  const blob = await res.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const audio = new Audio(blobUrl)
+  audio.addEventListener('ended', () => URL.revokeObjectURL(blobUrl), { once: true })
+  return audio
 }
 
 function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
@@ -2157,7 +2169,7 @@ function App() {
   }
 
   // === Unified audio handlers ===
-  const handleAppPlay = (file) => {
+  const handleAppPlay = async (file) => {
     stopPreviewModeApp()
     if (playingFile === file.filename) {
       // Toggle pause/resume
@@ -2173,15 +2185,20 @@ function App() {
     if (audioRef.current) {
       audioRef.current.pause()
     }
-    const audio = new Audio(getAudioUrl(file, agentConnected))
-    audio.preload = 'auto'
-    audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-    audio.onerror = (e) => { console.error('Audio error:', audio.error, getAudioUrl(file, agentConnected)); setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-    audio.play().catch(() => {})
-    audioRef.current = audio
     setPlayingFile(file.filename)
     setNowPlaying(file)
     setIsAudioPlaying(true)
+    try {
+      const audio = await createAudioElement(file, agentConnected)
+      audio.preload = 'auto'
+      audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+      audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+      audio.play().catch(() => {})
+      audioRef.current = audio
+    } catch (e) {
+      console.error('Failed to load audio', e)
+      setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
+    }
   }
 
   const handleAppPlayPause = () => {
@@ -2214,7 +2231,7 @@ function App() {
     }
   }
 
-  const playPreviewTrack = (list, idx) => {
+  const playPreviewTrack = async (list, idx) => {
     if (idx >= list.length) {
       stopPreviewModeApp()
       return
@@ -2222,23 +2239,27 @@ function App() {
     const file = list[idx]
     if (audioRef.current) audioRef.current.pause()
 
-    const audio = new Audio(getAudioUrl(file, agentConnected))
-    audio.preload = 'auto'
-    audio.oncanplaythrough = () => {
-      const startTime = audio.duration > 120 ? 60 : audio.duration * 0.3
-      audio.currentTime = startTime
-      audio.play().catch(() => {})
-    }
-    audio.onended = () => {
+    try {
+      const audio = await createAudioElement(file, agentConnected)
+      audio.preload = 'auto'
+      audio.oncanplaythrough = () => {
+        const startTime = audio.duration > 120 ? 60 : audio.duration * 0.3
+        audio.currentTime = startTime
+        audio.play().catch(() => {})
+      }
+      audio.onended = () => {
+        playPreviewTrack(list, idx + 1)
+      }
+      audio.onerror = () => {
+        playPreviewTrack(list, idx + 1)
+      }
+      audioRef.current = audio
+      setPlayingFile(file.filename)
+      setNowPlaying(file)
+      setIsAudioPlaying(true)
+    } catch {
       playPreviewTrack(list, idx + 1)
     }
-    audio.onerror = () => {
-      playPreviewTrack(list, idx + 1)
-    }
-    audioRef.current = audio
-    setPlayingFile(file.filename)
-    setNowPlaying(file)
-    setIsAudioPlaying(true)
 
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
     previewTimerRef.current = setTimeout(() => {
