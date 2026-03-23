@@ -2529,7 +2529,7 @@ function App() {
             <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-panel)] ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
           </a>
           <a
-            href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-mac.zip"
+            href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
             className="relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Mac)'}
           >
