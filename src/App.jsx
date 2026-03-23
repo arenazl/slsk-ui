@@ -3056,7 +3056,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: 'No conectado a SoulSeek' } }))
       return
     }
-    const query = `${track.artist} ${track.title}`.replace(/[()[\]{}]/g, '')
+    const query = `${track.artist} - ${track.title}`.replace(/[()[\]{}]/g, '')
     setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'searching', message: `Buscando...` } }))
 
     // Listen for search results
