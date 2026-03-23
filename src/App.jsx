@@ -2328,8 +2328,8 @@ function App() {
       <header className="flex-shrink-0 h-14 flex items-center justify-between px-6 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold btn-accent">S</div>
-            <span className="font-bold text-lg">SoulSeek</span>
+            <img src="/logo.png" alt="Groove Sync" className="w-8 h-8 object-contain" />
+            <span className="font-bold text-lg">Groove Sync</span>
           </div>
           <div className="flex gap-1">
             {[
