@@ -1964,6 +1964,28 @@ function App() {
   useEffect(() => {
     if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light')
   }, [])
+
+  const [agentConnected, setAgentConnected] = useState(false)
+  useEffect(() => {
+    if (!authUser) return
+    const checkAgent = async () => {
+      try {
+        const res = await fetch('http://localhost:9900/api/status', { signal: AbortSignal.timeout(2000) })
+        if (res.ok) {
+          setAgentConnected(true)
+          await fetch('http://localhost:9900/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: authUser.name })
+          })
+        }
+      } catch { setAgentConnected(false) }
+    }
+    checkAgent()
+    const interval = setInterval(checkAgent, 30000)
+    return () => clearInterval(interval)
+  }, [authUser])
+
   const [tracks, setTracks] = useState([])
   const [connected, setConnected] = useState(false)
   const [serverStatus, setServerStatus] = useState('idle')
@@ -2328,8 +2350,8 @@ function App() {
       <header className="flex-shrink-0 h-14 flex items-center justify-between px-6 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Groove Sync" className="w-8 h-8 object-contain" />
-            <span className="font-bold text-lg">Groove Sync</span>
+            <img src="/logo.png" alt="Groove Sync" className="h-6 object-contain" />
+            <span className="font-semibold text-base text-[var(--text-primary)]">Groove Sync</span>
           </div>
           <div className="flex gap-1">
             {[
@@ -2384,6 +2406,16 @@ function App() {
               )}
             </div>
           )}
+          <a
+            href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
+            className="relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            title={agentConnected ? "Agente conectado" : "Descargar Agente Local"}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-panel)] ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
+          </a>
           <button
             onClick={async () => {
               try {
