@@ -492,7 +492,6 @@ function useQS(key, defaultVal) {
 }
 
 const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected }, ref) {
-  const libApi = agentConnected ? AGENT_BASE : API_BASE
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [classifying, setClassifying] = useState(false)
@@ -519,38 +518,48 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const fetchLibrary = useCallback(async () => {
     const id = ++fetchIdRef.current
     try {
-      const res = await fetch(`${libApi}/api/library`)
-      const data = await res.json()
-      if (id === fetchIdRef.current) setFiles(data)
+      // Fetch metadata from Heroku (Cloudinary = source of truth)
+      const metaRes = await fetch(`${API_BASE}/api/metadata`)
+      const metadata = await metaRes.json()
+
+      if (agentConnected) {
+        // Fetch file list from agent (file info only)
+        const agentRes = await fetch(`${AGENT_BASE}/api/library`)
+        const agentFiles = await agentRes.json()
+
+        // Merge: agent file info + Cloudinary metadata by filename
+        const merged = agentFiles.map(f => {
+          const meta = metadata[f.filename] || {}
+          return {
+            filename: f.filename,
+            title: meta.title || '',
+            artist: meta.artist || '',
+            genre: meta.genre || f.subfolder || '',
+            key: meta.key || '',
+            bpm: meta.bpm,
+            rating: meta.rating || 0,
+            size_mb: f.size_mb,
+            format: f.format,
+            date: meta.date || meta.date_added || '',
+            date_added: meta.date_added || meta.date || '',
+            in_subfolder: !!f.subfolder,
+            subfolder: f.subfolder || '',
+            manual_genre: meta.manual_genre || false,
+          }
+        })
+        if (id === fetchIdRef.current) setFiles(merged)
+      } else {
+        // No agent: use Heroku library endpoint (metadata-only view)
+        const libRes = await fetch(`${API_BASE}/api/library`)
+        const data = await libRes.json()
+        if (id === fetchIdRef.current) setFiles(data)
+      }
     } catch (e) {
       console.error('Failed to fetch library', e)
     } finally {
       if (id === fetchIdRef.current) setLoading(false)
     }
-  }, [libApi])
-
-  // Sync agent manifest to Cloudinary after library loads
-  const syncManifestToCloud = useCallback(async () => {
-    if (!agentConnected) return
-    try {
-      const res = await fetch(`${AGENT_BASE}/api/library`)
-      const tracks = await res.json()
-      const manifest = {}
-      for (const t of tracks) {
-        manifest[t.filename] = { title: t.title || '', artist: t.artist || '', genre: t.genre || '', key: t.key || '', bpm: t.bpm, rating: t.rating, size_mb: t.size_mb, format: t.format || '' }
-      }
-      await fetch(`${API_BASE}/api/sync-manifest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manifest }),
-      })
-    } catch (e) { console.error('Sync manifest failed:', e) }
   }, [agentConnected])
-
-  // Sync on first load when agent is connected
-  useEffect(() => {
-    if (agentConnected) syncManifestToCloud()
-  }, [agentConnected, syncManifestToCloud])
 
   useEffect(() => { fetchLibrary() }, [fetchLibrary])
 
@@ -591,7 +600,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     setCtxMenu(null)
     setFiles(prev => prev.filter(f => f.filename !== file.filename))
     try {
-      await fetch(`${libApi}/api/delete`, {
+      // Delete file from agent
+      await fetch(`${AGENT_BASE}/api/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename }),
@@ -627,12 +637,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     try {
       const res = await fetch(`${API_BASE}/api/classify`, { method: 'POST' })
       const data = await res.json()
-      // Sync updated manifest to agent and refresh
+      // After classification, tell agent to organize files into genre folders
       if (agentConnected && data.classified > 0) {
-        // Get updated manifest from Heroku and tell agent to organize
-        const libRes = await fetch(`${API_BASE}/api/library`)
-        const tracks = await libRes.json()
-        const moves = tracks.filter(t => t.genre).map(t => ({ filename: t.filename, genre: t.genre }))
+        // Get updated metadata from Heroku to build move list
+        const metaRes = await fetch(`${API_BASE}/api/metadata`)
+        const metadata = await metaRes.json()
+        const moves = Object.entries(metadata)
+          .filter(([, info]) => info.genre)
+          .map(([filename, info]) => ({ filename, genre: info.genre }))
         await fetch(`${AGENT_BASE}/api/organize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -650,7 +662,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const organizeAll = async () => {
     setOrganizing(true)
     try {
-      await fetch(`${libApi}/api/organize`, {
+      await fetch(`${AGENT_BASE}/api/organize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -666,13 +678,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const detectKeys = async () => {
     setDetectingKeys(true)
     try {
-      // Get list of tracks without key
+      // Get list of tracks without key from Heroku (Cloudinary manifest)
       const res = await fetch(`${API_BASE}/api/detect-keys`, { method: 'POST' })
       const data = await res.json()
       const toDetect = data.to_detect || []
       if (toDetect.length === 0) { fetchLibrary(); return }
 
       // For each track, fetch audio from agent and send to Heroku for analysis
+      // Heroku's detect-key endpoint now also updates Cloudinary manifest
       const audioBase = agentConnected ? AGENT_BASE : API_BASE
       let detected = 0
       for (const fname of toDetect) {
@@ -685,21 +698,9 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           form.append('filename', fname)
           const keyRes = await fetch(`${API_BASE}/api/detect-key`, { method: 'POST', body: form })
           const keyData = await keyRes.json()
-          if (keyData.key) {
-            detected++
-            // Update agent manifest
-            if (agentConnected) {
-              await fetch(`${AGENT_BASE}/api/rate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename: fname, key: keyData.key }),
-              }).catch(() => {})
-            }
-          }
+          if (keyData.key) detected++
         } catch (e) { console.error('Key detect failed for:', fname, e) }
       }
-      // Sync and refresh
-      if (agentConnected) await syncManifestToCloud()
       fetchLibrary()
     } catch (e) {
       console.error('Failed to detect keys', e)
@@ -712,7 +713,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     if (!confirm(`Borrar ${dupeKeys.size} duplicados? Se mantienen los de mejor rating/calidad.`)) return
     setDeletingDupes(true)
     try {
-      const res = await fetch(`${libApi}/api/delete-dupes`, { method: 'POST' })
+      const res = await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST' })
       const data = await res.json()
       if (data.deleted > 0) fetchLibrary()
     } catch (e) {
@@ -730,7 +731,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       f.filename === file.filename ? { ...f, genre: newGenre, in_subfolder: !!newGenre, subfolder: newGenre } : f
     ))
     try {
-      const res = await fetch(`${libApi}/api/move-file`, {
+      // Move file on agent
+      const res = await fetch(`${AGENT_BASE}/api/move-file`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename, genre: newGenre }),
@@ -738,7 +740,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       if (!res.ok) {
         console.error('Move failed:', await res.text())
         fetchLibrary() // Revert on error
+        return
       }
+      // Update genre metadata on Heroku (Cloudinary)
+      await fetch(`${API_BASE}/api/move-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.filename, genre: newGenre }),
+      }).catch(() => {})
     } catch (e) {
       console.error('Failed to move file', e)
       fetchLibrary() // Revert on error
@@ -766,7 +775,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       f.filename === file.filename ? { ...f, rating } : f
     ))
     try {
-      await fetch(`${libApi}/api/rate`, {
+      // Rating always goes to Heroku (updates Cloudinary manifest)
+      await fetch(`${API_BASE}/api/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename, rating }),
@@ -781,7 +791,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     setExporting(true)
     try {
       const filesToExport = finalList.map(f => f.filename)
-      const res = await fetch(`${libApi}/api/export`, {
+      const res = await fetch(`${AGENT_BASE}/api/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: exportName.trim(), files: filesToExport }),
@@ -1004,7 +1014,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               } else {
                 // Second click: auto-delete all inferior dupes
                 const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                await fetch(`${libApi}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
+                await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                 fetchLibrary()
                 setShowDupes(false)
               }
@@ -1195,7 +1205,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               <button
                 onClick={async () => {
                   const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                  await fetch(`${libApi}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
+                  await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                   fetchLibrary()
                   setShowDupes(false)
                 }}
@@ -1232,7 +1242,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         if (isBest) return
                         e.preventDefault()
                         if (confirm(`Borrar "${f.filename}"?`)) {
-                          fetch(`${libApi}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
+                          fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             .then(() => fetchLibrary())
                         }
                       }}
@@ -1263,7 +1273,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       ) : (
                         <button
                           onClick={async () => {
-                            await fetch(`${libApi}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
+                            await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             fetchLibrary()
                           }}
                           className="flex-shrink-0 px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded font-medium hover:bg-red-500/40 transition-all duration-200 active:scale-95 text-center"
@@ -1593,7 +1603,6 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 })
 
 function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected }) {
-  const setApi = agentConnected ? AGENT_BASE : API_BASE
   const [minStars, setMinStars] = useState(3)
   const [duration, setDuration] = useState(60)
   const [method, setMethod] = useState('camelot')
@@ -1613,7 +1622,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   // Fetch genres that have tracks with >= minStars
   useEffect(() => {
     if (page !== 'set') return
-    fetch(`${setApi}/api/library`).then(r => r.json()).then(tracks => {
+    fetch(`${API_BASE}/api/library`).then(r => r.json()).then(tracks => {
       const genreCounts = {}
       tracks.forEach(t => {
         if ((t.rating || 0) >= minStars && t.genre && t.key) {
@@ -2094,12 +2103,12 @@ function App() {
     if (!authUser) return
     const checkAgent = async () => {
       try {
-        const res = await fetch('http://localhost:9900/api/status', { signal: AbortSignal.timeout(2000) })
+        const res = await fetch(`${AGENT_BASE}/api/status`, { signal: AbortSignal.timeout(2000) })
         if (res.ok) {
           const status = await res.json()
           setAgentConnected(true); agentConnectedRef.current = true
           setAgentVersion(status.version || '')
-          await fetch('http://localhost:9900/api/config', {
+          await fetch(`${AGENT_BASE}/api/config`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: authUser.name })
