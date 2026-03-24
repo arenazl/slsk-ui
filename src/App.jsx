@@ -1214,8 +1214,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 )}
                 className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200`}
                 style={{
-                  background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.08)`,
-                  color: active ? `rgb(${gColor.rgb})` : 'var(--text-muted)',
+                  background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.1)`,
+                  color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.7)`,
                   boxShadow: active ? `0 0 8px rgba(${gColor.rgb}, 0.15)` : 'none',
                 }}
               >
