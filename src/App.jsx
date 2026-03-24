@@ -805,16 +805,20 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const stopPreviewMode = () => onStopPreviewMode()
 
   const handleRate = async (file, rating) => {
-    setFiles(prev => prev.map(f =>
-      f.filename === file.filename ? { ...f, rating } : f
-    ))
+    console.log('Rating changed:', file.filename, 'from', file.rating, 'to', rating)
+    setFiles(prev => {
+      const next = prev.map(f => f.filename === file.filename ? { ...f, rating } : f)
+      console.log('Files updated, new rating for', file.filename, '=', next.find(f => f.filename === file.filename)?.rating)
+      return next
+    })
     try {
       // Rating always goes to Heroku (updates Cloudinary manifest)
-      await fetch(`${API_BASE}/api/rate`, {
+      const res = await fetch(`${API_BASE}/api/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename, rating }),
       })
+      console.log('Rate API response:', res.status)
     } catch (e) {
       console.error('Failed to rate', e)
     }
