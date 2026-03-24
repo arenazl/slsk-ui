@@ -1845,7 +1845,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                   key={genre}
                   onClick={() => setSelectedGenres(prev => active ? prev.filter(g => g !== genre) : [...prev, genre])}
                   className={`px-2.5 py-1 rounded-lg text-xs transition-all duration-200 active:scale-95 ${
-                    active ? 'font-semibold' : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                    active ? 'font-semibold' : 'bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                   style={active ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
                 >
@@ -1863,7 +1863,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
               key={d}
               onClick={() => { setDuration(d); if (setTracks.length > 0) generateSet(null, null, d) }}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
-                duration === d ? 'font-bold' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                duration === d ? 'font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
               style={duration === d ? { background: 'color-mix(in srgb, var(--color-accent) 20%, transparent)', color: 'var(--color-accent)' } : {}}
             >
@@ -1885,7 +1885,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 ${
                 method === m.id
                   ? 'ring-1'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-[var(--text-primary,white)]'
+                  : 'bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
               }`}
               style={method === m.id ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)', ringColor: 'var(--color-accent)' } : {}}
             >
