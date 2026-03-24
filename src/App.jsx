@@ -268,7 +268,7 @@ function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop, agentConn
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
 
-  // Fetch waveform peaks from server when file changes (skip for external previews)
+  // Generate waveform from audio element using Web Audio API
   useEffect(() => {
     if (!file) { waveformRef.current = null; return }
     const key = file.filename
@@ -276,17 +276,35 @@ function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop, agentConn
     lastFileRef.current = key
     waveformRef.current = null
 
-    if (file.isPreview) return // No server waveform for iTunes previews
+    if (!audio || !audio.src) return
 
-    const params = new URLSearchParams({ file: file.filename })
-    if (file.subfolder) params.set('subfolder', file.subfolder)
-    fetch(`${agentConnected ? AGENT_BASE : API_BASE}/api/waveform?${params}`)
-      .then(r => r.json())
-      .then(peaks => {
-        if (Array.isArray(peaks)) waveformRef.current = new Float32Array(peaks)
+    // Fetch audio as ArrayBuffer and decode for waveform
+    fetch(audio.src)
+      .then(r => r.arrayBuffer())
+      .then(buf => {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)()
+        return ctx.decodeAudioData(buf).then(decoded => {
+          const raw = decoded.getChannelData(0)
+          const numPeaks = 200
+          const blockSize = Math.floor(raw.length / numPeaks)
+          const peaks = new Float32Array(numPeaks)
+          for (let i = 0; i < numPeaks; i++) {
+            let sum = 0
+            const start = i * blockSize
+            for (let j = 0; j < blockSize; j++) {
+              sum += Math.abs(raw[start + j])
+            }
+            peaks[i] = sum / blockSize
+          }
+          // Normalize
+          const max = Math.max(...peaks) || 1
+          for (let i = 0; i < numPeaks; i++) peaks[i] /= max
+          waveformRef.current = peaks
+          ctx.close()
+        })
       })
       .catch(() => {})
-  }, [file])
+  }, [file, audio])
 
   // Draw waveform + progress cursor
   useEffect(() => {
