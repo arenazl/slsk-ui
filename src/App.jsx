@@ -1905,10 +1905,10 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
               disabled={generating}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 ${
                 method === m.id
-                  ? 'ring-1'
+                  ? ''
                   : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-panel)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
-              style={method === m.id ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)', ringColor: 'var(--color-accent)' } : {}}
+              style={method === m.id ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
             >
               {generating && method === m.id ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>{m.icon}</span>}
               {m.label}
