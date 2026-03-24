@@ -1345,7 +1345,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       </div>
                       <span className={`w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
                       <div className="flex-shrink-0">
-                        <StarRating key={`${f.filename}-${f.rating}`} rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
+                        <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                       </div>
                       {isBest ? (
                         <span className="flex-shrink-0 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded font-medium text-center" title={keepReasons.join(' · ')}>
@@ -1408,7 +1408,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   <span className="w-32 flex-shrink-0 text-xs text-gray-500 truncate">{f.genre || '-'}</span>
                   <span className={`w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
                   <div className="w-24 flex-shrink-0 flex justify-center">
-                    <StarRating key={`${f.filename}-${f.rating}`} rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
+                    <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                   </div>
                   <span className="w-20 flex-shrink-0 text-center text-xs text-gray-600">{f.date ? new Date(f.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '-'}</span>
                 </div>
@@ -1552,7 +1552,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       <span className="w-32 flex-shrink-0 text-xs text-gray-500 truncate">{f.genre || '-'}</span>
                       <span className={`w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
                       <div className="w-24 flex-shrink-0 flex justify-center">
-                        <StarRating key={`${f.filename}-${f.rating}`} rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
+                        <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                       </div>
                       <span className="w-20 flex-shrink-0 text-center text-xs text-gray-600">{f.date ? new Date(f.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '-'}</span>
                       <span className="w-12 flex-shrink-0 text-center text-xs text-gray-600">{f.format}</span>
