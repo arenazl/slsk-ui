@@ -872,10 +872,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     ? genreFiltered.filter(f => (f.title || f.filename).toLowerCase().includes(q) || (f.artist || '').toLowerCase().includes(q) || (f.genre || '').toLowerCase().includes(q))
     : genreFiltered
 
-  // Filter by stars
-  const numStars = Number(starFilter)
-  const starsFiltered = numStars > 0
-    ? searchFiltered.filter(f => (f.rating || 0) === numStars)
+  // Filter by stars (multi-select)
+  const selectedStars = starFilter ? starFilter.split(',').map(Number).filter(n => n > 0) : []
+  const starsFiltered = selectedStars.length > 0
+    ? searchFiltered.filter(f => selectedStars.includes(f.rating || 0))
     : searchFiltered
 
   // Duplicate detection - normalize by filename removing track numbers, BPM, extensions
@@ -1023,7 +1023,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       <div className="flex-shrink-0 flex items-center gap-3 px-5 py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-lg font-bold text-[var(--text-primary)]">{filtered.length}</span>
-          <span className="text-sm text-gray-500">{q || numStars || genreFilter.length > 0 ? `/ ${files.length}` : 'tracks'}</span>
+          <span className="text-sm text-gray-500">{q || selectedStars.length > 0 || genreFilter.length > 0 ? `/ ${files.length}` : 'tracks'}</span>
         </div>
 
         {/* View toggle */}
@@ -1041,19 +1041,31 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           ))}
         </div>
 
-        {/* Star filter */}
+        {/* Star filter (multi-select) */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {[0, 1, 2, 3, 4, 5].map(s => (
-            <button
-              key={s}
-              onClick={() => setStarFilter(s)}
-              className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
-                numStars === s ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              {s === 0 ? 'All' : `${'★'.repeat(s)}`}
-            </button>
-          ))}
+          <button
+            onClick={() => setStarFilter('0')}
+            className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
+              selectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >All</button>
+          {[1, 2, 3, 4, 5].map(s => {
+            const active = selectedStars.includes(s)
+            return (
+              <button
+                key={s}
+                onClick={() => {
+                  const next = active ? selectedStars.filter(x => x !== s) : [...selectedStars, s]
+                  setStarFilter(next.length > 0 ? next.join(',') : '0')
+                }}
+                className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
+                  active ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {'★'.repeat(s)}
+              </button>
+            )
+          })}
         </div>
 
         {view === 'tracks' && dupeGroups.length > 0 && (
@@ -1821,14 +1833,14 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       {/* Controls */}
       <div className="flex-shrink-0 flex items-center gap-4 px-6 py-4 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400">Estrellas mín:</span>
+          <span className="text-sm text-[var(--text-secondary)]">Estrellas mín:</span>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map(s => (
               <button
                 key={s}
                 onClick={() => { setMinStars(s); if (setTracks.length > 0) generateSet(null, s) }}
                 className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
-                  minStars === s ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
+                  minStars === s ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 {'★'.repeat(s)}
@@ -1838,6 +1850,12 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
         </div>
         {availableGenres.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setSelectedGenres([])}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 ${
+                selectedGenres.length === 0 ? 'btn-accent font-semibold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >All</button>
             {availableGenres.map(({ genre, count }, idx) => {
               const active = selectedGenres.includes(genre)
               const gColor = GENRE_COLORS[idx % GENRE_COLORS.length]
