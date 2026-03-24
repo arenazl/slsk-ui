@@ -1838,16 +1838,19 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
         </div>
         {availableGenres.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            {availableGenres.map(({ genre, count }) => {
+            {availableGenres.map(({ genre, count }, idx) => {
               const active = selectedGenres.includes(genre)
+              const gColor = GENRE_COLORS[idx % GENRE_COLORS.length]
               return (
                 <button
                   key={genre}
                   onClick={() => setSelectedGenres(prev => active ? prev.filter(g => g !== genre) : [...prev, genre])}
-                  className={`px-2.5 py-1 rounded-lg text-xs transition-all duration-200 active:scale-95 ${
-                    active ? 'font-semibold' : 'bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                  }`}
-                  style={active ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95`}
+                  style={{
+                    background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.1)`,
+                    color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.7)`,
+                    boxShadow: active ? `0 0 8px rgba(${gColor.rgb}, 0.15)` : 'none',
+                  }}
                 >
                   {genre} ({count})
                 </button>
@@ -1885,7 +1888,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 ${
                 method === m.id
                   ? 'ring-1'
-                  : 'bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-panel)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
               style={method === m.id ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)', ringColor: 'var(--color-accent)' } : {}}
             >
