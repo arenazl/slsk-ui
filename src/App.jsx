@@ -511,6 +511,29 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     }
   }, [libApi])
 
+  // Sync agent manifest to Cloudinary after library loads
+  const syncManifestToCloud = useCallback(async () => {
+    if (!agentConnected) return
+    try {
+      const res = await fetch(`${AGENT_BASE}/api/library`)
+      const tracks = await res.json()
+      const manifest = {}
+      for (const t of tracks) {
+        manifest[t.filename] = { title: t.title || '', artist: t.artist || '', genre: t.genre || '', key: t.key || '', bpm: t.bpm, rating: t.rating, size_mb: t.size_mb, format: t.format || '' }
+      }
+      await fetch(`${API_BASE}/api/sync-manifest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manifest }),
+      })
+    } catch (e) { console.error('Sync manifest failed:', e) }
+  }, [agentConnected])
+
+  // Sync on first load when agent is connected
+  useEffect(() => {
+    if (agentConnected) syncManifestToCloud()
+  }, [agentConnected, syncManifestToCloud])
+
   useEffect(() => { fetchLibrary() }, [fetchLibrary])
 
   useImperativeHandle(ref, () => ({
@@ -586,12 +609,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     try {
       const res = await fetch(`${API_BASE}/api/classify`, { method: 'POST' })
       const data = await res.json()
-      // If agent connected, tell it to organize files into genre folders
+      // Sync updated manifest to agent and refresh
       if (agentConnected && data.classified > 0) {
+        // Get updated manifest from Heroku and tell agent to organize
+        const libRes = await fetch(`${API_BASE}/api/library`)
+        const tracks = await libRes.json()
+        const moves = tracks.filter(t => t.genre).map(t => ({ filename: t.filename, genre: t.genre }))
         await fetch(`${AGENT_BASE}/api/organize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ moves: [] }), // agent reads manifest for genres
+          body: JSON.stringify({ moves }),
         }).catch(() => {})
       }
       fetchLibrary()
