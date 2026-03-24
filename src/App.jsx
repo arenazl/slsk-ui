@@ -432,12 +432,14 @@ function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop, agentConn
   }
 
   const handleSeek = (e) => {
-    if (!audio || !duration || !isFinite(duration)) return
+    if (!audio) return
+    const dur = audio.duration || duration
+    if (!dur || !isFinite(dur)) return
     const rect = e.currentTarget.getBoundingClientRect()
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const wasPlaying = !audio.paused
     try {
-      audio.currentTime = pct * duration
+      audio.currentTime = pct * dur
     } catch {}
     if (wasPlaying) {
       audio.play().catch(() => {})
