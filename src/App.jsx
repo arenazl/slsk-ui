@@ -648,7 +648,40 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const detectKeys = async () => {
     setDetectingKeys(true)
     try {
-      await fetch(`${API_BASE}/api/detect-keys`, { method: 'POST' })
+      // Get list of tracks without key
+      const res = await fetch(`${API_BASE}/api/detect-keys`, { method: 'POST' })
+      const data = await res.json()
+      const toDetect = data.to_detect || []
+      if (toDetect.length === 0) { fetchLibrary(); return }
+
+      // For each track, fetch audio from agent and send to Heroku for analysis
+      const audioBase = agentConnected ? AGENT_BASE : API_BASE
+      let detected = 0
+      for (const fname of toDetect) {
+        try {
+          const audioRes = await fetch(`${audioBase}/api/audio/${encodeURIComponent(fname)}`)
+          if (!audioRes.ok) continue
+          const blob = await audioRes.blob()
+          const form = new FormData()
+          form.append('file', blob, fname)
+          form.append('filename', fname)
+          const keyRes = await fetch(`${API_BASE}/api/detect-key`, { method: 'POST', body: form })
+          const keyData = await keyRes.json()
+          if (keyData.key) {
+            detected++
+            // Update agent manifest
+            if (agentConnected) {
+              await fetch(`${AGENT_BASE}/api/rate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: fname, key: keyData.key }),
+              }).catch(() => {})
+            }
+          }
+        } catch (e) { console.error('Key detect failed for:', fname, e) }
+      }
+      // Sync and refresh
+      if (agentConnected) await syncManifestToCloud()
       fetchLibrary()
     } catch (e) {
       console.error('Failed to detect keys', e)
