@@ -798,18 +798,30 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     setExporting(true)
     try {
       const filesToExport = finalList.map(f => f.filename)
+      const metadata = {}
+      finalList.forEach(f => { metadata[f.filename] = { genre: f.genre, key: f.key, bpm: f.bpm, rating: f.rating, artist: f.artist, title: f.title } })
       const res = await fetch(`${AGENT_BASE}/api/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: exportName.trim(), files: filesToExport, include_tracks: exportWithTracks }),
+        body: JSON.stringify({ name: exportName.trim(), files: filesToExport, include_tracks: exportWithTracks, metadata }),
       })
       const data = await res.json()
-      setExportName('')
-      if (exportWithTracks) {
-        alert(`${data.copied} archivos + playlist exportados a ${data.folder}`)
+      if (!exportWithTracks) {
+        // Download .m3u directly in browser
+        const m3uContent = data.m3u_content
+        if (m3uContent) {
+          const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `${exportName.trim()}.m3u`
+          a.click()
+          URL.revokeObjectURL(url)
+        }
       } else {
-        alert(`Playlist .m3u exportada a ${data.folder}`)
+        alert(`${data.copied} archivos + playlist exportados a ${data.folder}`)
       }
+      setExportName('')
     } catch (e) {
       console.error('Failed to export', e)
     } finally {
@@ -1363,7 +1375,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               >
                 <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
               </div>
-              <span className="text-xs text-gray-400">Tracks</span>
+              <span className="text-xs text-gray-400">+ Tracks</span>
             </label>
             <button
               onClick={handleExport}
@@ -1511,7 +1523,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               >
                 <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
               </div>
-              <span className="text-xs text-gray-400">Tracks</span>
+              <span className="text-xs text-gray-400">+ Tracks</span>
             </label>
             <button
               onClick={handleExport}
@@ -1740,24 +1752,32 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const handlePlayPause = () => onPlayPause()
   const handleStop = () => onStop()
 
+  const [exportWithTracks, setExportWithTracks] = useState(false)
   const exportSet = async () => {
     const name = setName.trim() || `Set ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}`
     setExporting(true)
     try {
-      const exportApi = agentConnected ? AGENT_BASE : API_BASE
-      const res = await fetch(`${exportApi}/api/export-set`, {
+      const metadata = {}
+      setTracks.forEach(t => { metadata[t.filename] = { genre: t.genre, key: t.key, bpm: t.bpm, rating: t.rating, artist: t.artist, title: t.title } })
+      const res = await fetch(`${AGENT_BASE}/api/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, tracks: setTracks.map(t => ({ filename: t.filename, artist: t.artist || '', title: t.title || t.filename })) }),
+        body: JSON.stringify({ name, files: setTracks.map(t => t.filename), include_tracks: exportWithTracks, metadata }),
       })
-      if (agentConnected && res.ok) {
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${name}.zip`
-        a.click()
-        URL.revokeObjectURL(url)
+      const data = await res.json()
+      if (!exportWithTracks) {
+        const m3uContent = data.m3u_content
+        if (m3uContent) {
+          const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `${name}.m3u`
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+      } else {
+        alert(`${data.copied} archivos + playlist exportados a ${data.folder}`)
       }
     } catch (e) {
       console.error('Failed to export set', e)
@@ -1858,6 +1878,15 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                 placeholder="Nombre del set..."
                 className="w-40 px-2 py-1 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-green-500"
               />
+              <label className="flex items-center gap-1.5 cursor-pointer" title="Incluir copia de archivos + metadata">
+                <div
+                  onClick={() => setExportWithTracks(v => !v)}
+                  className={`w-8 h-4 rounded-full transition-colors duration-200 cursor-pointer ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+                <span className="text-xs text-gray-400">+ Tracks</span>
+              </label>
               <button
                 onClick={exportSet}
                 disabled={exporting}
@@ -1869,7 +1898,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 )}
-                Exportar carpeta
+                Exportar
               </button>
             </div>
           </>
