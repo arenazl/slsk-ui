@@ -1245,9 +1245,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 )}
                 className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200`}
                 style={{
-                  background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.1)`,
-                  color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.7)`,
-                  boxShadow: active ? `0 0 8px rgba(${gColor.rgb}, 0.15)` : 'none',
+                  background: active ? `rgba(${gColor.rgb}, 0.3)` : `rgba(${gColor.rgb}, 0.08)`,
+                  color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.6)`,
+                  boxShadow: active ? `0 0 0 1.5px rgba(${gColor.rgb}, 0.5), 0 0 8px rgba(${gColor.rgb}, 0.15)` : 'none',
+                  fontWeight: active ? 600 : 500,
                 }}
               >
                 <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5" style={{background: `rgb(${gColor.rgb})`}} />
