@@ -540,8 +540,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             rating: meta.rating || 0,
             size_mb: f.size_mb,
             format: f.format,
-            date: meta.date || meta.date_added || '',
-            date_added: meta.date_added || meta.date || '',
+            date: meta.date || meta.date_added || f.mtime || '',
+            date_added: meta.date_added || meta.date || f.mtime || '',
             in_subfolder: !!f.subfolder,
             subfolder: f.subfolder || '',
             manual_genre: meta.manual_genre || false,
@@ -710,10 +710,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   }
 
   const deleteDupes = async () => {
-    if (!confirm(`Borrar ${dupeKeys.size} duplicados? Se mantienen los de mejor rating/calidad.`)) return
+    const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
+    if (!toDelete.length) return
+    if (!confirm(`Borrar ${toDelete.length} duplicados? Se mantienen los de mejor rating/calidad.`)) return
     setDeletingDupes(true)
     try {
-      const res = await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST' })
+      const res = await fetch(`${AGENT_BASE}/api/delete-dupes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filenames: toDelete }),
+      })
       const data = await res.json()
       if (data.deleted > 0) fetchLibrary()
     } catch (e) {
