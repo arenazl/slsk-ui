@@ -486,9 +486,8 @@ function StarRating({ rating, onRate }) {
   const handleClick = useCallback((e, star) => {
     e.stopPropagation()
     e.preventDefault()
-    const newRating = rating === star ? 0 : star
-    onRate(newRating)
-  }, [rating, onRate])
+    onRate(star)
+  }, [onRate])
   return (
     <div className="flex gap-0.5" onClick={e => e.stopPropagation()}>
       {[1, 2, 3, 4, 5].map(star => (
@@ -819,21 +818,17 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const stopPreviewMode = () => onStopPreviewMode()
 
-  const handleRate = async (file, rating) => {
-    console.log('Rating changed:', file.filename, 'from', file.rating, 'to', rating)
-    setFiles(prev => {
-      const next = prev.map(f => f.filename === file.filename ? { ...f, rating } : f)
-      console.log('Files updated, new rating for', file.filename, '=', next.find(f => f.filename === file.filename)?.rating)
-      return next
-    })
+  const handleRate = async (file, newRating) => {
+    console.log('Rating changed:', file.filename, 'from', file.rating, 'to', newRating)
+    // Update local state immediately
+    setFiles(prev => prev.map(f => f.filename === file.filename ? { ...f, rating: newRating } : f))
+    // Persist to backend
     try {
-      // Rating always goes to Heroku (updates Cloudinary manifest)
-      const res = await fetch(`${API_BASE}/api/rate`, {
+      await fetch(`${API_BASE}/api/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.filename, rating }),
+        body: JSON.stringify({ filename: file.filename, rating: newRating }),
       })
-      console.log('Rate API response:', res.status)
     } catch (e) {
       console.error('Failed to rate', e)
     }
@@ -1012,6 +1007,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     else { setSortCol(col); setSortDir(col === 'date' ? 'desc' : 'asc') }
   }
   const SortArrow = ({ col }) => sortCol !== col ? null : <span className="ml-0.5">{sortDir === 'asc' ? '▲' : '▼'}</span>
+
+  // Debug: log render with sample rating
+  const _sampleFile = filtered[0]
+  if (_sampleFile) console.log('RENDER - first file:', _sampleFile.filename, 'rating:', _sampleFile.rating, 'total files:', filtered.length)
 
   const finalList = [...genres.flatMap(g => byGenre[g]), ...ungrouped].sort((a, b) => {
     const dir = sortDir === 'asc' ? 1 : -1
