@@ -528,7 +528,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [search, setSearch] = useQS('q', '')
   const [view, setView] = useQS('view', 'cards')
   const [starFilter, _setStarFilter] = useQS('stars', '0')
-  const setStarFilter = useCallback((v) => _setStarFilter(String(typeof v === 'function' ? v(Number(starFilter)) : v)), [_setStarFilter, starFilter])
+  const setStarFilter = useCallback((v) => _setStarFilter(String(v)), [_setStarFilter])
   const [exportName, setExportName] = useState('')
   const [exporting, setExporting] = useState(false)
   const [exportWithTracks, setExportWithTracks] = useState(false)
