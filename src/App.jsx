@@ -504,6 +504,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const setStarFilter = useCallback((v) => _setStarFilter(String(typeof v === 'function' ? v(Number(starFilter)) : v)), [_setStarFilter, starFilter])
   const [exportName, setExportName] = useState('')
   const [exporting, setExporting] = useState(false)
+  const [exportWithTracks, setExportWithTracks] = useState(false)
   const [detectingKeys, setDetectingKeys] = useState(false)
   const [sortCol, setSortCol] = useQS('sort', 'date')
   const [sortDir, setSortDir] = useQS('dir', 'desc')
@@ -800,11 +801,15 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       const res = await fetch(`${AGENT_BASE}/api/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: exportName.trim(), files: filesToExport }),
+        body: JSON.stringify({ name: exportName.trim(), files: filesToExport, include_tracks: exportWithTracks }),
       })
       const data = await res.json()
       setExportName('')
-      alert(`${data.copied} archivos exportados a ${data.folder}`)
+      if (exportWithTracks) {
+        alert(`${data.copied} archivos + playlist exportados a ${data.folder}`)
+      } else {
+        alert(`Playlist .m3u exportada a ${data.folder}`)
+      }
     } catch (e) {
       console.error('Failed to export', e)
     } finally {
@@ -1347,10 +1352,19 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             <input
               value={exportName}
               onChange={e => setExportName(e.target.value)}
-              placeholder="Nombre de carpeta..."
+              placeholder="Nombre del set..."
               className="flex-1 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
               onKeyDown={e => e.key === 'Enter' && handleExport()}
             />
+            <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos">
+              <div
+                onClick={() => setExportWithTracks(v => !v)}
+                className={`w-8 h-4 rounded-full transition-colors duration-200 ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+              <span className="text-xs text-gray-400">Tracks</span>
+            </label>
             <button
               onClick={handleExport}
               disabled={!exportName.trim() || exporting || finalList.length === 0}
@@ -1486,10 +1500,19 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             <input
               value={exportName}
               onChange={e => setExportName(e.target.value)}
-              placeholder="Nombre de carpeta..."
+              placeholder="Nombre del set..."
               className="flex-1 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
               onKeyDown={e => e.key === 'Enter' && handleExport()}
             />
+            <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos">
+              <div
+                onClick={() => setExportWithTracks(v => !v)}
+                className={`w-8 h-4 rounded-full transition-colors duration-200 ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+              <span className="text-xs text-gray-400">Tracks</span>
+            </label>
             <button
               onClick={handleExport}
               disabled={!exportName.trim() || exporting || finalList.length === 0}
