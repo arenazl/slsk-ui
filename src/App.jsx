@@ -2086,8 +2086,24 @@ function App() {
 
       if (data.type === 'track_update') {
         setTracks(prev => prev.map(t => t.id === data.track.id ? data.track : t))
-        if (data.track.status === 'completed') {
-          libraryRef.current?.refresh()
+        if (data.track.status === 'completed' && data.track.filename) {
+          // Transfer file from Heroku to local agent
+          if (agentConnected) {
+            fetch(`${API_BASE}/audio/${encodeURIComponent(data.track.filename)}`)
+              .then(r => r.blob())
+              .then(blob => {
+                const form = new FormData()
+                form.append('file', blob, data.track.filename)
+                form.append('filename', data.track.filename)
+                form.append('genre', data.track.genre || '')
+                form.append('metadata', JSON.stringify({ title: data.track.title || '', artist: data.track.artist || '', genre: data.track.genre || '', key: data.track.key || '', rating: data.track.rating }))
+                return fetch(`${AGENT_BASE}/api/save-file`, { method: 'POST', body: form })
+              })
+              .then(() => libraryRef.current?.refresh())
+              .catch(e => console.error('Failed to transfer file to agent:', e))
+          } else {
+            libraryRef.current?.refresh()
+          }
         }
       }
 
@@ -2122,7 +2138,19 @@ function App() {
           queue: data.queue, source: data.source, wait_secs: data.wait_secs,
           timeout_secs: data.timeout_secs, source_idx: data.source_idx, source_total: data.source_total,
         }}))
-        if (data.status === 'completed') {
+        if (data.status === 'completed' && data.filename && agentConnected) {
+          fetch(`${API_BASE}/audio/${encodeURIComponent(data.filename)}`)
+            .then(r => r.blob())
+            .then(blob => {
+              const form = new FormData()
+              form.append('file', blob, data.filename)
+              form.append('filename', data.filename)
+              form.append('genre', genre || '')
+              return fetch(`${AGENT_BASE}/api/save-file`, { method: 'POST', body: form })
+            })
+            .then(() => libraryRef.current?.refresh())
+            .catch(e => console.error('Failed to transfer file to agent:', e))
+        } else if (data.status === 'completed') {
           libraryRef.current?.refresh()
         }
       }
