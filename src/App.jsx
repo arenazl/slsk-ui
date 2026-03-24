@@ -1,4 +1,30 @@
-import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react'
+
+// Toast notification system
+const ToastContext = createContext()
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState([])
+  const show = useCallback((msg, type = 'success', duration = 3000) => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, msg, type }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration)
+  }, [])
+  return (
+    <ToastContext.Provider value={show}>
+      {children}
+      <div className="fixed bottom-20 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} className={`pointer-events-auto px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+            t.type === 'error' ? 'bg-red-600 text-white' : t.type === 'warning' ? 'bg-yellow-600 text-white' : 'bg-emerald-600 text-white'
+          }`}>
+            {t.msg}
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  )
+}
+const useToast = () => useContext(ToastContext)
 
 const STATUS_LABELS = {
   pending: 'Pendiente',
@@ -492,6 +518,7 @@ function useQS(key, defaultVal) {
 }
 
 const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected }, ref) {
+  const toast = useToast()
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [classifying, setClassifying] = useState(false)
@@ -819,7 +846,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           URL.revokeObjectURL(url)
         }
       } else {
-        alert(`${data.copied} archivos + playlist exportados a ${data.folder}`)
+        toast(`${data.copied} archivos + playlist exportados`)
       }
       setExportName('')
     } catch (e) {
@@ -1644,6 +1671,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 })
 
 function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected }) {
+  const toast = useToast()
   const [minStars, setMinStars] = useState(3)
   const [duration, setDuration] = useState(60)
   const [method, setMethod] = useState('camelot')
@@ -1777,7 +1805,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
           URL.revokeObjectURL(url)
         }
       } else {
-        alert(`${data.copied} archivos + playlist exportados a ${data.folder}`)
+        toast(`${data.copied} archivos + playlist exportados`)
       }
     } catch (e) {
       console.error('Failed to export set', e)
@@ -2110,6 +2138,7 @@ function LoginScreen({ onLogin }) {
 }
 
 function App() {
+  const toast = useToast()
   const [authUser, setAuthUser] = useState(() => {
     const saved = localStorage.getItem('auth_user')
     return saved ? JSON.parse(saved) : null
@@ -2279,7 +2308,7 @@ function App() {
       }
 
       if (data.type === 'error') {
-        alert(data.message)
+        toast(data.message, 'error')
       }
 
       if (data.type === 'search_status') {
@@ -3836,4 +3865,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   )
 }
 
-export default App
+function AppWithToast() {
+  return (
+    <ToastProvider>
+      <App />
+    </ToastProvider>
+  )
+}
+
+export default AppWithToast
