@@ -1092,7 +1092,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </button>
         )}
 
-        {view !== 'tracks' && ungrouped.length > 0 && (
+        {ungrouped.length > 0 && (
           <button
             onClick={classifyWithAI}
             disabled={classifying}
@@ -1109,7 +1109,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {classifying ? 'Clasificando...' : `Clasificar (${ungrouped.length})`}
           </button>
         )}
-        {view !== 'tracks' && files.some(f => !f.in_subfolder && f.genre) && (
+        {files.some(f => !f.in_subfolder && f.genre) && (
           <button
             onClick={organizeAll}
             disabled={organizing}
@@ -1126,7 +1126,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {organizing ? 'Organizando...' : 'Organizar'}
           </button>
         )}
-        {view !== 'tracks' && files.some(f => !f.key) && (
+        {files.some(f => !f.key) && (
           <button
             onClick={detectKeys}
             disabled={detectingKeys}
@@ -1144,7 +1144,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </button>
         )}
 
-        {view !== 'tracks' && dupeKeys.size > 0 && (
+        {dupeKeys.size > 0 && (
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => setShowDupes(d => !d)}
