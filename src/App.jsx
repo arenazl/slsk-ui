@@ -2957,6 +2957,7 @@ function App() {
           setPlayingFile={setPlayingFile}
           setNowPlaying={setNowPlaying}
           setIsAudioPlaying={setIsAudioPlaying}
+          addToPending={addToPending}
         />
       </div>
 
@@ -2990,7 +2991,7 @@ function App() {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending }) {
   const [genres, setGenres] = useState([])
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
   const [tracks, setTracks] = useState([])
