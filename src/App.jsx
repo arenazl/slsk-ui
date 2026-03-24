@@ -584,7 +584,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const classifyWithAI = async () => {
     setClassifying(true)
     try {
-      await fetch(`${API_BASE}/api/classify`, { method: 'POST' })
+      const res = await fetch(`${API_BASE}/api/classify`, { method: 'POST' })
+      const data = await res.json()
+      // If agent connected, tell it to organize files into genre folders
+      if (agentConnected && data.classified > 0) {
+        await fetch(`${AGENT_BASE}/api/organize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ moves: [] }), // agent reads manifest for genres
+        }).catch(() => {})
+      }
       fetchLibrary()
     } catch (e) {
       console.error('Failed to classify', e)
