@@ -2001,6 +2001,7 @@ function App() {
   }, [])
 
   const [agentConnected, setAgentConnected] = useState(false)
+  const agentConnectedRef = useRef(false)
   const [agentVersion, setAgentVersion] = useState('')
   useEffect(() => {
     if (!authUser) return
@@ -2009,7 +2010,7 @@ function App() {
         const res = await fetch('http://localhost:9900/api/status', { signal: AbortSignal.timeout(2000) })
         if (res.ok) {
           const status = await res.json()
-          setAgentConnected(true)
+          setAgentConnected(true); agentConnectedRef.current = true
           setAgentVersion(status.version || '')
           await fetch('http://localhost:9900/api/config', {
             method: 'POST',
@@ -2017,7 +2018,7 @@ function App() {
             body: JSON.stringify({ username: authUser.name })
           })
         }
-      } catch { setAgentConnected(false) }
+      } catch { setAgentConnected(false); agentConnectedRef.current = false }
     }
     checkAgent()
     const interval = setInterval(checkAgent, 30000)
@@ -2088,10 +2089,12 @@ function App() {
         setTracks(prev => prev.map(t => t.id === data.track.id ? data.track : t))
         if (data.track.status === 'completed' && data.track.filename) {
           // Transfer file from Heroku to local agent
-          if (agentConnected) {
+          if (agentConnectedRef.current) {
+            console.log('Transferring file to agent:', data.track.filename)
             fetch(`${API_BASE}/audio/${encodeURIComponent(data.track.filename)}`)
-              .then(r => r.blob())
+              .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
               .then(blob => {
+                console.log('Got blob from Heroku:', blob.size, 'bytes')
                 const form = new FormData()
                 form.append('file', blob, data.track.filename)
                 form.append('filename', data.track.filename)
@@ -2099,9 +2102,11 @@ function App() {
                 form.append('metadata', JSON.stringify({ title: data.track.title || '', artist: data.track.artist || '', genre: data.track.genre || '', key: data.track.key || '', rating: data.track.rating }))
                 return fetch(`${AGENT_BASE}/api/save-file`, { method: 'POST', body: form })
               })
-              .then(() => libraryRef.current?.refresh())
+              .then(r => { console.log('Agent save-file response:', r.status); return r.json() })
+              .then(d => { console.log('Agent saved:', d); libraryRef.current?.refresh() })
               .catch(e => console.error('Failed to transfer file to agent:', e))
           } else {
+            console.log('No agent connected, skipping transfer')
             libraryRef.current?.refresh()
           }
         }
@@ -2138,17 +2143,19 @@ function App() {
           queue: data.queue, source: data.source, wait_secs: data.wait_secs,
           timeout_secs: data.timeout_secs, source_idx: data.source_idx, source_total: data.source_total,
         }}))
-        if (data.status === 'completed' && data.filename && agentConnected) {
+        if (data.status === 'completed' && data.filename && agentConnectedRef.current) {
+          console.log('Transferring search file to agent:', data.filename)
           fetch(`${API_BASE}/audio/${encodeURIComponent(data.filename)}`)
-            .then(r => r.blob())
+            .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
             .then(blob => {
+              console.log('Got blob from Heroku:', blob.size, 'bytes')
               const form = new FormData()
               form.append('file', blob, data.filename)
               form.append('filename', data.filename)
-              form.append('genre', genre || '')
               return fetch(`${AGENT_BASE}/api/save-file`, { method: 'POST', body: form })
             })
-            .then(() => libraryRef.current?.refresh())
+            .then(r => { console.log('Agent save-file response:', r.status); return r.json() })
+            .then(d => { console.log('Agent saved:', d); libraryRef.current?.refresh() })
             .catch(e => console.error('Failed to transfer file to agent:', e))
         } else if (data.status === 'completed') {
           libraryRef.current?.refresh()
