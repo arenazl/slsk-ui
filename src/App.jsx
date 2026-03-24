@@ -1903,12 +1903,11 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
               key={m.id}
               onClick={() => generateSet(m.id)}
               disabled={generating}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 ${
-                method === m.id
-                  ? ''
-                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-panel)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
-              }`}
-              style={method === m.id ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 disabled:opacity-50`}
+              style={method === m.id
+                ? { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.25)', color: 'var(--color-accent)' }
+                : { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.08)', color: 'rgba(var(--color-accent-rgb, 59,130,246), 0.6)' }
+              }
             >
               {generating && method === m.id ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>{m.icon}</span>}
               {m.label}
