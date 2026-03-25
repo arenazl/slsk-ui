@@ -1826,6 +1826,13 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     }
   }
 
+  // Auto-regenerate set when star filter changes
+  const [autoRegenRef] = useState({ init: false })
+  useEffect(() => {
+    if (!autoRegenRef.init) { autoRegenRef.init = true; return }
+    if (setTracks.length > 0 && method) generateSet()
+  }, [minStars])
+
   const handlePlay = (t) => onPlay(t)
   const handlePlayPause = () => onPlayPause()
   const handleStop = () => onStop()
@@ -1872,7 +1879,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       <div className="flex-shrink-0 flex items-center gap-4 px-6 py-4 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex-wrap">
         <div className="flex items-center gap-1">
           <button
-            onClick={() => { setSetSelectedStars([]); setMinStars(1); if (setTracks.length > 0) generateSet(null, 1) }}
+            onClick={() => { setSetSelectedStars([]); setMinStars(1) }}
             className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
               setSelectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
@@ -1887,7 +1894,6 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                   setSetSelectedStars(next)
                   const newMin = next.length > 0 ? Math.min(...next) : 1
                   setMinStars(newMin)
-                  if (setTracks.length > 0) generateSet(null, newMin)
                 }}
                 className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
                   active ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
