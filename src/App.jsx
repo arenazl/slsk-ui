@@ -288,6 +288,14 @@ function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop, agentConn
   const lastFileRef = useRef(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(0.8)
+  const [muted, setMuted] = useState(false)
+
+  // Sync volume to audio element
+  useEffect(() => {
+    if (!audio) return
+    audio.volume = muted ? 0 : volume
+  }, [audio, volume, muted])
 
   // Generate waveform from audio element using Web Audio API
   useEffect(() => {
@@ -479,6 +487,34 @@ function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop, agentConn
         </div>
 
         <span className="text-xs text-gray-500 flex-shrink-0 w-10">{formatTime(duration)}</span>
+
+        {/* Volume */}
+        <button
+          onClick={() => setMuted(m => !m)}
+          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--text-primary,white)] hover:bg-white/10 transition-all flex-shrink-0"
+          title={muted ? 'Unmute' : 'Mute'}
+        >
+          {muted || volume === 0 ? (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728" />
+            </svg>
+          )}
+        </button>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={muted ? 0 : volume}
+          onChange={(e) => { setVolume(parseFloat(e.target.value)); if (muted) setMuted(false) }}
+          className="w-20 h-1 accent-[var(--color-accent)] flex-shrink-0"
+        />
       </div>
     </div>
   )
@@ -2860,7 +2896,29 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                 </span>
               </div>
               <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-20 text-center">{t.genre || '-'}</span>
-              <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-12 text-center">{t.bpm || '-'}</span>
+              <span
+                className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-12 text-center cursor-pointer hover:text-[var(--color-accent)] transition-colors"
+                title="Doble click para editar BPM"
+                onDoubleClick={(e) => {
+                  const span = e.currentTarget
+                  const current = t.bpm || ''
+                  const input = document.createElement('input')
+                  input.type = 'number'
+                  input.value = current
+                  input.className = 'w-12 text-[10px] text-center bg-[var(--bg-input)] border border-[var(--color-accent)] rounded px-1 py-0 outline-none'
+                  input.style.cssText = 'width:48px;font-size:10px;text-align:center'
+                  span.replaceWith(input)
+                  input.focus()
+                  input.select()
+                  const finish = () => {
+                    const val = parseInt(input.value) || null
+                    setMixTracks(prev => prev.map((tr, idx) => idx === i ? { ...tr, bpm: val } : tr))
+                    input.replaceWith(span)
+                  }
+                  input.addEventListener('blur', finish)
+                  input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') input.blur() })
+                }}
+              >{t.bpm || '-'}</span>
               <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-12 text-center">{t.key || '-'}</span>
               <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-14 text-center">{fmtTime(t.duration)}</span>
               <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-14 text-right">@{fmtTime(t.startTime)}</span>
