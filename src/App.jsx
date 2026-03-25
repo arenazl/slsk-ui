@@ -3207,6 +3207,7 @@ function App() {
           addToPending={addToPending}
           pendingRadioTrack={pendingRadioTrack}
           onRadioConsumed={() => setPendingRadioTrack(null)}
+          agentConnected={agentConnected}
         />
       </div>
 
@@ -3240,7 +3241,7 @@ function App() {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected }) {
   const [genres, setGenres] = useState([])
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
   const [tracks, setTracks] = useState([])
@@ -3641,9 +3642,18 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 {loading && <span className="text-sm text-white/40">Cargando...</span>}
                 {!loading && (
                   <button
-                    onClick={() => loadChart(selectedGenre, true)}
+                    onClick={async () => {
+                      if (agentConnected) {
+                        try {
+                          toast('Scrapeando Beatport...', 'warning', 5000)
+                          await fetch(`${AGENT_BASE}/api/refresh-charts`, { method: 'POST' })
+                          toast('Charts actualizados')
+                        } catch { toast('Error al scrapear', 'error') }
+                      }
+                      loadChart(selectedGenre, true)
+                    }}
                     className="p-2 rounded-lg hover:bg-white/20 transition-all active:scale-95"
-                    title="Actualizar chart"
+                    title={agentConnected ? "Scrapear Beatport y actualizar" : "Actualizar chart"}
                   >
                     <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
