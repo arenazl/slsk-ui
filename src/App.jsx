@@ -1751,7 +1751,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       // Keep only previously selected genres that still exist
       setSelectedGenres(prev => prev.filter(g => genreCounts[g]))
     }).catch(() => {})
-  }, [page, minStars])
+  }, [page, minStars, authUser])
 
   const fetchSuggestions = async (currentTracks) => {
     if (!currentTracks.length) return
