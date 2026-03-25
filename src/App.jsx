@@ -2319,17 +2319,24 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     }
   }, [])
 
-  // Spacebar play/pause
+  // Keyboard: spacebar play/pause, arrows seek
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.code === 'Space' && !e.target.closest('input, select, textarea')) {
+      if (e.target.closest('input, select, textarea')) return
+      if (e.code === 'Space') {
         e.preventDefault()
         togglePlay()
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault()
+        setPlayhead(p => Math.min(totalDuration, p + 5))
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault()
+        setPlayhead(p => Math.max(0, p - 5))
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [togglePlay])
+  }, [togglePlay, totalDuration])
 
   // Auto-scroll to keep cursor visible
   useEffect(() => {
@@ -2688,7 +2695,29 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
             className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none"
             style={{ left: playhead * pxPerSec, transition: isPlaying ? 'none' : 'left 0.1s' }}
           >
-            <div className="absolute -top-0 -left-1.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-red-300" />
+            <div
+              className="absolute -top-0 -left-2.5 w-5 h-5 bg-red-500 rounded-full border-2 border-red-300 cursor-grab active:cursor-grabbing pointer-events-auto z-40"
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                const wasPlaying = isPlaying
+                if (wasPlaying) { audioARef.current.pause(); audioBRef.current.pause(); clearInterval(playheadInterval.current); setIsPlaying(false) }
+                const onMove = (ev) => {
+                  if (!timelineRef.current) return
+                  const rect = timelineRef.current.getBoundingClientRect()
+                  const scrollLeft = timelineRef.current.scrollLeft
+                  const x = ev.clientX - rect.left + scrollLeft
+                  setPlayhead(Math.max(0, Math.min(totalDuration, x / pxPerSec)))
+                }
+                const onUp = () => {
+                  window.removeEventListener('mousemove', onMove)
+                  window.removeEventListener('mouseup', onUp)
+                  wasDraggingRef.current = true
+                }
+                window.addEventListener('mousemove', onMove)
+                window.addEventListener('mouseup', onUp)
+              }}
+            />
           </div>
           {/* Time ruler */}
           <div className="sticky top-0 z-10 h-8 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex items-end">
@@ -2714,8 +2743,8 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
             </div>
           </div>
 
-          {/* Track lanes */}
-          <div className="relative" style={{ height: mixTracks.length * 80 + 40 }}>
+          {/* Track lanes - 2 alternating rows */}
+          <div className="relative" style={{ height: 2 * 80 + 40 }}>
             {mixTracks.map((track, i) => {
               const color = getTrackColor(track, i)
               const left = track.startTime * pxPerSec
@@ -2734,7 +2763,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                     style={{
                       left,
                       width: Math.max(width, 40),
-                      top: i * 80 + 12,
+                      top: (i % 2) * 80 + 12,
                       height: 56,
                       background: `rgba(${color.rgb}, 0.2)`,
                       borderColor: `rgba(${color.rgb}, 0.4)`,
@@ -2793,7 +2822,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                       style={{
                         left: left,
                         width: overlapPx,
-                        top: i * 80 + 2,
+                        top: (i % 2) * 80 + 2,
                         height: 10,
                       }}
                     >
