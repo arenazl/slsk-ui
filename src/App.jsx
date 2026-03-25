@@ -2163,6 +2163,153 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
   const [exportFormat, setExportFormat] = useState('mp3')
   const timelineRef = useRef(null)
 
+  // Preview player state
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [playhead, setPlayhead] = useState(0) // current time in seconds
+  const audioARef = useRef(new Audio())
+  const audioBRef = useRef(new Audio())
+  const playheadInterval = useRef(null)
+  const activeTrackRef = useRef(-1)
+  const cursorRef = useRef(null)
+
+  // Build audio URL for a track
+  const audioUrl = (track) => {
+    const path = track.subfolder
+      ? `${encodeURIComponent(track.subfolder)}/${encodeURIComponent(track.filename)}`
+      : encodeURIComponent(track.filename)
+    return `${AGENT_BASE}/api/audio/${path}`
+  }
+
+  // Find which track should be playing at a given time
+  const trackAtTime = useCallback((time) => {
+    for (let i = mixTracks.length - 1; i >= 0; i--) {
+      if (time >= mixTracks[i].startTime) return i
+    }
+    return 0
+  }, [mixTracks])
+
+  // Play/pause toggle
+  const togglePlay = useCallback(() => {
+    if (isPlaying) {
+      // Pause
+      audioARef.current.pause()
+      audioBRef.current.pause()
+      clearInterval(playheadInterval.current)
+      setIsPlaying(false)
+      return
+    }
+    // Start playing from playhead position
+    setIsPlaying(true)
+    const startTime = playhead
+    const trackIdx = trackAtTime(startTime)
+    const track = mixTracks[trackIdx]
+    if (!track) return
+
+    const audioA = audioARef.current
+    audioA.src = audioUrl(track)
+    audioA.currentTime = startTime - track.startTime
+    audioA.volume = 1
+    audioA.play().catch(() => {})
+    activeTrackRef.current = trackIdx
+
+    const startedAt = Date.now() - (startTime * 1000)
+    playheadInterval.current = setInterval(() => {
+      const now = (Date.now() - startedAt) / 1000
+      setPlayhead(now)
+
+      // Check if we need to crossfade to next track
+      const currentIdx = activeTrackRef.current
+      const currentTrack = mixTracks[currentIdx]
+      const nextTrack = mixTracks[currentIdx + 1]
+
+      if (nextTrack) {
+        const timeInCurrent = now - currentTrack.startTime
+        const fadeOutStart = currentTrack.duration - currentTrack.fadeOut
+        if (timeInCurrent >= fadeOutStart && audioBRef.current.paused) {
+          // Start next track
+          const audioB = audioBRef.current
+          audioB.src = audioUrl(nextTrack)
+          audioB.currentTime = 0
+          audioB.volume = 0
+          audioB.play().catch(() => {})
+        }
+        // Crossfade volumes
+        if (timeInCurrent >= fadeOutStart && !audioBRef.current.paused) {
+          const fadeProgress = (timeInCurrent - fadeOutStart) / currentTrack.fadeOut
+          audioA.volume = Math.max(0, 1 - fadeProgress)
+          audioBRef.current.volume = Math.min(1, fadeProgress)
+          if (fadeProgress >= 1) {
+            // Switch: B becomes A
+            audioA.pause()
+            audioA.src = audioBRef.current.src
+            audioA.currentTime = audioBRef.current.currentTime
+            audioA.volume = 1
+            audioA.play().catch(() => {})
+            audioBRef.current.pause()
+            audioBRef.current.src = ''
+            activeTrackRef.current = currentIdx + 1
+          }
+        }
+      }
+
+      // Check if mix is done
+      const lastTrack = mixTracks[mixTracks.length - 1]
+      if (now >= lastTrack.startTime + lastTrack.duration) {
+        audioA.pause()
+        audioBRef.current.pause()
+        clearInterval(playheadInterval.current)
+        setIsPlaying(false)
+        setPlayhead(0)
+      }
+    }, 50)
+  }, [isPlaying, playhead, mixTracks, trackAtTime])
+
+  // Stop and reset
+  const stopPlay = useCallback(() => {
+    audioARef.current.pause()
+    audioBRef.current.pause()
+    clearInterval(playheadInterval.current)
+    setIsPlaying(false)
+    setPlayhead(0)
+    activeTrackRef.current = -1
+  }, [])
+
+  // Click on timeline to seek
+  const seekTimeline = useCallback((e) => {
+    if (!timelineRef.current) return
+    const rect = timelineRef.current.getBoundingClientRect()
+    const scrollLeft = timelineRef.current.scrollLeft
+    const x = e.clientX - rect.left + scrollLeft
+    const time = x / pxPerSec
+    setPlayhead(Math.max(0, time))
+    if (isPlaying) {
+      stopPlay()
+      // Will restart from new position on next togglePlay
+    }
+  }, [pxPerSec, isPlaying, stopPlay])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      audioARef.current.pause()
+      audioBRef.current.pause()
+      clearInterval(playheadInterval.current)
+    }
+  }, [])
+
+  // Auto-scroll to keep cursor visible
+  useEffect(() => {
+    if (isPlaying && timelineRef.current && cursorRef.current) {
+      const container = timelineRef.current
+      const cursorX = playhead * pxPerSec
+      const viewLeft = container.scrollLeft
+      const viewRight = viewLeft + container.clientWidth
+      if (cursorX < viewLeft + 50 || cursorX > viewRight - 50) {
+        container.scrollLeft = cursorX - container.clientWidth / 3
+      }
+    }
+  }, [playhead, isPlaying, pxPerSec])
+
   // On mount, fetch durations for all tracks
   useEffect(() => {
     if (!initialTracks || initialTracks.length === 0) { setLoading(false); return }
@@ -2344,6 +2491,32 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
 
         <div className="w-px h-6 bg-[var(--border-color)]" />
 
+        {/* Play controls */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={stopPlay}
+            className="w-7 h-7 flex items-center justify-center rounded-lg btn-ghost transition-all duration-200 active:scale-95"
+            title="Stop"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" /></svg>
+          </button>
+          <button
+            onClick={togglePlay}
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 active:scale-95"
+            style={{ background: isPlaying ? 'var(--color-accent)' : 'rgba(var(--color-accent-rgb, 59,130,246), 0.2)' }}
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? (
+              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+            ) : (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            )}
+          </button>
+          <span className="text-xs text-[var(--text-muted)] w-16 text-center font-mono">{fmtTime(playhead)} / {fmtTime(totalDuration)}</span>
+        </div>
+
+        <div className="w-px h-6 bg-[var(--border-color)]" />
+
         {/* Zoom controls */}
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-[var(--text-muted)]">Zoom</span>
@@ -2394,8 +2567,16 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
       </div>
 
       {/* Timeline */}
-      <div className="flex-1 min-h-0 overflow-auto" ref={timelineRef}>
-        <div className="min-w-full" style={{ width: Math.max(timelineWidth + 100, 800) }}>
+      <div className="flex-1 min-h-0 overflow-auto" ref={timelineRef} onClick={seekTimeline}>
+        <div className="relative min-w-full" style={{ width: Math.max(timelineWidth + 100, 800) }}>
+          {/* Playhead cursor */}
+          <div
+            ref={cursorRef}
+            className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none"
+            style={{ left: playhead * pxPerSec, transition: isPlaying ? 'none' : 'left 0.1s' }}
+          >
+            <div className="absolute -top-0 -left-1.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-red-300" />
+          </div>
           {/* Time ruler */}
           <div className="sticky top-0 z-10 h-8 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex items-end">
             <div className="relative w-full h-full">
