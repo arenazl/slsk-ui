@@ -527,7 +527,7 @@ function useQS(key, defaultVal) {
   return [val, set]
 }
 
-const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected }, ref) {
+const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio }, ref) {
   const toast = useToast()
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1669,6 +1669,17 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
           {/* Actions - fixed */}
           <div className="flex-shrink-0 border-t border-[var(--border-color)] py-1">
+            {onRadio && (
+              <button
+                onClick={() => { onRadio(ctxMenu.file); setCtxMenu(null) }}
+                className="w-full text-left px-3 py-1.5 text-sm text-purple-400 hover:bg-purple-500/10 hover:text-purple-300 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" />
+                </svg>
+                Radio
+              </button>
+            )}
             <button
               onClick={() => { startPreviewMode(ctxMenu.file); setCtxMenu(null) }}
               className="w-full text-left px-3 py-1.5 text-sm text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors flex items-center gap-2"
@@ -2187,6 +2198,7 @@ function App() {
     return saved ? JSON.parse(saved) : null
   })
   const [page, setPage] = useQS('page', 'discover')
+  const [pendingRadioTrack, setPendingRadioTrack] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accent_color') || '#3b82f6')
   const [accentOpacity, setAccentOpacity] = useState(() => parseFloat(localStorage.getItem('accent_opacity') || '1'))
@@ -2879,6 +2891,7 @@ function App() {
           previewMode={previewMode}
           onStopPreviewMode={stopPreviewModeApp}
           agentConnected={agentConnected}
+          onRadio={(file) => { setPendingRadioTrack({ artist: file.artist || '', title: file.title || file.filename }); setPage('discover') }}
         />
       </div>
 
@@ -3191,6 +3204,8 @@ function App() {
           setNowPlaying={setNowPlaying}
           setIsAudioPlaying={setIsAudioPlaying}
           addToPending={addToPending}
+          pendingRadioTrack={pendingRadioTrack}
+          onRadioConsumed={() => setPendingRadioTrack(null)}
         />
       </div>
 
@@ -3224,7 +3239,7 @@ function App() {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed }) {
   const [genres, setGenres] = useState([])
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
   const [tracks, setTracks] = useState([])
@@ -3240,6 +3255,14 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Context menu
   const [discoverCtx, setDiscoverCtx] = useState(null) // {x, y, track}
   const discoverCtxRef = useRef(null)
+
+  // Handle pending radio track from Library
+  useEffect(() => {
+    if (pendingRadioTrack && connected) {
+      loadRadio(pendingRadioTrack)
+      onRadioConsumed?.()
+    }
+  }, [pendingRadioTrack, connected])
 
   // Close context menu on outside click
   useEffect(() => {
