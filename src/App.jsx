@@ -4454,6 +4454,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const [loading, setLoading] = useState(false)
   const [playingId, setPlayingId] = useState(null)
 
+  // Source: 'beatport' or 'spotify'
+  const [discoverSource, setDiscoverSource] = useState('beatport')
+  const [spotifyCategories, setSpotifyCategories] = useState([])
+  const [selectedSpotifyCategory, setSelectedSpotifyCategory] = useState(null)
+  const [spotifyPlaylistName, setSpotifyPlaylistName] = useState('')
+
   // Library manifest for marking already-downloaded tracks
   const [libraryManifest, setLibraryManifest] = useState({})
   useEffect(() => {
@@ -4656,6 +4662,40 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Load "All" on mount
   useEffect(() => { loadChart(null) }, [])
 
+  // Load Spotify categories on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/api/discover/spotify/categories`).then(r => r.json()).then(setSpotifyCategories).catch(() => {})
+  }, [])
+
+  const loadSpotifyPlaylist = async (cat) => {
+    setSelectedSpotifyCategory(cat)
+    setLoading(true)
+    setTracks([])
+    try {
+      const key = cat ? cat.key : 'top50_argentina'
+      const res = await fetch(`${API_BASE}/api/discover/spotify/playlist?key=${key}`)
+      const data = await res.json()
+      setTracks(data.tracks || [])
+      setSpotifyPlaylistName(data.name || cat?.name || '')
+    } catch (e) {
+      console.error('Failed to load Spotify playlist', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const switchSource = (source) => {
+    if (source === discoverSource) return
+    setDiscoverSource(source)
+    setTracks([])
+    setLoading(true)
+    if (source === 'beatport') {
+      loadChart(selectedGenre)
+    } else {
+      loadSpotifyPlaylist(selectedSpotifyCategory || spotifyCategories[0] || null)
+    }
+  }
+
   const clearDiscoverAudio = () => {
     setPlayingId(null)
     setPlayingFile(null)
@@ -4820,7 +4860,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     'Trance': '#06b6d4',
     'Peak Time Techno': '#f43f5e',
   }
-  const accentColor = selectedGenre ? (genreAccents[selectedGenre.name] || '#22c55e') : '#22c55e'
+  const spotifyAccent = selectedSpotifyCategory ? (selectedSpotifyCategory.color || '#1DB954') : '#1DB954'
+  const accentColor = discoverSource === 'spotify' ? spotifyAccent : (selectedGenre ? (genreAccents[selectedGenre.name] || '#22c55e') : '#22c55e')
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[var(--bg-app)] relative">
@@ -4840,14 +4881,38 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         <div className="relative h-full flex flex-col justify-end gap-3 px-8 pb-4">
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs font-medium uppercase tracking-widest" style={{color: `${accentColor}`}}>Beatport Charts</span>
+              {/* Source tabs: EDM / Latin */}
+              <div className="flex items-center gap-1 mb-1">
+                <button
+                  onClick={() => switchSource('beatport')}
+                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest transition-all duration-200 active:scale-95 ${
+                    discoverSource === 'beatport' ? 'text-white' : 'text-white/40 hover:text-white/70'
+                  }`}
+                  style={discoverSource === 'beatport' ? { background: `${accentColor}50` } : {}}
+                >
+                  EDM
+                </button>
+                <button
+                  onClick={() => switchSource('spotify')}
+                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest transition-all duration-200 active:scale-95 flex items-center gap-1.5 ${
+                    discoverSource === 'spotify' ? 'text-white' : 'text-white/40 hover:text-white/70'
+                  }`}
+                  style={discoverSource === 'spotify' ? { background: '#1DB95450' } : {}}
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                  Latin
+                </button>
+              </div>
               <div className="flex items-center gap-5 mt-1">
                 <h1 className="text-3xl font-bold text-white tracking-tight">
-                  {selectedGenre ? selectedGenre.name : 'Top 100'}
+                  {discoverSource === 'beatport'
+                    ? (selectedGenre ? selectedGenre.name : 'Top 100')
+                    : (spotifyPlaylistName || selectedSpotifyCategory?.name || 'Top 50 Argentina')
+                  }
                 </h1>
                 {tracks.length > 0 && <span className="text-sm text-white/40">{tracks.length} tracks</span>}
                 {loading && <span className="text-sm text-white/40">Cargando...</span>}
-                {!loading && (
+                {!loading && discoverSource === 'beatport' && (
                   <button
                     onClick={async () => {
                       if (agentConnected) {
@@ -4861,6 +4926,17 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     }}
                     className="p-2 rounded-lg hover:bg-white/20 transition-all active:scale-95"
                     title={agentConnected ? "Scrapear Beatport y actualizar" : "Actualizar chart"}
+                  >
+                    <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                )}
+                {!loading && discoverSource === 'spotify' && (
+                  <button
+                    onClick={() => loadSpotifyPlaylist(selectedSpotifyCategory)}
+                    className="p-2 rounded-lg hover:bg-white/20 transition-all active:scale-95"
+                    title="Refrescar playlist"
                   >
                     <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -4882,33 +4958,51 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             )}
           </div>
 
-          {/* Genre pills - single line with horizontal scroll */}
+          {/* Category pills - single line with horizontal scroll */}
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full">
-            <button
-              onClick={() => loadChart(null)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
-                !selectedGenre ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
-              }`}
-              style={!selectedGenre ? { background: `rgba(${GENRE_COLORS[0].rgb}, 0.3)` } : {}}
-            >
-              All
-            </button>
-            {genres.map((g, gi) => {
-              const isActive = selectedGenre?.name === g.name
-              const c = GENRE_COLORS[gi % GENRE_COLORS.length]
-              return (
-                <button
-                  key={g.name}
-                  onClick={() => loadChart(g)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
-                    isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
-                  }`}
-                  style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
-                >
-                  {g.name}
-                </button>
-              )
-            })}
+            {discoverSource === 'beatport' ? (<>
+              <button
+                onClick={() => loadChart(null)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                  !selectedGenre ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
+                }`}
+                style={!selectedGenre ? { background: `rgba(${GENRE_COLORS[0].rgb}, 0.3)` } : {}}
+              >
+                All
+              </button>
+              {genres.map((g, gi) => {
+                const isActive = selectedGenre?.name === g.name
+                const c = GENRE_COLORS[gi % GENRE_COLORS.length]
+                return (
+                  <button
+                    key={g.name}
+                    onClick={() => loadChart(g)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                      isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
+                    }`}
+                    style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
+                  >
+                    {g.name}
+                  </button>
+                )
+              })}
+            </>) : (<>
+              {spotifyCategories.map((cat) => {
+                const isActive = selectedSpotifyCategory?.key === cat.key
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => loadSpotifyPlaylist(cat)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                      isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
+                    }`}
+                    style={isActive ? { background: `${cat.color}40` } : {}}
+                  >
+                    {cat.name}
+                  </button>
+                )
+              })}
+            </>)}
           </div>
         </div>
       </div>
