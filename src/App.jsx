@@ -1826,13 +1826,6 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     }
   }
 
-  // Auto-regenerate set when star filter changes
-  const [autoRegenRef] = useState({ init: false })
-  useEffect(() => {
-    if (!autoRegenRef.init) { autoRegenRef.init = true; return }
-    if (setTracks.length > 0 && method) generateSet()
-  }, [minStars])
-
   const handlePlay = (t) => onPlay(t)
   const handlePlayPause = () => onPlayPause()
   const handleStop = () => onStop()
@@ -1938,7 +1931,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
           {[60, 90, 120].map(d => (
             <button
               key={d}
-              onClick={() => { setDuration(d); if (setTracks.length > 0) generateSet(null, null, d) }}
+              onClick={() => setDuration(d)}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
                 duration === d ? 'font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
