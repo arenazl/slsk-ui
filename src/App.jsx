@@ -3254,19 +3254,55 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }, [])
 
   const isInLibrary = useMemo(() => {
-    // Build normalized index: "artist - title" -> true
-    const index = new Set()
+    // Normalize: lowercase, strip parens content like (Extended Mix), remove non-alphanumeric
+    const norm = (s) => (s || '').toLowerCase()
+      .replace(/\(.*?\)/g, '')  // remove (Extended Mix), (Original Mix), etc
+      .replace(/\[.*?\]/g, '')  // remove [brackets]
+      .replace(/\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i, '') // remove extension
+      .replace(/^\d+[\s.\-]+/, '') // remove leading track numbers
+      .replace(/[^a-z0-9]/g, '') // only alphanumeric
+      .trim()
+
+    // Build multiple indexes for fuzzy matching
+    const titleWords = new Set()  // individual normalized titles
+    const artistTitle = new Set() // "artist|title" combos
+    const filenames = new Set()   // normalized filenames
+
     for (const [filename, meta] of Object.entries(libraryManifest)) {
-      const artist = (meta.artist || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-      const title = (meta.title || filename).toLowerCase().replace(/[^a-z0-9]/g, '')
-      if (artist && title) index.add(`${artist}|${title}`)
-      if (title) index.add(title)
+      const fn = norm(filename)
+      if (fn) filenames.add(fn)
+
+      const artist = norm(meta.artist || '')
+      const title = norm(meta.title || '')
+      if (title) titleWords.add(title)
+      if (artist && title) artistTitle.add(`${artist}|${title}`)
+
+      // Also extract artist-title from filename pattern "Artist - Title"
+      const parts = filename.replace(/\.(flac|mp3|wav|m4a)$/i, '').split(/\s*-\s*/)
+      if (parts.length >= 2) {
+        const fnArtist = norm(parts[0])
+        const fnTitle = norm(parts.slice(1).join(''))
+        if (fnArtist && fnTitle) artistTitle.add(`${fnArtist}|${fnTitle}`)
+        if (fnTitle) titleWords.add(fnTitle)
+      }
     }
+
     return (track) => {
-      const a = (track.artist || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-      const t = (track.title || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-      if (a && t && index.has(`${a}|${t}`)) return true
-      if (t && index.has(t)) return true
+      const a = norm(track.artist || '')
+      const t = norm(track.title || '')
+      // Exact artist+title match
+      if (a && t && artistTitle.has(`${a}|${t}`)) return true
+      // Title-only match
+      if (t && titleWords.has(t)) return true
+      // Check if track title+artist appears in any filename
+      const combined = a + t
+      if (combined && filenames.has(combined)) return true
+      // Check if any filename contains the title
+      if (t && t.length > 5) {
+        for (const fn of filenames) {
+          if (fn.includes(t)) return true
+        }
+      }
       return false
     }
   }, [libraryManifest])
