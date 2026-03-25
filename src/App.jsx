@@ -2291,13 +2291,18 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           audioA.volume = Math.max(0, (1 - fadeProgress) * mv)
           audioBRef.current.volume = Math.min(mv, fadeProgress * mv)
           if (fadeProgress >= 1) {
-            // Switch: B becomes A
+            // Crossfade complete: A is silent, B is full volume
+            // Just stop A cleanly and promote B — no re-assign needed
             audioA.pause()
-            audioA.src = audioBRef.current.src
-            audioA.currentTime = audioBRef.current.currentTime
-            audioA.volume = volumeRef.current
-            audioA.play().catch(() => {})
-            audioBRef.current.pause()
+            audioA.src = ''
+            // Swap refs: B becomes the new A for the next crossfade
+            const tmpSrc = audioBRef.current.src
+            const tmpTime = audioBRef.current.currentTime
+            const tmpVol = audioBRef.current.volume
+            // B continues playing, just swap the references
+            const temp = audioARef.current
+            audioARef.current = audioBRef.current
+            audioBRef.current = temp
             audioBRef.current.src = ''
             activeTrackRef.current = currentIdx + 1
           }
