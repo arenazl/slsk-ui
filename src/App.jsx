@@ -2198,6 +2198,8 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
   const [exporting, setExporting] = useState(false)
   const [mixName, setMixName] = useState(() => `Mix ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }).replace(/\//g, '-')}`)
   const [exportFormat, setExportFormat] = useState('mp3')
+  const [masterBPM, setMasterBPM] = useState(128)
+  const [snapEnabled, setSnapEnabled] = useState(true)
   const timelineRef = useRef(null)
 
   // Preview player state
@@ -2549,8 +2551,13 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           track.startTime = 0
         } else {
           const prevTrack = next[i - 1]
-          // Free movement — no limits on overlap
-          track.startTime = Math.max(0, newStart)
+          // Free movement — snap to beat grid if enabled
+          let snapped = Math.max(0, newStart)
+          if (snapEnabled && masterBPM > 0) {
+            const beatLen = 60 / masterBPM
+            snapped = Math.round(snapped / beatLen) * beatLen
+          }
+          track.startTime = snapped
           // Update fadeIn/fadeOut based on overlap
           const prevEnd = prevTrack.startTime + prevTrack.duration
           const overlap = prevEnd - track.startTime
@@ -2671,6 +2678,28 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
 
         <div className="w-px h-6 bg-[var(--border-color)]" />
 
+        {/* BPM Master + Snap */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-[var(--text-muted)]">BPM</span>
+          <input
+            type="number"
+            value={masterBPM}
+            onChange={(e) => setMasterBPM(Math.max(60, Math.min(200, parseInt(e.target.value) || 128)))}
+            className="w-14 px-1.5 py-0.5 bg-[var(--bg-input)] border border-gray-700 rounded text-xs text-center text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+          />
+          <button
+            onClick={() => setSnapEnabled(s => !s)}
+            className={`px-2 py-0.5 rounded text-xs font-medium transition-all duration-200 ${
+              snapEnabled ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+            title="Snap to beat grid"
+          >
+            Snap
+          </button>
+        </div>
+
+        <div className="w-px h-6 bg-[var(--border-color)]" />
+
         {/* Zoom controls */}
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-[var(--text-muted)]">Zoom</span>
@@ -2779,6 +2808,27 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
 
           {/* Track lanes - 2 alternating rows */}
           <div className="relative" style={{ height: 2 * 80 + 40 }}>
+            {/* Beat grid lines */}
+            {snapEnabled && masterBPM > 0 && (() => {
+              const beatLen = 60 / masterBPM
+              const barLen = beatLen * 4
+              const lines = []
+              for (let t = 0; t <= totalDuration; t += beatLen) {
+                const isBar = Math.abs(t % barLen) < 0.01 || Math.abs(t % barLen - barLen) < 0.01
+                lines.push(
+                  <div
+                    key={`beat${t.toFixed(3)}`}
+                    className="absolute top-0 bottom-0 pointer-events-none"
+                    style={{
+                      left: t * pxPerSec,
+                      width: 1,
+                      background: isBar ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
+                    }}
+                  />
+                )
+              }
+              return lines
+            })()}
             {mixTracks.map((track, i) => {
               const color = getTrackColor(track, i)
               const left = track.startTime * pxPerSec
