@@ -612,6 +612,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   useImperativeHandle(ref, () => ({
     refresh: fetchLibrary,
+    getFiles: () => files,
     goToTrack: (filename) => {
       fetchLibrary().then(() => {
         setView('tracks')
@@ -3245,6 +3246,30 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const [tracks, setTracks] = useState([])
   const [loading, setLoading] = useState(false)
   const [playingId, setPlayingId] = useState(null)
+
+  // Library manifest for marking already-downloaded tracks
+  const [libraryManifest, setLibraryManifest] = useState({})
+  useEffect(() => {
+    fetch(`${API_BASE}/api/metadata`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
+  }, [])
+
+  const isInLibrary = useMemo(() => {
+    // Build normalized index: "artist - title" -> true
+    const index = new Set()
+    for (const [filename, meta] of Object.entries(libraryManifest)) {
+      const artist = (meta.artist || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const title = (meta.title || filename).toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (artist && title) index.add(`${artist}|${title}`)
+      if (title) index.add(title)
+    }
+    return (track) => {
+      const a = (track.artist || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const t = (track.title || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (a && t && index.has(`${a}|${t}`)) return true
+      if (t && index.has(t)) return true
+      return false
+    }
+  }, [libraryManifest])
   // Download queue state
   const [downloadQueue, setDownloadQueue] = useState({}) // trackId -> {status, message}
   // Radio state
@@ -3492,6 +3517,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           if (fname.toLowerCase().includes(track.title?.toLowerCase()?.slice(0, 20) || '---')) {
             if (data.status === 'completed') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Descargado' } }))
+              // Refresh manifest to update "in library" marks
+              fetch(`${API_BASE}/api/metadata`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
               wsRef.current.removeEventListener('message', handler)
             } else if (data.status === 'error') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: 'Error al descargar' } }))
@@ -3695,8 +3722,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
                   {/* Track info */}
                   <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-medium truncate ${isPlaying ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>
+                    <div className={`text-sm font-medium truncate flex items-center gap-1.5 ${isPlaying ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>
                       {t.title}
+                      {isInLibrary(t) && <span className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500" title="En tu biblioteca" />}
                     </div>
                     <div className="text-xs text-gray-500 truncate mt-0.5">{t.artist}</div>
                   </div>
