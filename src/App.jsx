@@ -2167,6 +2167,8 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
   // Preview player state
   const [isPlaying, setIsPlaying] = useState(false)
   const [playhead, setPlayhead] = useState(0) // current time in seconds
+  const [volume, setVolume] = useState(1)
+  const [muted, setMuted] = useState(false)
   const audioARef = useRef(new Audio())
   const audioBRef = useRef(new Audio())
   const playheadInterval = useRef(null)
@@ -2210,7 +2212,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     const audioA = audioARef.current
     audioA.src = audioUrl(track)
     audioA.currentTime = startTime - track.startTime
-    audioA.volume = 1
+    audioA.volume = volumeRef.current
     audioA.play().catch(() => {})
     activeTrackRef.current = trackIdx
 
@@ -2238,14 +2240,15 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         // Crossfade volumes
         if (timeInCurrent >= fadeOutStart && !audioBRef.current.paused) {
           const fadeProgress = (timeInCurrent - fadeOutStart) / currentTrack.fadeOut
-          audioA.volume = Math.max(0, 1 - fadeProgress)
-          audioBRef.current.volume = Math.min(1, fadeProgress)
+          const mv = volumeRef.current
+          audioA.volume = Math.max(0, (1 - fadeProgress) * mv)
+          audioBRef.current.volume = Math.min(mv, fadeProgress * mv)
           if (fadeProgress >= 1) {
             // Switch: B becomes A
             audioA.pause()
             audioA.src = audioBRef.current.src
             audioA.currentTime = audioBRef.current.currentTime
-            audioA.volume = 1
+            audioA.volume = volumeRef.current
             audioA.play().catch(() => {})
             audioBRef.current.pause()
             audioBRef.current.src = ''
@@ -2293,6 +2296,19 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
       // Will restart from new position on next togglePlay
     }
   }, [pxPerSec, isPlaying, stopPlay])
+
+  // Master volume ref for use in crossfade interval
+  const effectiveVolume = muted ? 0 : volume
+  const volumeRef = useRef(effectiveVolume)
+  volumeRef.current = effectiveVolume
+  // Apply volume changes immediately to playing audio
+  useEffect(() => {
+    const v = muted ? 0 : volume
+    if (!isPlaying) return
+    // Scale current audio volumes
+    audioARef.current.volume = Math.min(1, audioARef.current.volume > 0 ? v : 0)
+    if (!audioBRef.current.paused) audioBRef.current.volume = Math.min(1, audioBRef.current.volume > 0 ? v : 0)
+  }, [volume, muted, isPlaying])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -2829,6 +2845,118 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
             </div>
           )
         })}
+      </div>
+
+      {/* Bottom transport bar */}
+      <div className="flex-shrink-0 h-14 flex items-center gap-3 px-4 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
+        {/* Play/Pause */}
+        <button
+          onClick={togglePlay}
+          className="w-8 h-8 flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 flex-shrink-0"
+          style={{ background: isPlaying ? 'var(--color-accent)' : 'rgba(var(--color-accent-rgb, 59,130,246), 0.2)' }}
+        >
+          {isPlaying ? (
+            <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          )}
+        </button>
+
+        {/* Time */}
+        <span className="text-xs text-[var(--text-muted)] font-mono flex-shrink-0 w-10">{fmtTime(playhead)}</span>
+
+        {/* Progress bar */}
+        <div
+          className="flex-1 h-8 relative cursor-pointer rounded overflow-hidden bg-black/20"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            const pct = (e.clientX - rect.left) / rect.width
+            const newTime = pct * totalDuration
+            setPlayhead(Math.max(0, Math.min(totalDuration, newTime)))
+            if (isPlaying) { stopPlay() }
+          }}
+        >
+          {/* Track segments background */}
+          {mixTracks.map((t, i) => {
+            const color = getTrackColor(t, i)
+            const startPct = (t.startTime / totalDuration) * 100
+            const widthPct = (t.duration / totalDuration) * 100
+            return (
+              <div
+                key={i}
+                className="absolute top-0 bottom-0"
+                style={{
+                  left: `${startPct}%`,
+                  width: `${widthPct}%`,
+                  background: `rgba(${color.rgb}, 0.15)`,
+                  borderRight: i < mixTracks.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                }}
+              />
+            )
+          })}
+          {/* Progress fill */}
+          <div
+            className="absolute top-0 bottom-0 left-0 bg-[var(--color-accent)]/30"
+            style={{ width: totalDuration > 0 ? `${(playhead / totalDuration) * 100}%` : '0%' }}
+          />
+          {/* Playhead indicator */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-accent)]"
+            style={{ left: totalDuration > 0 ? `${(playhead / totalDuration) * 100}%` : '0%' }}
+          />
+          {/* Track name labels */}
+          {mixTracks.map((t, i) => {
+            const startPct = (t.startTime / totalDuration) * 100
+            const widthPct = (t.duration / totalDuration) * 100
+            return widthPct > 3 ? (
+              <div
+                key={`l${i}`}
+                className="absolute top-1 text-[8px] text-white/60 truncate pointer-events-none px-0.5"
+                style={{ left: `${startPct}%`, width: `${widthPct}%` }}
+              >
+                {t.filename.replace(/\.[^.]+$/, '').replace(/^\d+\s*-\s*/, '')}
+              </div>
+            ) : null
+          })}
+        </div>
+
+        {/* Time total */}
+        <span className="text-xs text-[var(--text-muted)] font-mono flex-shrink-0 w-10">{fmtTime(totalDuration)}</span>
+
+        <div className="w-px h-6 bg-[var(--border-color)]" />
+
+        {/* Volume controls */}
+        <button
+          onClick={() => setMuted(m => !m)}
+          className="w-7 h-7 flex items-center justify-center rounded-lg btn-ghost transition-all duration-200 active:scale-95 flex-shrink-0"
+          title={muted ? 'Unmute' : 'Mute'}
+        >
+          {muted || volume === 0 ? (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+            </svg>
+          ) : volume < 0.5 ? (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728" />
+            </svg>
+          )}
+        </button>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={muted ? 0 : volume}
+          onChange={(e) => { setVolume(parseFloat(e.target.value)); if (muted) setMuted(false) }}
+          className="w-20 h-1 accent-[var(--color-accent)] flex-shrink-0"
+        />
       </div>
     </div>
   )
