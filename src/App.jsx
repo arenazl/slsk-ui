@@ -4702,7 +4702,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       fetch(`${API_BASE}/api/spotify/status`).then(r => r.json()).then(data => {
         setSpotifyConnected(data.connected)
         if (!data.connected) {
-          window.open(`${API_BASE}/api/spotify/login`, '_blank', 'width=500,height=700')
+          window.location.href = `${API_BASE}/api/spotify/login`
+          return
         }
       }).catch(() => {})
       loadSpotifyPlaylist(selectedSpotifyCategory || spotifyCategories[0] || null)
