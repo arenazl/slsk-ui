@@ -241,7 +241,7 @@ function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, c
                   e.dataTransfer.effectAllowed = 'move'
                 }}
                 onContextMenu={(e) => onContextMenu?.(e, f)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-grab active:cursor-grabbing hover:bg-white/5 transition-colors group/item ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-grab active:cursor-grabbing hover:bg-[var(--bg-hover)] transition-colors group/item ${
                   isPlaying ? 'bg-white/5' : ''
                 }`}
               >
@@ -1389,7 +1389,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   key={`${f.filename}-${i}`}
                   onDoubleClick={() => handlePlay(f)}
                   onContextMenu={(e) => handleContextMenu(e, f)}
-                  className={`flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-white/5 cursor-default ${
+                  className={`flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-default ${
                     isPlaying ? 'bg-white/5' : ''
                   }`}
                 >
@@ -1530,7 +1530,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                     <div
                       onDoubleClick={() => handlePlay(f)}
                       onContextMenu={(e) => handleContextMenu(e, f)}
-                      className={`flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-white/5 cursor-default ${
+                      className={`flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-default ${
                       isPlaying ? 'bg-white/5' : ''
                     }`}>
                       <span className="w-8 text-center text-xs text-gray-600">{idx}</span>
@@ -1624,7 +1624,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 key={g}
                 onClick={() => changeGenre(g)}
                 className={`w-full text-left px-3 py-1 text-sm transition-colors ${
-                  g === ctxMenu.file?.genre ? 'text-[var(--color-accent)] bg-[var(--color-accent)]/10 font-medium' : 'text-gray-300 hover:bg-white/5 hover:text-[var(--text-primary,white)]'
+                  g === ctxMenu.file?.genre ? 'text-[var(--color-accent)] bg-[var(--color-accent)]/10 font-medium' : 'text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)]'
                 }`}
               >
                 {g} {g === ctxMenu.file?.genre && '✓'}
@@ -1632,7 +1632,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             ))}
             <button
               onClick={() => changeGenre('')}
-              className={`w-full text-left px-3 py-1 text-sm text-gray-400 hover:bg-white/5 hover:text-[var(--text-primary,white)] transition-colors ${
+              className={`w-full text-left px-3 py-1 text-sm text-gray-400 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors ${
                 !ctxMenu.file?.genre ? 'text-[var(--color-accent)] bg-[var(--color-accent)]/10 font-medium' : ''
               }`}
             >
@@ -1675,7 +1675,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             </button>
             <button
               onClick={() => { openFolder(ctxMenu.file?.subfolder || ctxMenu.file?.genre || ''); setCtxMenu(null) }}
-              className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
@@ -2851,7 +2851,7 @@ function App() {
           {authUser && (
             <button
               onClick={() => { localStorage.removeItem('auth_token'); localStorage.removeItem('auth_user'); setAuthUser(null) }}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-[var(--bg-hover)] transition-all"
               title="Cerrar sesión"
             >
               <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{authUser.name?.[0]?.toUpperCase()}</span>
@@ -3197,7 +3197,7 @@ function App() {
           </span>
           <button
             onClick={stopPreviewModeApp}
-            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-2 py-0.5 rounded hover:bg-white/5"
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-2 py-0.5 rounded hover:bg-[var(--bg-hover)]"
           >
             Detener
           </button>
@@ -3593,7 +3593,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 <div key={t.id || i}
                   onContextMenu={(e) => { e.preventDefault(); setDiscoverCtx({ x: e.clientX, y: e.clientY, track: t }) }}
                   className={`group flex items-center gap-4 px-4 py-3 rounded-xl mb-1 transition-all duration-200 ${
-                  isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-white/5'
+                  isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-[var(--bg-hover)]'
                 }`}>
                   {/* Position number - shows play on hover */}
                   <div className="w-8 flex-shrink-0 text-center">
@@ -3751,7 +3751,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     <div key={t.id || i}
                       onContextMenu={(e) => { e.preventDefault(); setDiscoverCtx({ x: e.clientX, y: e.clientY, track: t }) }}
                       className={`group flex items-center gap-4 px-4 py-3 rounded-xl mb-1 transition-all duration-200 ${
-                      isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-white/5'
+                      isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-[var(--bg-hover)]'
                     }`}>
                       <div className="w-8 flex-shrink-0 text-center">
                         <span className={`text-sm font-mono group-hover:hidden ${isPlaying ? 'text-green-400 font-bold' : 'text-gray-600'}`}>
@@ -3840,7 +3840,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           </div>
           <button
             onClick={() => loadRadio(discoverCtx.track)}
-            className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
+            className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
           >
             <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
