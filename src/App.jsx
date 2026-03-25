@@ -563,7 +563,7 @@ function useQS(key, defaultVal) {
   return [val, set]
 }
 
-const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser }, ref) {
+const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
   const toast = useToast()
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -593,7 +593,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     const id = ++fetchIdRef.current
     try {
       // Fetch metadata from Heroku (Cloudinary = source of truth)
-      const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}`)
+      const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
       const metadata = await metaRes.json()
 
       if (agentConnected) {
@@ -624,7 +624,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         if (id === fetchIdRef.current) setFiles(merged)
       } else {
         // No agent: use Heroku library endpoint (metadata-only view)
-        const libRes = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}`)
+        const libRes = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
         const data = await libRes.json()
         if (id === fetchIdRef.current) setFiles(data)
       }
@@ -633,12 +633,12 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     } finally {
       if (id === fetchIdRef.current) setLoading(false)
     }
-  }, [agentConnected, authUser])
+  }, [agentConnected, authUser, collection])
 
   const hasFetched = useRef(false)
   useEffect(() => {
     hasFetched.current = false
-  }, [agentConnected, authUser])
+  }, [agentConnected, authUser, collection])
   useEffect(() => {
     if (!hasFetched.current) {
       hasFetched.current = true
@@ -3392,6 +3392,8 @@ function App() {
   const [page, setPage] = useQS('page', 'discover')
   const [pendingRadioTrack, setPendingRadioTrack] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
+  const [collection, setCollection] = useState(() => localStorage.getItem('collection') || 'edm')
+  useEffect(() => { localStorage.setItem('collection', collection) }, [collection])
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accent_color') || '#3b82f6')
   const [accentOpacity, setAccentOpacity] = useState(() => parseFloat(localStorage.getItem('accent_opacity') || '1'))
 
@@ -3952,6 +3954,22 @@ function App() {
               </button>
             ))}
           </div>
+          <div className="flex items-center bg-white/10 rounded-full p-0.5">
+            {[
+              { id: 'edm', label: 'EDM' },
+              { id: 'latin', label: 'LATIN', icon: true },
+            ].map(c => (
+              <button key={c.id}
+                onClick={() => setCollection(c.id)}
+                className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                  collection === c.id ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/60'
+                }`}
+              >
+                {c.icon && <svg className="w-3 h-3 inline mr-1" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>}
+                {c.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-3 min-w-0 flex-1 justify-end">
           {logs.length > 0 && isRunning && (
@@ -4089,6 +4107,7 @@ function App() {
           agentConnected={agentConnected}
           onRadio={(file) => { setPendingRadioTrack({ artist: file.artist || '', title: file.title || file.filename }); setPage('discover') }}
           authUser={authUser}
+          collection={collection}
         />
       </div>
 
@@ -4414,6 +4433,7 @@ function App() {
           onRadioConsumed={() => setPendingRadioTrack(null)}
           agentConnected={agentConnected}
           authUser={authUser}
+          collection={collection}
         />
       </div>
 
@@ -4447,15 +4467,15 @@ function App() {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, authUser }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, authUser, collection }) {
   const [genres, setGenres] = useState([])
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
   const [tracks, setTracks] = useState([])
   const [loading, setLoading] = useState(false)
   const [playingId, setPlayingId] = useState(null)
 
-  // Source: 'beatport' or 'spotify'
-  const [discoverSource, setDiscoverSource] = useState('beatport')
+  // Source derived from global collection toggle
+  const discoverSource = collection === 'latin' ? 'spotify' : 'beatport'
   const [spotifyCategories, setSpotifyCategories] = useState([])
   const [selectedSpotifyCategory, setSelectedSpotifyCategory] = useState(null)
   const [spotifyPlaylistName, setSpotifyPlaylistName] = useState('')
@@ -4690,15 +4710,16 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
   }
 
-  const switchSource = (source) => {
-    if (source === discoverSource) return
-    setDiscoverSource(source)
+  // React to collection/source changes
+  const prevSourceRef = useRef(discoverSource)
+  useEffect(() => {
+    if (prevSourceRef.current === discoverSource) return
+    prevSourceRef.current = discoverSource
     setTracks([])
     setLoading(true)
-    if (source === 'beatport') {
+    if (discoverSource === 'beatport') {
       loadChart(selectedGenre)
     } else {
-      // Check Spotify connection, auto-login if needed
       fetch(`${API_BASE}/api/spotify/status`).then(r => r.json()).then(data => {
         setSpotifyConnected(data.connected)
         if (!data.connected) {
@@ -4708,7 +4729,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       }).catch(() => {})
       loadSpotifyPlaylist(selectedSpotifyCategory || spotifyCategories[0] || null)
     }
-  }
+  }, [discoverSource])
 
   const clearDiscoverAudio = () => {
     setPlayingId(null)
@@ -4804,7 +4825,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             }))
           } else {
             setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
-            addToPending({ artist: track.artist, title: track.title, source: 'discover' })
+            addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
           }
           wsRef.current.removeEventListener('message', handler)
         }
@@ -4820,7 +4841,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               wsRef.current.removeEventListener('message', handler)
             } else if (data.status === 'error') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: 'Error al descargar' } }))
-              addToPending({ artist: track.artist, title: track.title, source: 'discover' })
+              addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
               wsRef.current.removeEventListener('message', handler)
             }
           }
@@ -4842,7 +4863,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         const curr = prev[track.id]
         if (curr?.status === 'searching') {
           wsRef.current?.removeEventListener('message', handler)
-          addToPending({ artist: track.artist, title: track.title, source: 'discover' })
+          addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
           return { ...prev, [track.id]: { status: 'not_found', message: 'No encontrado' } }
         }
         return prev
@@ -4895,28 +4916,6 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         <div className="relative h-full flex flex-col justify-end gap-3 px-8 pb-4">
           <div className="flex items-start justify-between">
             <div>
-              {/* Source tabs: EDM / Latin */}
-              <div className="flex items-center gap-1 mb-1">
-                <button
-                  onClick={() => switchSource('beatport')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest transition-all duration-200 active:scale-95 ${
-                    discoverSource === 'beatport' ? 'text-white' : 'text-white/40 hover:text-white/70'
-                  }`}
-                  style={discoverSource === 'beatport' ? { background: `${accentColor}50` } : {}}
-                >
-                  EDM
-                </button>
-                <button
-                  onClick={() => switchSource('spotify')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest transition-all duration-200 active:scale-95 flex items-center gap-1.5 ${
-                    discoverSource === 'spotify' ? 'text-white' : 'text-white/40 hover:text-white/70'
-                  }`}
-                  style={discoverSource === 'spotify' ? { background: '#1DB95450' } : {}}
-                >
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-                  Latin
-                </button>
-              </div>
               <div className="flex items-center gap-5 mt-1">
                 <h1 className="text-3xl font-bold text-white tracking-tight">
                   {discoverSource === 'beatport'
