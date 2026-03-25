@@ -527,7 +527,7 @@ function useQS(key, defaultVal) {
   return [val, set]
 }
 
-const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio }, ref) {
+const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser }, ref) {
   const toast = useToast()
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -557,7 +557,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     const id = ++fetchIdRef.current
     try {
       // Fetch metadata from Heroku (Cloudinary = source of truth)
-      const metaRes = await fetch(`${API_BASE}/api/metadata`)
+      const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}`)
       const metadata = await metaRes.json()
 
       if (agentConnected) {
@@ -588,7 +588,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         if (id === fetchIdRef.current) setFiles(merged)
       } else {
         // No agent: use Heroku library endpoint (metadata-only view)
-        const libRes = await fetch(`${API_BASE}/api/library`)
+        const libRes = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}`)
         const data = await libRes.json()
         if (id === fetchIdRef.current) setFiles(data)
       }
@@ -597,12 +597,12 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     } finally {
       if (id === fetchIdRef.current) setLoading(false)
     }
-  }, [agentConnected])
+  }, [agentConnected, authUser])
 
   const hasFetched = useRef(false)
   useEffect(() => {
     hasFetched.current = false
-  }, [agentConnected])
+  }, [agentConnected, authUser])
   useEffect(() => {
     if (!hasFetched.current) {
       hasFetched.current = true
@@ -683,12 +683,12 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const classifyWithAI = async () => {
     setClassifying(true)
     try {
-      const res = await fetch(`${API_BASE}/api/classify`, { method: 'POST' })
+      const res = await fetch(`${API_BASE}/api/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: authUser?.name || '' }) })
       const data = await res.json()
       // After classification, tell agent to organize files into genre folders
       if (agentConnected && data.classified > 0) {
         // Get updated metadata from Heroku to build move list
-        const metaRes = await fetch(`${API_BASE}/api/metadata`)
+        const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}`)
         const metadata = await metaRes.json()
         const moves = Object.entries(metadata)
           .filter(([, info]) => info.genre)
@@ -727,7 +727,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     setDetectingKeys(true)
     try {
       // Get list of tracks without key from Heroku (Cloudinary manifest)
-      const res = await fetch(`${API_BASE}/api/detect-keys`, { method: 'POST' })
+      const res = await fetch(`${API_BASE}/api/detect-keys`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: authUser?.name || '' }) })
       const data = await res.json()
       const toDetect = data.to_detect || []
       if (toDetect.length === 0) { fetchLibrary(); return }
@@ -744,6 +744,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           const form = new FormData()
           form.append('file', blob, fname)
           form.append('filename', fname)
+          form.append('username', authUser?.name || '')
           const keyRes = await fetch(`${API_BASE}/api/detect-key`, { method: 'POST', body: form })
           const keyData = await keyRes.json()
           if (keyData.key) detected++
@@ -800,7 +801,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       await fetch(`${API_BASE}/api/move-file`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.filename, genre: newGenre }),
+        body: JSON.stringify({ filename: file.filename, genre: newGenre, username: authUser?.name || '' }),
       }).catch(() => {})
     } catch (e) {
       console.error('Failed to move file', e)
@@ -830,7 +831,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       await fetch(`${API_BASE}/api/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.filename, rating: newRating }),
+        body: JSON.stringify({ filename: file.filename, rating: newRating, username: authUser?.name || '' }),
       })
     } catch (e) {
       console.error('Failed to rate', e)
@@ -1717,7 +1718,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   )
 })
 
-function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix }) {
+function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser }) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
   const [duration, setDuration] = useState(60)
@@ -1738,7 +1739,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   // Fetch genres that have tracks with >= minStars
   useEffect(() => {
     if (page !== 'set') return
-    fetch(`${API_BASE}/api/library`).then(r => r.json()).then(tracks => {
+    fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}`).then(r => r.json()).then(tracks => {
       const genreCounts = {}
       tracks.forEach(t => {
         if ((t.rating || 0) >= minStars && t.genre && t.key) {
@@ -1763,6 +1764,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
           current: currentTracks.map(t => t.filename),
           min_stars: minStars,
           limit: 8,
+          username: authUser?.name || '',
         }),
       })
       const data = await res.json()
@@ -1810,7 +1812,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       const res = await fetch(`${API_BASE}/api/generate-set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ min_stars: overrideStars ?? minStars, duration: overrideDuration ?? duration, method: useMethod, genres: selectedGenres.length > 0 ? selectedGenres : undefined }),
+        body: JSON.stringify({ min_stars: overrideStars ?? minStars, duration: overrideDuration ?? duration, method: useMethod, genres: selectedGenres.length > 0 ? selectedGenres : undefined, username: authUser?.name || '' }),
       })
       const data = await res.json()
       setSetTracks(data.tracks || [])
@@ -2899,6 +2901,7 @@ function App() {
       username,
       password,
       genre,
+      app_user: authUser?.name || '',
     }))
   }
 
@@ -3078,6 +3081,7 @@ function App() {
       username,
       password,
       result,
+      app_user: authUser?.name || '',
     }))
   }
 
@@ -3305,6 +3309,7 @@ function App() {
           onStopPreviewMode={stopPreviewModeApp}
           agentConnected={agentConnected}
           onRadio={(file) => { setPendingRadioTrack({ artist: file.artist || '', title: file.title || file.filename }); setPage('discover') }}
+          authUser={authUser}
         />
       </div>
 
@@ -3601,7 +3606,7 @@ function App() {
       </div>
 
       {/* Set Builder page */}
-      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} />
+      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} />
 
       {/* Mix Editor page */}
       {page === 'mix' && mixTracks && (
@@ -3629,6 +3634,7 @@ function App() {
           pendingRadioTrack={pendingRadioTrack}
           onRadioConsumed={() => setPendingRadioTrack(null)}
           agentConnected={agentConnected}
+          authUser={authUser}
         />
       </div>
 
@@ -3662,7 +3668,7 @@ function App() {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, authUser }) {
   const [genres, setGenres] = useState([])
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
   const [tracks, setTracks] = useState([])
@@ -3672,8 +3678,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Library manifest for marking already-downloaded tracks
   const [libraryManifest, setLibraryManifest] = useState({})
   useEffect(() => {
-    fetch(`${API_BASE}/api/metadata`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
-  }, [])
+    fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
+  }, [authUser])
 
   const isInLibrary = useMemo(() => {
     // Normalize: lowercase, strip parens content like (Extended Mix), remove non-alphanumeric
@@ -3847,8 +3853,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   // Load genres
   useEffect(() => {
-    fetch(`${API_BASE}/api/discover/genres`).then(r => r.json()).then(setGenres).catch(() => {})
-  }, [])
+    fetch(`${API_BASE}/api/discover/genres?user=${encodeURIComponent(authUser?.name || '')}`).then(r => r.json()).then(setGenres).catch(() => {})
+  }, [authUser])
 
   // Load chart when genre changes
   const loadChart = async (genre, force = false) => {
@@ -3961,6 +3967,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               type: 'download_single',
               username, password,
               result: results[0],
+              app_user: authUser?.name || '',
             }))
           } else {
             setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
@@ -3976,7 +3983,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             if (data.status === 'completed') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Descargado' } }))
               // Refresh manifest to update "in library" marks
-              fetch(`${API_BASE}/api/metadata`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
+              fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
               wsRef.current.removeEventListener('message', handler)
             } else if (data.status === 'error') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: 'Error al descargar' } }))
