@@ -2188,13 +2188,24 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   )
 }
 
+const TRANSITION_TYPES = {
+  smooth: { label: 'Smooth', overlap: 60 },
+  quick: { label: 'Quick', overlap: 16 },
+  cut: { label: 'Cut', overlap: 0 },
+  longblend: { label: 'Long Blend', overlap: 90 },
+  drop: { label: 'Drop', overlap: 8 },
+  eqmix: { label: 'EQ Mix', overlap: 45 },
+}
+
 function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
   const toast = useToast()
   const [mixTracks, setMixTracks] = useState([])
   const [loading, setLoading] = useState(true)
   const [pxPerSec, setPxPerSec] = useState(10)
   const [dragging, setDragging] = useState(null) // { index, startX, origStartTime }
+  const [resizing, setResizing] = useState(null) // { index, side: 'left'|'right', startX, origTrimStart, origTrimEnd }
   const wasDraggingRef = useRef(false)
+  const [contextMenu, setContextMenu] = useState(null) // { x, y, trackIndex, side: 'left'|'right' }
   const [exporting, setExporting] = useState(false)
   const [mixName, setMixName] = useState(() => `Mix ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }).replace(/\//g, '-')}`)
   const [exportFormat, setExportFormat] = useState('mp3')
@@ -2230,12 +2241,15 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     return 0
   }, [mixTracks])
 
+  // Effective duration accounting for trims
+  const effectiveDuration = useCallback((t) => t.duration - (t.trimStart || 0) - (t.trimEnd || 0), [])
+
   // Total mix duration (must be before togglePlay/keyboard effects)
   const totalDuration = useMemo(() => {
     if (mixTracks.length === 0) return 0
     const last = mixTracks[mixTracks.length - 1]
-    return last.startTime + last.duration
-  }, [mixTracks])
+    return last.startTime + effectiveDuration(last)
+  }, [mixTracks, effectiveDuration])
 
   const timelineWidth = totalDuration * pxPerSec
 
@@ -2426,7 +2440,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         }
       }
       if (cancelled) return
-      // Calculate initial layout with 16s crossfade
+      // Calculate initial layout with 16s crossfade (quick transition)
       const DEFAULT_FADE = 16
       const laid = []
       let cumStart = 0
@@ -2436,6 +2450,11 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           startTime: cumStart,
           fadeIn: i === 0 ? 0 : DEFAULT_FADE,
           fadeOut: i === results.length - 1 ? 0 : DEFAULT_FADE,
+          transitionType: 'quick',
+          trimStart: 0,
+          trimEnd: 0,
+          customFadeIn: null,
+          customFadeOut: null,
         })
         cumStart += results[i].duration - (i === results.length - 1 ? 0 : DEFAULT_FADE)
       }
@@ -2532,6 +2551,105 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     return () => { cancelled = true }
   }, [mixTracks, generateWaveform])
 
+  // Change transition type for a track (affects overlap with NEXT track)
+  const changeTransitionType = useCallback((index, type) => {
+    const overlap = TRANSITION_TYPES[type].overlap
+    setMixTracks(prev => {
+      const next = [...prev]
+      next[index] = { ...next[index], transitionType: type }
+      // Update the next track's startTime and fade values
+      if (index < next.length - 1) {
+        const currentTrack = next[index]
+        const currentEnd = currentTrack.startTime + effectiveDuration(currentTrack)
+        const nextStart = currentEnd - overlap
+        next[index] = { ...next[index], fadeOut: overlap }
+        next[index + 1] = { ...next[index + 1], startTime: Math.max(0, nextStart), fadeIn: overlap }
+        // Recalculate all subsequent tracks
+        for (let j = index + 2; j < next.length; j++) {
+          const prevT = next[j - 1]
+          const prevEnd = prevT.startTime + effectiveDuration(prevT)
+          const thisOverlap = TRANSITION_TYPES[next[j - 1].transitionType || 'quick'].overlap
+          next[j] = { ...next[j], startTime: prevEnd - thisOverlap, fadeIn: thisOverlap }
+        }
+      }
+      return next
+    })
+  }, [effectiveDuration])
+
+  // Handle resize start (trim handles)
+  const handleResizeStart = (e, index, side) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setResizing({
+      index,
+      side,
+      startX: e.clientX,
+      origTrimStart: mixTracks[index].trimStart || 0,
+      origTrimEnd: mixTracks[index].trimEnd || 0,
+    })
+  }
+
+  // Handle resize move and end
+  useEffect(() => {
+    if (!resizing) return
+    const handleMouseMove = (e) => {
+      const dx = e.clientX - resizing.startX
+      const dtSec = dx / pxPerSec
+      setMixTracks(prev => {
+        const next = [...prev]
+        const track = { ...next[resizing.index] }
+        const maxTrim = track.duration * 0.8 // Don't allow trimming more than 80%
+        if (resizing.side === 'left') {
+          const newTrimStart = Math.max(0, Math.min(maxTrim - (track.trimEnd || 0), resizing.origTrimStart + dtSec))
+          track.trimStart = newTrimStart
+          // Shift visual start forward
+          if (resizing.index > 0) {
+            const prevTrack = next[resizing.index - 1]
+            const prevEnd = prevTrack.startTime + effectiveDuration(prevTrack)
+            const overlap = prevEnd - track.startTime
+            // Keep startTime adjusted so visual block moves
+          }
+        } else {
+          const newTrimEnd = Math.max(0, Math.min(maxTrim - (track.trimStart || 0), resizing.origTrimEnd - dtSec))
+          track.trimEnd = newTrimEnd
+        }
+        next[resizing.index] = track
+        return next
+      })
+    }
+    const handleMouseUp = () => {
+      wasDraggingRef.current = true
+      setResizing(null)
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [resizing, pxPerSec, effectiveDuration])
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!contextMenu) return
+    const handleClick = () => setContextMenu(null)
+    window.addEventListener('click', handleClick)
+    return () => window.removeEventListener('click', handleClick)
+  }, [contextMenu])
+
+  // Handle right-click on track block for fade context menu
+  const handleTrackContextMenu = (e, index) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const track = mixTracks[index]
+    const trackLeft = track.startTime * pxPerSec
+    const trackWidth = effectiveDuration(track) * pxPerSec
+    const rect = e.currentTarget.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const side = clickX < rect.width / 2 ? 'left' : 'right'
+    setContextMenu({ x: e.clientX, y: e.clientY, trackIndex: index, side })
+  }
+
   // Handle drag start
   const handleMouseDown = (e, index) => {
     e.preventDefault()
@@ -2598,8 +2716,10 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           subfolder: t.subfolder || '',
           start_time: t.startTime,
           duration: t.duration,
-          fade_in: t.fadeIn,
-          fade_out: t.fadeOut,
+          fade_in: t.customFadeIn ?? t.fadeIn,
+          fade_out: t.customFadeOut ?? t.fadeOut,
+          trim_start: t.trimStart || 0,
+          trim_end: t.trimEnd || 0,
         })),
         format: exportFormat,
         bitrate: '320k',
@@ -2836,10 +2956,13 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
             })()}
             {mixTracks.map((track, i) => {
               const color = getTrackColor(track, i)
-              const left = track.startTime * pxPerSec
-              const width = track.duration * pxPerSec
+              const trimS = track.trimStart || 0
+              const trimE = track.trimEnd || 0
+              const effDur = track.duration - trimS - trimE
+              const left = (track.startTime + trimS) * pxPerSec
+              const width = effDur * pxPerSec
               const prevTrack = i > 0 ? mixTracks[i - 1] : null
-              const overlapSec = prevTrack ? Math.max(0, (prevTrack.startTime + prevTrack.duration) - track.startTime) : 0
+              const overlapSec = prevTrack ? Math.max(0, (prevTrack.startTime + effectiveDuration(prevTrack)) - track.startTime) : 0
               const overlapPx = overlapSec * pxPerSec
 
               return (
@@ -2847,7 +2970,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                   {/* Track block */}
                   <div
                     className={`absolute rounded-lg border overflow-hidden select-none ${
-                      dragging?.index === i ? 'ring-2 ring-white/50 z-20 cursor-grabbing' : 'cursor-grab hover:ring-1 hover:ring-white/20 z-10'
+                      dragging?.index === i ? 'ring-2 ring-white/50 z-20 cursor-grabbing' : resizing?.index === i ? 'ring-2 ring-yellow-400/50 z-20' : 'cursor-grab hover:ring-1 hover:ring-white/20 z-10'
                     }`}
                     style={{
                       left,
@@ -2858,7 +2981,20 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                       borderColor: `rgba(${color.rgb}, 0.4)`,
                     }}
                     onMouseDown={(e) => handleMouseDown(e, i)}
+                    onContextMenu={(e) => handleTrackContextMenu(e, i)}
                   >
+                    {/* Left resize handle (trim start) */}
+                    <div
+                      className="absolute inset-y-0 left-0 w-1 bg-white/30 hover:bg-white/60 z-20"
+                      style={{ cursor: 'col-resize' }}
+                      onMouseDown={(e) => handleResizeStart(e, i, 'left')}
+                    />
+                    {/* Right resize handle (trim end) */}
+                    <div
+                      className="absolute inset-y-0 right-0 w-1 bg-white/30 hover:bg-white/60 z-20"
+                      style={{ cursor: 'col-resize' }}
+                      onMouseDown={(e) => handleResizeStart(e, i, 'right')}
+                    />
                     {/* Fade in gradient */}
                     {track.fadeIn > 0 && (
                       <div
@@ -2876,6 +3012,26 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                         style={{
                           width: track.fadeOut * pxPerSec,
                           background: `linear-gradient(to left, transparent, rgba(${color.rgb}, 0.3))`,
+                        }}
+                      />
+                    )}
+                    {/* Custom fade in overlay */}
+                    {track.customFadeIn != null && track.customFadeIn > 0 && (
+                      <div
+                        className="absolute inset-y-0 left-0 pointer-events-none"
+                        style={{
+                          width: track.customFadeIn * pxPerSec,
+                          background: `linear-gradient(to right, rgba(0,0,0,0.5), transparent)`,
+                        }}
+                      />
+                    )}
+                    {/* Custom fade out overlay */}
+                    {track.customFadeOut != null && track.customFadeOut > 0 && (
+                      <div
+                        className="absolute inset-y-0 right-0 pointer-events-none"
+                        style={{
+                          width: track.customFadeOut * pxPerSec,
+                          background: `linear-gradient(to left, rgba(0,0,0,0.5), transparent)`,
                         }}
                       />
                     )}
@@ -2899,12 +3055,14 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                         {track.title || track.filename}
                       </div>
                       <div className="text-[10px] text-[var(--text-muted)] truncate">
-                        {track.artist}{track.bpm ? ` · ${track.bpm} BPM` : ''}{track.key ? ` · ${track.key}` : ''} · {fmtTime(track.duration)}
+                        {track.artist}{track.bpm ? ` · ${track.bpm} BPM` : ''}{track.key ? ` · ${track.key}` : ''} · {fmtTime(effDur)}
+                        {trimS > 0 && <span className="text-yellow-400"> T+{Math.round(trimS)}s</span>}
+                        {trimE > 0 && <span className="text-yellow-400"> T-{Math.round(trimE)}s</span>}
                       </div>
                     </div>
                   </div>
 
-                  {/* Overlap label */}
+                  {/* Overlap label - shows transition type name */}
                   {overlapSec > 0 && (
                     <div
                       className="absolute z-20 flex items-center justify-center pointer-events-none"
@@ -2919,7 +3077,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                         className="text-[9px] font-bold px-1.5 py-0 rounded-full"
                         style={{ background: `rgba(${color.rgb}, 0.5)`, color: 'white' }}
                       >
-                        {Math.round(overlapSec)}s
+                        {TRANSITION_TYPES[track.transitionType]?.label || `${Math.round(overlapSec)}s`}
                       </span>
                     </div>
                   )}
@@ -2930,12 +3088,59 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         </div>
       </div>
 
+      {/* Context menu for custom fade in/out */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-lg shadow-xl py-1 min-w-36"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {contextMenu.side === 'left' ? (
+            <>
+              <div className="px-3 py-1 text-[10px] text-[var(--text-muted)] uppercase font-bold">Fade In</div>
+              {[null, 4, 8, 16].map(val => (
+                <button
+                  key={`fi-${val}`}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)] transition-colors ${
+                    mixTracks[contextMenu.trackIndex]?.customFadeIn === val ? 'text-[var(--color-accent)] font-semibold' : 'text-[var(--text-primary)]'
+                  }`}
+                  onClick={() => {
+                    setMixTracks(prev => prev.map((t, idx) => idx === contextMenu.trackIndex ? { ...t, customFadeIn: val } : t))
+                    setContextMenu(null)
+                  }}
+                >
+                  {val === null ? 'Fade In: Off' : `Fade In: ${val}s`}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <div className="px-3 py-1 text-[10px] text-[var(--text-muted)] uppercase font-bold">Fade Out</div>
+              {[null, 4, 8, 16].map(val => (
+                <button
+                  key={`fo-${val}`}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)] transition-colors ${
+                    mixTracks[contextMenu.trackIndex]?.customFadeOut === val ? 'text-[var(--color-accent)] font-semibold' : 'text-[var(--text-primary)]'
+                  }`}
+                  onClick={() => {
+                    setMixTracks(prev => prev.map((t, idx) => idx === contextMenu.trackIndex ? { ...t, customFadeOut: val } : t))
+                    setContextMenu(null)
+                  }}
+                >
+                  {val === null ? 'Fade Out: Off' : `Fade Out: ${val}s`}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Track list summary */}
       <div className="flex-shrink-0 max-h-48 overflow-y-auto border-t border-[var(--border-color)] bg-[var(--bg-panel)]">
         {mixTracks.map((t, i) => {
           const color = getTrackColor(t, i)
           const prevTrack = i > 0 ? mixTracks[i - 1] : null
-          const overlap = prevTrack ? Math.max(0, (prevTrack.startTime + prevTrack.duration) - t.startTime) : 0
+          const overlap = prevTrack ? Math.max(0, (prevTrack.startTime + effectiveDuration(prevTrack)) - t.startTime) : 0
           return (
             <div
               key={`list-${t.filename}-${i}`}
@@ -2975,13 +3180,24 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                 }}
               >{t.bpm || '-'}</span>
               <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-12 text-center">{t.key || '-'}</span>
-              <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-14 text-center">{fmtTime(t.duration)}</span>
+              <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-14 text-center">{fmtTime(effectiveDuration(t))}</span>
               <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-14 text-right">@{fmtTime(t.startTime)}</span>
               {overlap > 0 && (
                 <span className="text-[10px] font-medium flex-shrink-0 w-16 text-center" style={{ color: `rgb(${color.rgb})` }}>
                   -{Math.round(overlap)}s fade
                 </span>
               )}
+              {/* Transition type selector */}
+              <select
+                value={t.transitionType || 'quick'}
+                onChange={(e) => changeTransitionType(i, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="text-[10px] flex-shrink-0 w-20 px-1 py-0.5 bg-[var(--bg-input)] border border-gray-700 rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+              >
+                {Object.entries(TRANSITION_TYPES).map(([key, { label, overlap: ov }]) => (
+                  <option key={key} value={key}>{label} ({ov}s)</option>
+                ))}
+              </select>
             </div>
           )
         })}
