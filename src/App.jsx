@@ -1721,6 +1721,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser }) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
+  const [setSelectedStars, setSetSelectedStars] = useState([])
   const [duration, setDuration] = useState(60)
   const [method, setMethod] = useState('camelot')
   const [setTracks, setSetTracks] = useState([])
@@ -1742,7 +1743,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}`).then(r => r.json()).then(tracks => {
       const genreCounts = {}
       tracks.forEach(t => {
-        if ((t.rating || 0) >= minStars && t.genre && t.key) {
+        if ((setSelectedStars.length > 0 ? setSelectedStars.includes(t.rating || 0) : (t.rating || 0) >= minStars) && t.genre && t.key) {
           genreCounts[t.genre] = (genreCounts[t.genre] || 0) + 1
         }
       })
@@ -1751,7 +1752,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       // Keep only previously selected genres that still exist
       setSelectedGenres(prev => prev.filter(g => genreCounts[g]))
     }).catch(() => {})
-  }, [page, minStars, authUser])
+  }, [page, minStars, setSelectedStars, authUser])
 
   const fetchSuggestions = async (currentTracks) => {
     if (!currentTracks.length) return
@@ -1812,7 +1813,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       const res = await fetch(`${API_BASE}/api/generate-set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ min_stars: overrideStars ?? minStars, duration: overrideDuration ?? duration, method: useMethod, genres: selectedGenres.length > 0 ? selectedGenres : undefined, username: authUser?.name || '' }),
+        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: setSelectedStars.length > 0 ? setSelectedStars : undefined, duration: overrideDuration ?? duration, method: useMethod, genres: selectedGenres.length > 0 ? selectedGenres : undefined, username: authUser?.name || '' }),
       })
       const data = await res.json()
       setSetTracks(data.tracks || [])
@@ -1869,21 +1870,33 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     <div className="flex-1 flex flex-col min-h-0">
       {/* Controls */}
       <div className="flex-shrink-0 flex items-center gap-4 px-6 py-4 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-[var(--text-secondary)]">Estrellas mín:</span>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5].map(s => (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => { setSetSelectedStars([]); setMinStars(1); if (setTracks.length > 0) generateSet(null, 1) }}
+            className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
+              setSelectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >All</button>
+          {[1, 2, 3, 4, 5].map(s => {
+            const active = setSelectedStars.includes(s)
+            return (
               <button
                 key={s}
-                onClick={() => { setMinStars(s); if (setTracks.length > 0) generateSet(null, s) }}
+                onClick={() => {
+                  const next = active ? setSelectedStars.filter(x => x !== s) : [...setSelectedStars, s]
+                  setSetSelectedStars(next)
+                  const newMin = next.length > 0 ? Math.min(...next) : 1
+                  setMinStars(newMin)
+                  if (setTracks.length > 0) generateSet(null, newMin)
+                }}
                 className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
-                  minStars === s ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  active ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 {'★'.repeat(s)}
               </button>
-            ))}
-          </div>
+            )
+          })}
         </div>
         {availableGenres.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
