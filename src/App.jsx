@@ -2513,12 +2513,10 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           track.startTime = 0
         } else {
           const prevTrack = next[i - 1]
-          const prevEnd = prevTrack.startTime + prevTrack.duration
-          // Must overlap between 0 and 60 seconds with previous track
-          const minStart = prevEnd - 60
-          const maxStart = prevEnd
-          track.startTime = Math.max(minStart, Math.min(maxStart, newStart))
+          // Free movement — no limits on overlap
+          track.startTime = Math.max(0, newStart)
           // Update fadeIn/fadeOut based on overlap
+          const prevEnd = prevTrack.startTime + prevTrack.duration
           const overlap = prevEnd - track.startTime
           track.fadeIn = Math.max(0, Math.round(overlap))
           // Also update previous track fadeOut
