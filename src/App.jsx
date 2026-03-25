@@ -2184,22 +2184,16 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
       if (cancelled) return
       // Calculate initial layout with 16s crossfade
       const DEFAULT_FADE = 16
-      const laid = results.map((t, i) => {
-        const startTime = i === 0 ? 0 : laid[i - 1].startTime + laid[i - 1].duration - DEFAULT_FADE
-        return {
-          ...t,
-          startTime: i === 0 ? 0 : startTime,
+      const laid = []
+      let cumStart = 0
+      for (let i = 0; i < results.length; i++) {
+        laid.push({
+          ...results[i],
+          startTime: cumStart,
           fadeIn: i === 0 ? 0 : DEFAULT_FADE,
           fadeOut: i === results.length - 1 ? 0 : DEFAULT_FADE,
-        }
-      })
-      // Recalculate with correct forward references
-      let cumStart = 0
-      for (let i = 0; i < laid.length; i++) {
-        laid[i].startTime = cumStart
-        laid[i].fadeIn = i === 0 ? 0 : DEFAULT_FADE
-        laid[i].fadeOut = i === laid.length - 1 ? 0 : DEFAULT_FADE
-        cumStart += laid[i].duration - (i === laid.length - 1 ? 0 : DEFAULT_FADE)
+        })
+        cumStart += results[i].duration - (i === results.length - 1 ? 0 : DEFAULT_FADE)
       }
       setMixTracks(laid)
       setLoading(false)
