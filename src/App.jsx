@@ -1661,6 +1661,12 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             </form>
           </div>
 
+          {/* Rating */}
+          <div className="flex-shrink-0 border-t border-[var(--border-color)] px-3 py-2 flex items-center gap-2">
+            <span className="text-xs text-[var(--text-secondary)]">Rating:</span>
+            <StarRating rating={ctxMenu.file?.rating || 0} onRate={(r) => { handleRate(ctxMenu.file, r); setCtxMenu(null) }} />
+          </div>
+
           {/* Actions - fixed */}
           <div className="flex-shrink-0 border-t border-[var(--border-color)] py-1">
             <button
