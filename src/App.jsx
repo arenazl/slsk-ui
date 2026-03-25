@@ -2158,6 +2158,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
   const [loading, setLoading] = useState(true)
   const [pxPerSec, setPxPerSec] = useState(10)
   const [dragging, setDragging] = useState(null) // { index, startX, origStartTime }
+  const wasDraggingRef = useRef(false)
   const [exporting, setExporting] = useState(false)
   const [mixName, setMixName] = useState(() => `Mix ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }).replace(/\//g, '-')}`)
   const [exportFormat, setExportFormat] = useState('mp3')
@@ -2171,6 +2172,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
   const playheadInterval = useRef(null)
   const activeTrackRef = useRef(-1)
   const cursorRef = useRef(null)
+  const waveformCache = useRef({}) // { filename: Float32Array of peaks }
 
   // Build audio URL for a track
   const audioUrl = (track) => {
@@ -2274,8 +2276,12 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     activeTrackRef.current = -1
   }, [])
 
-  // Click on timeline to seek
+  // Click on timeline to seek (skip if we just finished dragging a track)
   const seekTimeline = useCallback((e) => {
+    if (wasDraggingRef.current) {
+      wasDraggingRef.current = false
+      return
+    }
     if (!timelineRef.current) return
     const rect = timelineRef.current.getBoundingClientRect()
     const scrollLeft = timelineRef.current.scrollLeft
@@ -2296,6 +2302,18 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
       clearInterval(playheadInterval.current)
     }
   }, [])
+
+  // Spacebar play/pause
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space' && !e.target.closest('input, select, textarea')) {
+        e.preventDefault()
+        togglePlay()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [togglePlay])
 
   // Auto-scroll to keep cursor visible
   useEffect(() => {
@@ -2323,7 +2341,11 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         try {
           const res = await fetch(`${AGENT_BASE}/api/track-info/${path}`)
           const info = await res.json()
-          results.push({ ...t, duration: info.duration_seconds || 300 })
+          results.push({
+            ...t,
+            duration: info.duration_seconds || 300,
+            bpm: t.bpm || info.bpm || null,
+          })
         } catch {
           results.push({ ...t, duration: 300 })
         }
@@ -2372,6 +2394,78 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     return GENRE_COLORS[(gi >= 0 ? gi : idx) % GENRE_COLORS.length]
   }
 
+  // Generate waveform peaks for a track
+  const generateWaveform = useCallback(async (track) => {
+    const key = track.subfolder ? `${track.subfolder}/${track.filename}` : track.filename
+    if (waveformCache.current[key]) return waveformCache.current[key]
+    try {
+      const url = audioUrl(track)
+      const response = await fetch(url)
+      const arrayBuffer = await response.arrayBuffer()
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
+      audioCtx.close()
+      const channelData = audioBuffer.getChannelData(0)
+      const PEAKS = 200
+      const blockSize = Math.floor(channelData.length / PEAKS)
+      const peaks = new Float32Array(PEAKS)
+      for (let i = 0; i < PEAKS; i++) {
+        let sum = 0
+        const start = i * blockSize
+        for (let j = start; j < start + blockSize && j < channelData.length; j++) {
+          sum += Math.abs(channelData[j])
+        }
+        peaks[i] = sum / blockSize
+      }
+      // Normalize
+      const max = Math.max(...peaks) || 1
+      for (let i = 0; i < peaks.length; i++) peaks[i] /= max
+      waveformCache.current[key] = peaks
+      return peaks
+    } catch {
+      return null
+    }
+  }, [])
+
+  // Draw waveform on a canvas element
+  const drawWaveform = useCallback((canvas, peaks, rgbColor) => {
+    if (!canvas || !peaks) return
+    const ctx = canvas.getContext('2d')
+    const w = canvas.width
+    const h = canvas.height
+    ctx.clearRect(0, 0, w, h)
+    ctx.fillStyle = `rgba(${rgbColor}, 0.4)`
+    const barWidth = w / peaks.length
+    for (let i = 0; i < peaks.length; i++) {
+      const barH = peaks[i] * h * 0.9
+      const x = i * barWidth
+      const y = (h - barH) / 2
+      ctx.fillRect(x, y, Math.max(barWidth - 0.5, 1), barH)
+    }
+  }, [])
+
+  // Load waveforms for all tracks
+  const [waveforms, setWaveforms] = useState({})
+  useEffect(() => {
+    if (mixTracks.length === 0) return
+    let cancelled = false
+    const loadAll = async () => {
+      for (const track of mixTracks) {
+        const key = track.subfolder ? `${track.subfolder}/${track.filename}` : track.filename
+        if (waveformCache.current[key]) {
+          if (!cancelled) setWaveforms(prev => ({ ...prev, [key]: waveformCache.current[key] }))
+          continue
+        }
+        const peaks = await generateWaveform(track)
+        if (!cancelled && peaks) {
+          setWaveforms(prev => ({ ...prev, [key]: peaks }))
+        }
+      }
+    }
+    loadAll()
+    return () => { cancelled = true }
+  }, [mixTracks, generateWaveform])
+
   // Handle drag start
   const handleMouseDown = (e, index) => {
     e.preventDefault()
@@ -2411,7 +2505,10 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         return next
       })
     }
-    const handleMouseUp = () => setDragging(null)
+    const handleMouseUp = () => {
+      wasDraggingRef.current = true
+      setDragging(null)
+    }
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
     return () => {
@@ -2648,16 +2745,27 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                         }}
                       />
                     )}
+                    {/* Waveform canvas */}
+                    <canvas
+                      className="absolute inset-0 w-full h-full pointer-events-none"
+                      ref={(el) => {
+                        if (!el) return
+                        const key = track.subfolder ? `${track.subfolder}/${track.filename}` : track.filename
+                        const peaks = waveforms[key]
+                        if (peaks) {
+                          el.width = el.offsetWidth
+                          el.height = el.offsetHeight
+                          drawWaveform(el, peaks, color.rgb)
+                        }
+                      }}
+                    />
                     {/* Track info */}
                     <div className="relative z-10 px-3 py-1.5 h-full flex flex-col justify-center min-w-0">
                       <div className="text-xs font-semibold truncate" style={{ color: `rgb(${color.rgb})` }}>
                         {track.title || track.filename}
                       </div>
                       <div className="text-[10px] text-[var(--text-muted)] truncate">
-                        {track.artist}{track.bpm ? ` · ${track.bpm} BPM` : ''}{track.key ? ` · ${track.key}` : ''}
-                      </div>
-                      <div className="text-[10px] text-[var(--text-muted)]">
-                        {fmtTime(track.duration)}
+                        {track.artist}{track.bpm ? ` · ${track.bpm} BPM` : ''}{track.key ? ` · ${track.key}` : ''} · {fmtTime(track.duration)}
                       </div>
                     </div>
                   </div>
