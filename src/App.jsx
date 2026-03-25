@@ -140,14 +140,9 @@ function getAudioUrl(file, useAgent) {
 
 async function createAudioElement(file, useAgent) {
   const url = getAudioUrl(file, useAgent)
-  if (!useAgent) return new Audio(url)
-  // Fetch as blob to avoid Mixed Content (HTTPS page → HTTP localhost)
-  const res = await fetch(url)
-  const blob = await res.blob()
-  const blobUrl = URL.createObjectURL(blob)
-  const audio = new Audio(blobUrl)
-  audio.addEventListener('ended', () => URL.revokeObjectURL(blobUrl), { once: true })
-  return audio
+  // Use Audio element directly — Chrome allows <audio> to load from localhost
+  // even on HTTPS pages (unlike fetch which gets blocked by private network policy)
+  return new Audio(url)
 }
 
 function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
@@ -304,8 +299,13 @@ function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop, agentConn
 
     if (!audio || !audio.src) return
 
-    // Fetch audio as ArrayBuffer and decode for waveform
-    fetch(audio.src)
+    // Generate waveform: try fetch for same-origin, skip for cross-origin (localhost)
+    const src = audio.src
+    if (src.includes('localhost') || src.startsWith('blob:')) {
+      // Can't fetch from localhost on HTTPS page — waveform will use simple progress bar
+      return
+    }
+    fetch(src)
       .then(r => r.arrayBuffer())
       .then(buf => {
         const ctx = new (window.AudioContext || window.webkitAudioContext)()
