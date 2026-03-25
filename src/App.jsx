@@ -2192,6 +2192,15 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     return 0
   }, [mixTracks])
 
+  // Total mix duration (must be before togglePlay/keyboard effects)
+  const totalDuration = useMemo(() => {
+    if (mixTracks.length === 0) return 0
+    const last = mixTracks[mixTracks.length - 1]
+    return last.startTime + last.duration
+  }, [mixTracks])
+
+  const timelineWidth = totalDuration * pxPerSec
+
   // Play/pause toggle
   const togglePlay = useCallback(() => {
     if (isPlaying) {
@@ -2393,15 +2402,6 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     fetchDurations()
     return () => { cancelled = true }
   }, [initialTracks])
-
-  // Total mix duration
-  const totalDuration = useMemo(() => {
-    if (mixTracks.length === 0) return 0
-    const last = mixTracks[mixTracks.length - 1]
-    return last.startTime + last.duration
-  }, [mixTracks])
-
-  const timelineWidth = totalDuration * pxPerSec
 
   // Format seconds to mm:ss
   const fmtTime = (s) => {
