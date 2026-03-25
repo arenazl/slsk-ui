@@ -1717,7 +1717,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   )
 })
 
-function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected }) {
+function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix }) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
   const [duration, setDuration] = useState(60)
@@ -1983,6 +1983,17 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                 )}
                 Exportar
               </button>
+              {agentConnected && (
+                <button
+                  onClick={() => onEditMix(setTracks)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 active:scale-95 bg-purple-600 hover:bg-purple-500 text-white"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                  </svg>
+                  Editar Mix
+                </button>
+              )}
             </div>
           </>
         )}
@@ -2123,6 +2134,405 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
         )}
       </div>
 
+    </div>
+  )
+}
+
+function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
+  const toast = useToast()
+  const [mixTracks, setMixTracks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [pxPerSec, setPxPerSec] = useState(10)
+  const [dragging, setDragging] = useState(null) // { index, startX, origStartTime }
+  const [exporting, setExporting] = useState(false)
+  const [mixName, setMixName] = useState(() => `Mix ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }).replace(/\//g, '-')}`)
+  const [exportFormat, setExportFormat] = useState('mp3')
+  const timelineRef = useRef(null)
+
+  // On mount, fetch durations for all tracks
+  useEffect(() => {
+    if (!initialTracks || initialTracks.length === 0) { setLoading(false); return }
+    let cancelled = false
+    const fetchDurations = async () => {
+      const results = []
+      for (const t of initialTracks) {
+        const path = t.subfolder
+          ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
+          : encodeURIComponent(t.filename)
+        try {
+          const res = await fetch(`${AGENT_BASE}/api/track-info/${path}`)
+          const info = await res.json()
+          results.push({ ...t, duration: info.duration_seconds || 300 })
+        } catch {
+          results.push({ ...t, duration: 300 })
+        }
+      }
+      if (cancelled) return
+      // Calculate initial layout with 16s crossfade
+      const DEFAULT_FADE = 16
+      const laid = results.map((t, i) => {
+        const startTime = i === 0 ? 0 : laid[i - 1].startTime + laid[i - 1].duration - DEFAULT_FADE
+        return {
+          ...t,
+          startTime: i === 0 ? 0 : startTime,
+          fadeIn: i === 0 ? 0 : DEFAULT_FADE,
+          fadeOut: i === results.length - 1 ? 0 : DEFAULT_FADE,
+        }
+      })
+      // Recalculate with correct forward references
+      let cumStart = 0
+      for (let i = 0; i < laid.length; i++) {
+        laid[i].startTime = cumStart
+        laid[i].fadeIn = i === 0 ? 0 : DEFAULT_FADE
+        laid[i].fadeOut = i === laid.length - 1 ? 0 : DEFAULT_FADE
+        cumStart += laid[i].duration - (i === laid.length - 1 ? 0 : DEFAULT_FADE)
+      }
+      setMixTracks(laid)
+      setLoading(false)
+    }
+    fetchDurations()
+    return () => { cancelled = true }
+  }, [initialTracks])
+
+  // Total mix duration
+  const totalDuration = useMemo(() => {
+    if (mixTracks.length === 0) return 0
+    const last = mixTracks[mixTracks.length - 1]
+    return last.startTime + last.duration
+  }, [mixTracks])
+
+  const timelineWidth = totalDuration * pxPerSec
+
+  // Format seconds to mm:ss
+  const fmtTime = (s) => {
+    const m = Math.floor(s / 60)
+    const sec = Math.floor(s % 60)
+    return `${m}:${sec.toString().padStart(2, '0')}`
+  }
+
+  // Get color for track based on genre
+  const getTrackColor = (track, idx) => {
+    const genres = [...new Set(mixTracks.map(t => t.genre || ''))]
+    const gi = genres.indexOf(track.genre || '')
+    return GENRE_COLORS[(gi >= 0 ? gi : idx) % GENRE_COLORS.length]
+  }
+
+  // Handle drag start
+  const handleMouseDown = (e, index) => {
+    e.preventDefault()
+    setDragging({ index, startX: e.clientX, origStartTime: mixTracks[index].startTime })
+  }
+
+  // Handle drag move and end
+  useEffect(() => {
+    if (!dragging) return
+    const handleMouseMove = (e) => {
+      const dx = e.clientX - dragging.startX
+      const dtSec = dx / pxPerSec
+      const newStart = dragging.origStartTime + dtSec
+
+      setMixTracks(prev => {
+        const next = [...prev]
+        const track = { ...next[dragging.index] }
+        const i = dragging.index
+
+        if (i === 0) {
+          // First track always starts at 0
+          track.startTime = 0
+        } else {
+          const prevTrack = next[i - 1]
+          const prevEnd = prevTrack.startTime + prevTrack.duration
+          // Must overlap between 0 and 60 seconds with previous track
+          const minStart = prevEnd - 60
+          const maxStart = prevEnd
+          track.startTime = Math.max(minStart, Math.min(maxStart, newStart))
+          // Update fadeIn/fadeOut based on overlap
+          const overlap = prevEnd - track.startTime
+          track.fadeIn = Math.max(0, Math.round(overlap))
+          // Also update previous track fadeOut
+          next[i - 1] = { ...prevTrack, fadeOut: Math.max(0, Math.round(overlap)) }
+        }
+        next[i] = track
+        return next
+      })
+    }
+    const handleMouseUp = () => setDragging(null)
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [dragging, pxPerSec])
+
+  // Export mix
+  const handleExport = async () => {
+    if (!agentConnected) { toast('Agent no conectado', 'error'); return }
+    setExporting(true)
+    try {
+      const payload = {
+        name: mixName.trim() || 'mix',
+        tracks: mixTracks.map(t => ({
+          filename: t.filename,
+          subfolder: t.subfolder || '',
+          start_time: t.startTime,
+          duration: t.duration,
+          fade_in: t.fadeIn,
+          fade_out: t.fadeOut,
+        })),
+        format: exportFormat,
+        bitrate: '320k',
+      }
+      const res = await fetch(`${AGENT_BASE}/api/mix-export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        toast(`Mix exportado: ${fmtTime(data.duration)}`)
+      } else {
+        toast(data.error || 'Error al exportar', 'error', 5000)
+      }
+    } catch (e) {
+      toast('Error al exportar mix', 'error')
+      console.error('Mix export failed', e)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-[var(--text-muted)]">Analizando tracks...</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Toolbar */}
+      <div className="flex-shrink-0 flex items-center gap-3 px-5 py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm btn-ghost transition-all duration-200 active:scale-95"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Volver al Set
+        </button>
+
+        <div className="w-px h-6 bg-[var(--border-color)]" />
+
+        <span className="text-sm font-bold text-[var(--text-primary)]">Mix Editor</span>
+        <span className="text-xs text-[var(--text-muted)]">
+          {mixTracks.length} tracks · {fmtTime(totalDuration)}
+        </span>
+
+        <div className="w-px h-6 bg-[var(--border-color)]" />
+
+        {/* Zoom controls */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-[var(--text-muted)]">Zoom</span>
+          <button
+            onClick={() => setPxPerSec(p => Math.max(2, p - 2))}
+            className="w-7 h-7 flex items-center justify-center rounded-lg btn-ghost text-sm font-bold transition-all duration-200 active:scale-95"
+          >-</button>
+          <span className="text-xs text-[var(--text-muted)] w-8 text-center">{pxPerSec}x</span>
+          <button
+            onClick={() => setPxPerSec(p => Math.min(50, p + 2))}
+            className="w-7 h-7 flex items-center justify-center rounded-lg btn-ghost text-sm font-bold transition-all duration-200 active:scale-95"
+          >+</button>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Export controls */}
+        <input
+          value={mixName}
+          onChange={e => setMixName(e.target.value)}
+          placeholder="Nombre del mix..."
+          className="w-40 px-2 py-1 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+        />
+        <select
+          value={exportFormat}
+          onChange={e => setExportFormat(e.target.value)}
+          className="px-2 py-1 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+        >
+          <option value="mp3">MP3 320k</option>
+          <option value="flac">FLAC</option>
+          <option value="wav">WAV</option>
+        </select>
+        <button
+          onClick={handleExport}
+          disabled={exporting || mixTracks.length === 0}
+          className="flex items-center gap-1.5 px-4 py-1.5 disabled:opacity-50 rounded-lg text-sm font-semibold text-[var(--color-accent-text)] transition-all duration-200 active:scale-95"
+          style={{ background: 'var(--color-accent)' }}
+        >
+          {exporting ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          )}
+          {exporting ? 'Exportando...' : 'Exportar Mix'}
+        </button>
+      </div>
+
+      {/* Timeline */}
+      <div className="flex-1 min-h-0 overflow-auto" ref={timelineRef}>
+        <div className="min-w-full" style={{ width: Math.max(timelineWidth + 100, 800) }}>
+          {/* Time ruler */}
+          <div className="sticky top-0 z-10 h-8 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex items-end">
+            <div className="relative w-full h-full">
+              {Array.from({ length: Math.ceil(totalDuration / 30) + 1 }, (_, i) => i * 30).map(sec => (
+                <div
+                  key={sec}
+                  className="absolute bottom-0 flex flex-col items-center"
+                  style={{ left: sec * pxPerSec }}
+                >
+                  <span className="text-[10px] text-[var(--text-muted)] mb-0.5">{fmtTime(sec)}</span>
+                  <div className="w-px h-2 bg-[var(--border-color)]" />
+                </div>
+              ))}
+              {/* Minor ticks every 10s */}
+              {Array.from({ length: Math.ceil(totalDuration / 10) + 1 }, (_, i) => i * 10).filter(s => s % 30 !== 0).map(sec => (
+                <div
+                  key={`m${sec}`}
+                  className="absolute bottom-0 w-px h-1 bg-[var(--border-color)]/50"
+                  style={{ left: sec * pxPerSec }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Track lanes */}
+          <div className="relative" style={{ height: mixTracks.length * 80 + 40 }}>
+            {mixTracks.map((track, i) => {
+              const color = getTrackColor(track, i)
+              const left = track.startTime * pxPerSec
+              const width = track.duration * pxPerSec
+              const prevTrack = i > 0 ? mixTracks[i - 1] : null
+              const overlapSec = prevTrack ? Math.max(0, (prevTrack.startTime + prevTrack.duration) - track.startTime) : 0
+              const overlapPx = overlapSec * pxPerSec
+
+              return (
+                <div key={`${track.filename}-${i}`}>
+                  {/* Track block */}
+                  <div
+                    className={`absolute rounded-lg border overflow-hidden select-none ${
+                      dragging?.index === i ? 'ring-2 ring-white/50 z-20 cursor-grabbing' : 'cursor-grab hover:ring-1 hover:ring-white/20 z-10'
+                    }`}
+                    style={{
+                      left,
+                      width: Math.max(width, 40),
+                      top: i * 80 + 12,
+                      height: 56,
+                      background: `rgba(${color.rgb}, 0.2)`,
+                      borderColor: `rgba(${color.rgb}, 0.4)`,
+                    }}
+                    onMouseDown={(e) => handleMouseDown(e, i)}
+                  >
+                    {/* Fade in gradient */}
+                    {track.fadeIn > 0 && (
+                      <div
+                        className="absolute inset-y-0 left-0"
+                        style={{
+                          width: track.fadeIn * pxPerSec,
+                          background: `linear-gradient(to right, transparent, rgba(${color.rgb}, 0.3))`,
+                        }}
+                      />
+                    )}
+                    {/* Fade out gradient */}
+                    {track.fadeOut > 0 && (
+                      <div
+                        className="absolute inset-y-0 right-0"
+                        style={{
+                          width: track.fadeOut * pxPerSec,
+                          background: `linear-gradient(to left, transparent, rgba(${color.rgb}, 0.3))`,
+                        }}
+                      />
+                    )}
+                    {/* Track info */}
+                    <div className="relative z-10 px-3 py-1.5 h-full flex flex-col justify-center min-w-0">
+                      <div className="text-xs font-semibold truncate" style={{ color: `rgb(${color.rgb})` }}>
+                        {track.title || track.filename}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-muted)] truncate">
+                        {track.artist}{track.bpm ? ` · ${track.bpm} BPM` : ''}{track.key ? ` · ${track.key}` : ''}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-muted)]">
+                        {fmtTime(track.duration)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Overlap label */}
+                  {overlapSec > 0 && (
+                    <div
+                      className="absolute z-20 flex items-center justify-center pointer-events-none"
+                      style={{
+                        left: left,
+                        width: overlapPx,
+                        top: i * 80 + 2,
+                        height: 10,
+                      }}
+                    >
+                      <span
+                        className="text-[9px] font-bold px-1.5 py-0 rounded-full"
+                        style={{ background: `rgba(${color.rgb}, 0.5)`, color: 'white' }}
+                      >
+                        {Math.round(overlapSec)}s
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Track list summary */}
+      <div className="flex-shrink-0 max-h-48 overflow-y-auto border-t border-[var(--border-color)] bg-[var(--bg-panel)]">
+        {mixTracks.map((t, i) => {
+          const color = getTrackColor(t, i)
+          const prevTrack = i > 0 ? mixTracks[i - 1] : null
+          const overlap = prevTrack ? Math.max(0, (prevTrack.startTime + prevTrack.duration) - t.startTime) : 0
+          return (
+            <div
+              key={`list-${t.filename}-${i}`}
+              className="flex items-center gap-3 px-5 py-2 border-b border-[var(--border-color)]/30 hover:bg-[var(--bg-hover)] transition-colors text-sm"
+            >
+              <span className="w-6 text-center text-xs font-mono flex-shrink-0" style={{ color: `rgb(${color.rgb})` }}>
+                {i + 1}
+              </span>
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: `rgb(${color.rgb})` }} />
+              <div className="flex-1 min-w-0">
+                <span className="text-[var(--text-primary)] truncate text-xs font-medium">
+                  {t.artist ? `${t.artist} - ` : ''}{t.title || t.filename}
+                </span>
+              </div>
+              <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-20 text-center">{t.genre || '-'}</span>
+              <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-12 text-center">{t.bpm || '-'}</span>
+              <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-12 text-center">{t.key || '-'}</span>
+              <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-14 text-center">{fmtTime(t.duration)}</span>
+              <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 w-14 text-right">@{fmtTime(t.startTime)}</span>
+              {overlap > 0 && (
+                <span className="text-[10px] font-medium flex-shrink-0 w-16 text-center" style={{ color: `rgb(${color.rgb})` }}>
+                  -{Math.round(overlap)}s fade
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -2285,6 +2695,7 @@ function App() {
   const [nowPlaying, setNowPlaying] = useState(null)
   const [isAudioPlaying, setIsAudioPlaying] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
+  const [mixTracks, setMixTracks] = useState(null) // tracks array for MixEditor
   const previewTimerRef = useRef(null)
   const audioRef = useRef(null)
   const wsRef = useRef(null)
@@ -2745,6 +3156,7 @@ function App() {
               { id: 'download', label: 'Descargar' },
               { id: 'library', label: 'Biblioteca' },
               { id: 'set', label: 'Set' },
+              ...(mixTracks ? [{ id: 'mix', label: 'Mix Editor' }] : []),
             ].map(tab => (
               <button
                 key={tab.id}
@@ -3189,7 +3601,16 @@ function App() {
       </div>
 
       {/* Set Builder page */}
-      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} />
+      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} />
+
+      {/* Mix Editor page */}
+      {page === 'mix' && mixTracks && (
+        <MixEditor
+          tracks={mixTracks}
+          onBack={() => setPage('set')}
+          agentConnected={agentConnected}
+        />
+      )}
 
       {/* Discover page */}
       <div className={`flex-1 flex flex-col min-h-0 ${page !== 'discover' ? 'hidden' : ''}`}>
