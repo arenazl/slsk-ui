@@ -5514,7 +5514,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           </div>
 
           {/* Category pills - single line with horizontal scroll */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full flex-nowrap">
             {discoverSource === 'beatport' ? (<>
               <button
                 onClick={() => loadChart(null)}
