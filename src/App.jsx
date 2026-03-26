@@ -1760,11 +1760,14 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const [selectedGenres, setSelectedGenres] = useState([])
   const [availableGenres, setAvailableGenres] = useState([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [allTracks, setAllTracks] = useState([])
 
   // Fetch genres that have tracks with >= minStars
   useEffect(() => {
     if (page !== 'set') return
     fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(tracks => {
+      setAllTracks(tracks)
       const genreCounts = {}
       tracks.forEach(t => {
         if ((setSelectedStars.length > 0 ? setSelectedStars.includes(t.rating || 0) : (t.rating || 0) >= minStars) && t.genre && t.key) {
@@ -1773,7 +1776,6 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       })
       const sorted = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]).map(([g, c]) => ({ genre: g, count: c }))
       setAvailableGenres(sorted)
-      // Keep only previously selected genres that still exist
       setSelectedGenres(prev => prev.filter(g => genreCounts[g]))
     }).catch(() => {})
   }, [page, minStars, setSelectedStars, authUser, collection])
@@ -2037,14 +2039,63 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
         )}
       </div>
 
+      {/* Search & add tracks manually */}
+      <div className="flex-shrink-0 px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-[var(--text-primary)]">{allTracks.length} tracks</span>
+          <div className="flex-1 relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar en tu biblioteca para agregar al set..."
+              className="w-full pl-10 pr-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+            />
+          </div>
+        </div>
+        {searchQuery.length >= 2 && (() => {
+          const q = searchQuery.toLowerCase()
+          const results = allTracks
+            .filter(t => !setTracks.some(s => s.filename === t.filename))
+            .filter(t => (t.title || t.filename || '').toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q) || (t.genre || '').toLowerCase().includes(q))
+            .slice(0, 8)
+          return results.length > 0 ? (
+            <div className="mt-2 rounded-lg border border-gray-700 overflow-hidden">
+              {results.map(t => (
+                <button
+                  key={t.filename}
+                  onClick={() => { addToSet(t); setSearchQuery('') }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-[var(--bg-hover)] transition-colors border-b border-gray-800 last:border-0"
+                >
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-[var(--text-primary)] truncate">{t.title || t.filename}</div>
+                    <div className="text-xs text-gray-500 truncate">{t.artist} · {t.genre} · {t.bpm || '?'} BPM · {t.key || '?'}</div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {t.rating > 0 && <span className="text-xs text-yellow-500">{'★'.repeat(t.rating)}</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-gray-600">No se encontraron tracks para "{searchQuery}"</p>
+          )
+        })()}
+      </div>
+
       {/* Tracklist */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {setTracks.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-600">
             <div className="text-center space-y-2">
               <p className="text-4xl">&#127911;</p>
-              <p>Elegí las estrellas mínimas y la duración del set</p>
-              <p className="text-sm text-gray-700">Elegí un método: Camelot Greedy · Energy Wave · Genre Journey · Peak Time</p>
+              <p>Buscá un tema arriba para agregarlo, o generá un set automático</p>
+              <p className="text-sm text-gray-700">Camelot Greedy · Energy Wave · Genre Journey · Peak Time</p>
             </div>
           </div>
         ) : (
