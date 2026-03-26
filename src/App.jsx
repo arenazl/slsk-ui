@@ -2240,6 +2240,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
 }
 
 const TRANSITION_TYPES = {
+  auto: { label: 'Auto', overlap: null }, // calculated per-track from energy analysis
   smooth: { label: 'Smooth', overlap: 60 },
   quick: { label: 'Quick', overlap: 16 },
   cut: { label: 'Cut', overlap: 0 },
@@ -2491,23 +2492,59 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         }
       }
       if (cancelled) return
-      // Calculate initial layout with 16s crossfade (quick transition)
-      const DEFAULT_FADE = 16
+
+      // Fetch energy analysis for each track to detect intro/outro boundaries
+      const analyses = []
+      for (const t of results) {
+        const path = t.subfolder
+          ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
+          : encodeURIComponent(t.filename)
+        try {
+          const res = await fetch(`${AGENT_BASE}/api/track-analysis/${path}`)
+          if (res.ok) {
+            analyses.push(await res.json())
+          } else {
+            analyses.push({ intro_end: 16, outro_start: t.duration - 16, duration: t.duration })
+          }
+        } catch {
+          analyses.push({ intro_end: 16, outro_start: t.duration - 16, duration: t.duration })
+        }
+      }
+
+      if (cancelled) return
+
+      // Calculate initial layout with smart per-track overlaps from energy analysis
       const laid = []
       let cumStart = 0
       for (let i = 0; i < results.length; i++) {
+        const analysis = analyses[i]
+        // Overlap = how much of this track's outro overlaps with next track's intro
+        // Use current track's outro length, clamped by next track's intro length
+        const outroLen = Math.max(0, results[i].duration - analysis.outro_start)
+        const nextIntroLen = i < results.length - 1 ? analyses[i + 1].intro_end : 0
+        // Smart overlap: use the shorter of outro/intro (both tracks must have content to mix)
+        // Minimum 8s, max 90s to stay reasonable
+        const smartOverlap = i < results.length - 1
+          ? Math.max(8, Math.min(90, Math.min(outroLen, nextIntroLen) || Math.max(outroLen, nextIntroLen) || 16))
+          : 0
+        const fadeOut = smartOverlap
+        const fadeIn = i === 0 ? 0 : laid[i - 1]._autoOverlap || 16
+
         laid.push({
           ...results[i],
           startTime: cumStart,
-          fadeIn: i === 0 ? 0 : DEFAULT_FADE,
-          fadeOut: i === results.length - 1 ? 0 : DEFAULT_FADE,
-          transitionType: 'quick',
+          fadeIn,
+          fadeOut,
+          transitionType: 'auto',
           trimStart: 0,
           trimEnd: 0,
           customFadeIn: null,
           customFadeOut: null,
+          _autoOverlap: smartOverlap, // store the computed overlap for reference
+          _introEnd: analysis.intro_end,
+          _outroStart: analysis.outro_start,
         })
-        cumStart += results[i].duration - (i === results.length - 1 ? 0 : DEFAULT_FADE)
+        cumStart += results[i].duration - smartOverlap
       }
       setMixTracks(laid)
       setLoading(false)
@@ -2602,12 +2639,20 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     return () => { cancelled = true }
   }, [mixTracks, generateWaveform])
 
+  // Resolve the effective overlap for a track (auto uses stored analysis, others use fixed)
+  const resolveOverlap = useCallback((track) => {
+    if (track.transitionType === 'auto') return track._autoOverlap || 16
+    return TRANSITION_TYPES[track.transitionType || 'quick'].overlap
+  }, [])
+
   // Change transition type for a track (affects overlap with NEXT track)
   const changeTransitionType = useCallback((index, type) => {
-    const overlap = TRANSITION_TYPES[type].overlap
     setMixTracks(prev => {
       const next = [...prev]
       next[index] = { ...next[index], transitionType: type }
+      const overlap = type === 'auto'
+        ? (next[index]._autoOverlap || 16)
+        : TRANSITION_TYPES[type].overlap
       // Update the next track's startTime and fade values
       if (index < next.length - 1) {
         const currentTrack = next[index]
@@ -2619,7 +2664,9 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         for (let j = index + 2; j < next.length; j++) {
           const prevT = next[j - 1]
           const prevEnd = prevT.startTime + effectiveDuration(prevT)
-          const thisOverlap = TRANSITION_TYPES[next[j - 1].transitionType || 'quick'].overlap
+          const thisOverlap = prevT.transitionType === 'auto'
+            ? (prevT._autoOverlap || 16)
+            : TRANSITION_TYPES[prevT.transitionType || 'quick'].overlap
           next[j] = { ...next[j], startTime: prevEnd - thisOverlap, fadeIn: thisOverlap }
         }
       }
@@ -3066,6 +3113,27 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                         }}
                       />
                     )}
+                    {/* Intro/outro boundary markers from energy analysis */}
+                    {track._introEnd > 0 && (
+                      <div
+                        className="absolute top-0 bottom-0 w-px pointer-events-none z-10"
+                        style={{
+                          left: (track._introEnd - trimS) * pxPerSec,
+                          borderLeft: '1px dashed rgba(34,197,94,0.6)',
+                        }}
+                        title={`Intro ends: ${Math.round(track._introEnd)}s`}
+                      />
+                    )}
+                    {track._outroStart > 0 && track._outroStart < track.duration && (
+                      <div
+                        className="absolute top-0 bottom-0 w-px pointer-events-none z-10"
+                        style={{
+                          left: (track._outroStart - trimS) * pxPerSec,
+                          borderLeft: '1px dashed rgba(239,68,68,0.6)',
+                        }}
+                        title={`Outro starts: ${Math.round(track._outroStart)}s`}
+                      />
+                    )}
                     {/* Custom fade in overlay */}
                     {track.customFadeIn != null && track.customFadeIn > 0 && (
                       <div
@@ -3128,7 +3196,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                         className="text-[9px] font-bold px-1.5 py-0 rounded-full"
                         style={{ background: `rgba(${color.rgb}, 0.5)`, color: 'white' }}
                       >
-                        {TRANSITION_TYPES[track.transitionType]?.label || `${Math.round(overlapSec)}s`}
+                        {track.transitionType === 'auto' ? `Auto ${Math.round(overlapSec)}s` : (TRANSITION_TYPES[track.transitionType]?.label || `${Math.round(overlapSec)}s`)}
                       </span>
                     </div>
                   )}
@@ -3246,7 +3314,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                 className="text-[10px] flex-shrink-0 w-20 px-1 py-0.5 bg-[var(--bg-input)] border border-gray-700 rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
               >
                 {Object.entries(TRANSITION_TYPES).map(([key, { label, overlap: ov }]) => (
-                  <option key={key} value={key}>{label} ({ov}s)</option>
+                  <option key={key} value={key}>{label} ({key === 'auto' ? `${Math.round(t._autoOverlap || 0)}s` : `${ov}s`})</option>
                 ))}
               </select>
             </div>
