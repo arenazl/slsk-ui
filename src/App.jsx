@@ -2582,75 +2582,91 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     }
   }, [playhead, isPlaying, pxPerSec])
 
-  // On mount, fetch durations for all tracks
+  // On mount, fetch track info (duration, bpm, intro/outro from manifest)
   useEffect(() => {
     if (!initialTracks || initialTracks.length === 0) { setLoading(false); return }
     let cancelled = false
-    const fetchDurations = async () => {
-      const results = []
-      for (const t of initialTracks) {
+    const DEFAULT_FADE = 16
+
+    const fetchAndLayout = async () => {
+      // Fetch all track info in parallel — manifest data comes back instantly
+      const results = await Promise.all(initialTracks.map(async (t) => {
         const path = t.subfolder
           ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
           : encodeURIComponent(t.filename)
         try {
           const res = await fetch(`${AGENT_BASE}/api/track-info/${path}`)
           const info = await res.json()
-          results.push({
+          return {
             ...t,
             duration: info.duration_seconds || 300,
             bpm: t.bpm || info.bpm || null,
-          })
+            _introEnd: info.intro_end || 0,
+            _outroStart: info.outro_start || info.duration_seconds || 300,
+          }
         } catch {
-          results.push({ ...t, duration: 300 })
+          return { ...t, duration: 300, _introEnd: 0, _outroStart: 300 }
         }
-      }
+      }))
+
       if (cancelled) return
 
-      // First: lay out immediately with default 16s overlap so UI is responsive
-      const DEFAULT_FADE = 16
+      // Layout with smart overlaps using manifest data
       const laid = []
       let cumStart = 0
       for (let i = 0; i < results.length; i++) {
-        // BPM ratio: adjust duration when time-stretching to masterBPM
-        const trackBpm = results[i].bpm || masterBPM
-        const ratio = trackBpm / masterBPM // >1 = track gets longer, <1 = shorter
-        const stretchedDuration = results[i].duration * ratio
+        const r = results[i]
+        const trackBpm = r.bpm || masterBPM
+        const ratio = trackBpm / masterBPM
+        const stretchedDuration = r.duration * ratio
+
+        // Smart overlap from intro/outro if available
+        const hasAnalysis = r._introEnd > 0 || r._outroStart < r.duration
+        let smartOverlap = DEFAULT_FADE
+        if (hasAnalysis && i < results.length - 1) {
+          const outroLen = Math.max(0, r.duration - r._outroStart)
+          const nextIntroLen = results[i + 1]._introEnd || 0
+          smartOverlap = Math.max(8, Math.min(90,
+            Math.min(outroLen, nextIntroLen) || Math.max(outroLen, nextIntroLen) || DEFAULT_FADE
+          ))
+        } else if (i === results.length - 1) {
+          smartOverlap = 0
+        }
+
         laid.push({
-          ...results[i],
+          ...r,
           startTime: cumStart,
-          fadeIn: i === 0 ? 0 : DEFAULT_FADE,
-          fadeOut: i === results.length - 1 ? 0 : DEFAULT_FADE,
+          fadeIn: i === 0 ? 0 : (laid[i - 1]._autoOverlap || DEFAULT_FADE),
+          fadeOut: smartOverlap,
           transitionType: 'auto',
           trimStart: 0,
           trimEnd: 0,
           customFadeIn: null,
           customFadeOut: null,
-          _autoOverlap: DEFAULT_FADE,
-          _introEnd: 0,
-          _outroStart: results[i].duration,
+          _autoOverlap: smartOverlap,
         })
-        cumStart += stretchedDuration - (i === results.length - 1 ? 0 : DEFAULT_FADE)
+        cumStart += stretchedDuration - smartOverlap
       }
       setMixTracks(laid)
       setLoading(false)
 
-      // Then: fetch energy analysis in background (parallel) — only adds metadata, never moves tracks
-      const analyzeAll = async () => {
-        const paths = results.map(t => t.subfolder
-          ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
-          : encodeURIComponent(t.filename))
-
-        const analyses = await Promise.all(paths.map(async (path, idx) => {
+      // For tracks missing analysis, fetch in background and enrich (no position changes)
+      const needsAnalysis = results.filter(r => !r._introEnd && r._outroStart >= r.duration)
+      if (needsAnalysis.length > 0) {
+        const analyses = await Promise.all(results.map(async (r) => {
+          if (r._introEnd > 0 || r._outroStart < r.duration) return null // already has data
+          const path = r.subfolder
+            ? `${encodeURIComponent(r.subfolder)}/${encodeURIComponent(r.filename)}`
+            : encodeURIComponent(r.filename)
           try {
             const res = await fetch(`${AGENT_BASE}/api/track-analysis/${path}`)
             if (res.ok) return await res.json()
           } catch { /* ignore */ }
-          return { intro_end: DEFAULT_FADE, outro_start: results[idx].duration - DEFAULT_FADE, duration: results[idx].duration }
+          return null
         }))
 
         if (cancelled) return
 
-        // Only enrich existing tracks with analysis data — preserve all positions
         setMixTracks(prev => prev.map((t, i) => {
           const a = analyses[i]
           if (!a) return t
@@ -2662,9 +2678,8 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           return { ...t, _introEnd: a.intro_end, _outroStart: a.outro_start, _autoOverlap: smartOverlap }
         }))
       }
-      analyzeAll()
     }
-    fetchDurations()
+    fetchAndLayout()
     return () => { cancelled = true }
   }, [initialTracks])
 
