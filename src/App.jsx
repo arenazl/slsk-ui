@@ -4422,60 +4422,78 @@ function App() {
                 </button>
               ))}
             </nav>
-            {/* Mobile menu footer with agent/settings */}
-            <div className="flex-shrink-0 border-t border-[var(--border-color)] p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <a href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
-                  className="relative p-2 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all flex-shrink-0" title="Agente Windows">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
-                  <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-panel)] ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
-                </a>
-                <a href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
-                  className="p-2 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all flex-shrink-0" title="Agente Mac">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" /></svg>
-                </a>
-                <button onClick={async () => { try { await fetch(`${API_BASE}/api/restart-slsk`, { method: 'POST' }); connectWs() } catch {} }}
-                  className="p-2 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all flex-shrink-0" title="Reiniciar SoulSeek">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                </button>
+            {/* Mobile menu footer */}
+            <div className="flex-shrink-0 border-t border-[var(--border-color)] p-4 space-y-4">
+              {/* Accent color */}
+              <div>
+                <div className="text-[10px] text-gray-500 uppercase font-bold mb-2">Color</div>
+                <div className="flex items-center gap-2.5">
+                  {[
+                    { color: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
+                    { color: '#8b5cf6', gradient: 'from-violet-500 to-purple-600' },
+                    { color: '#f43f5e', gradient: 'from-rose-500 to-pink-600' },
+                    { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500' },
+                    { color: '#22c55e', gradient: 'from-green-400 to-emerald-600' },
+                  ].map(p => (
+                    <button
+                      key={p.color}
+                      onClick={() => setAccentColor(p.color)}
+                      className={`rounded-full bg-gradient-to-br ${p.gradient} transition-all duration-200 active:scale-95 ${
+                        accentColor === p.color ? 'ring-2 ring-white/60 ring-offset-2 ring-offset-[var(--bg-panel)] scale-110' : 'ring-1 ring-white/10'
+                      }`}
+                      style={{ width: '28px', height: '28px' }}
+                    />
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 px-1">
-                {[
-                  { color: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
-                  { color: '#8b5cf6', gradient: 'from-violet-500 to-purple-600' },
-                  { color: '#f43f5e', gradient: 'from-rose-500 to-pink-600' },
-                  { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500' },
-                  { color: '#22c55e', gradient: 'from-green-400 to-emerald-600' },
-                ].map(p => (
-                  <button
-                    key={p.color}
-                    onClick={() => setAccentColor(p.color)}
-                    className={`rounded-full bg-gradient-to-br ${p.gradient} transition-all duration-200 active:scale-95 ${
-                      accentColor === p.color ? 'ring-2 ring-white/60 scale-110' : 'ring-1 ring-white/10'
-                    }`}
-                    style={{ width: '22px', height: '22px' }}
-                  />
-                ))}
+
+              {/* Agent downloads */}
+              <div>
+                <div className="text-[10px] text-gray-500 uppercase font-bold mb-2">Agente</div>
+                <div className="flex items-center gap-2">
+                  <a href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
+                    className="flex items-center gap-2 flex-1 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.98]">
+                    <svg className="w-5 h-5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
+                    <span className="text-xs text-[var(--text-secondary)]">Windows</span>
+                  </a>
+                  <a href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
+                    className="flex items-center gap-2 flex-1 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.98]">
+                    <svg className="w-5 h-5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" /></svg>
+                    <span className="text-xs text-[var(--text-secondary)]">macOS</span>
+                  </a>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-                {connected ? (isRunning ? 'Descargando...' : 'Conectado') : 'Desconectado'}
-                {agentConnected && <span className="text-green-400">| Agente v{agentVersion}</span>}
-                {agentConnected && (
-                  <button
-                    className="ml-1 text-[var(--text-muted)] hover:text-yellow-400 transition-colors"
-                    title="Reiniciar Agente (git pull + restart)"
-                    onClick={async () => {
-                      try {
-                        const res = await fetch(`${AGENT_BASE}/api/restart`, { method: 'POST' })
-                        if (res.ok) toast('Reiniciando agente...', 'info')
-                      } catch { /* agent is restarting */ }
-                      toast('Agente reiniciándose, reconectará en segundos...', 'info')
-                    }}
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+
+              {/* Connection status */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                  <div className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span>{connected ? (isRunning ? 'Descargando...' : 'SoulSeek conectado') : 'Desconectado'}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {agentConnected && (
+                    <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">v{agentVersion}</span>
+                  )}
+                  <button onClick={async () => { try { await fetch(`${API_BASE}/api/restart-slsk`, { method: 'POST' }); connectWs() } catch {} }}
+                    className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all" title="Reiniciar SoulSeek">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                   </button>
-                )}
+                  {agentConnected && (
+                    <button
+                      className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all"
+                      title="Reiniciar Agente"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`${AGENT_BASE}/api/restart`, { method: 'POST' })
+                          if (res.ok) toast('Reiniciando agente...', 'info')
+                        } catch {}
+                        toast('Agente reiniciándose...', 'info')
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
