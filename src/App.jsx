@@ -2343,8 +2343,9 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
 
       if (nextTrack) {
         const timeInCurrent = now - currentTrack.startTime
-        const fadeOutStart = currentTrack.duration - currentTrack.fadeOut
-        if (timeInCurrent >= fadeOutStart && audioBRef.current.paused) {
+        const actualFadeOut = currentTrack.customFadeOut ?? currentTrack.fadeOut
+        const fadeOutStart = currentTrack.duration - actualFadeOut
+        if (actualFadeOut > 0 && timeInCurrent >= fadeOutStart && audioBRef.current.paused) {
           // Start next track
           const audioB = audioBRef.current
           audioB.src = audioUrl(nextTrack)
@@ -2353,8 +2354,8 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           audioB.play().catch(() => {})
         }
         // Crossfade volumes
-        if (timeInCurrent >= fadeOutStart && !audioBRef.current.paused) {
-          const fadeProgress = (timeInCurrent - fadeOutStart) / currentTrack.fadeOut
+        if (actualFadeOut > 0 && timeInCurrent >= fadeOutStart && !audioBRef.current.paused) {
+          const fadeProgress = (timeInCurrent - fadeOutStart) / actualFadeOut
           const mv = volumeRef.current
           audioA.volume = Math.max(0, (1 - fadeProgress) * mv)
           audioBRef.current.volume = Math.min(mv, fadeProgress * mv)
@@ -3112,21 +3113,21 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                       onMouseDown={(e) => handleResizeStart(e, i, 'right')}
                     />
                     {/* Fade in gradient */}
-                    {track.fadeIn > 0 && (
+                    {(track.customFadeIn ?? track.fadeIn) > 0 && (
                       <div
                         className="absolute inset-y-0 left-0"
                         style={{
-                          width: track.fadeIn * pxPerSec,
+                          width: (track.customFadeIn ?? track.fadeIn) * pxPerSec,
                           background: `linear-gradient(to right, transparent, rgba(${color.rgb}, 0.3))`,
                         }}
                       />
                     )}
                     {/* Fade out gradient */}
-                    {track.fadeOut > 0 && (
+                    {(track.customFadeOut ?? track.fadeOut) > 0 && (
                       <div
                         className="absolute inset-y-0 right-0"
                         style={{
-                          width: track.fadeOut * pxPerSec,
+                          width: (track.customFadeOut ?? track.fadeOut) * pxPerSec,
                           background: `linear-gradient(to left, transparent, rgba(${color.rgb}, 0.3))`,
                         }}
                       />
@@ -3235,36 +3236,36 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           {contextMenu.side === 'left' ? (
             <>
               <div className="px-3 py-1 text-[10px] text-[var(--text-muted)] uppercase font-bold">Fade In</div>
-              {[null, 4, 8, 16].map(val => (
+              {[{val: undefined, label: 'Auto'}, {val: 0, label: 'Off'}, {val: 4, label: '4s'}, {val: 8, label: '8s'}, {val: 16, label: '16s'}, {val: 24, label: '24s'}].map(opt => (
                 <button
-                  key={`fi-${val}`}
+                  key={`fi-${opt.val}`}
                   className={`w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)] transition-colors ${
-                    mixTracks[contextMenu.trackIndex]?.customFadeIn === val ? 'text-[var(--color-accent)] font-semibold' : 'text-[var(--text-primary)]'
+                    mixTracks[contextMenu.trackIndex]?.customFadeIn === opt.val ? 'text-[var(--color-accent)] font-semibold' : 'text-[var(--text-primary)]'
                   }`}
                   onClick={() => {
-                    setMixTracks(prev => prev.map((t, idx) => idx === contextMenu.trackIndex ? { ...t, customFadeIn: val } : t))
+                    setMixTracks(prev => prev.map((t, idx) => idx === contextMenu.trackIndex ? { ...t, customFadeIn: opt.val } : t))
                     setContextMenu(null)
                   }}
                 >
-                  {val === null ? 'Fade In: Off' : `Fade In: ${val}s`}
+                  Fade In: {opt.label}
                 </button>
               ))}
             </>
           ) : (
             <>
               <div className="px-3 py-1 text-[10px] text-[var(--text-muted)] uppercase font-bold">Fade Out</div>
-              {[null, 4, 8, 16].map(val => (
+              {[{val: undefined, label: 'Auto'}, {val: 0, label: 'Off'}, {val: 4, label: '4s'}, {val: 8, label: '8s'}, {val: 16, label: '16s'}, {val: 24, label: '24s'}].map(opt => (
                 <button
-                  key={`fo-${val}`}
+                  key={`fo-${opt.val}`}
                   className={`w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)] transition-colors ${
-                    mixTracks[contextMenu.trackIndex]?.customFadeOut === val ? 'text-[var(--color-accent)] font-semibold' : 'text-[var(--text-primary)]'
+                    mixTracks[contextMenu.trackIndex]?.customFadeOut === opt.val ? 'text-[var(--color-accent)] font-semibold' : 'text-[var(--text-primary)]'
                   }`}
                   onClick={() => {
-                    setMixTracks(prev => prev.map((t, idx) => idx === contextMenu.trackIndex ? { ...t, customFadeOut: val } : t))
+                    setMixTracks(prev => prev.map((t, idx) => idx === contextMenu.trackIndex ? { ...t, customFadeOut: opt.val } : t))
                     setContextMenu(null)
                   }}
                 >
-                  {val === null ? 'Fade Out: Off' : `Fade Out: ${val}s`}
+                  Fade Out: {opt.label}
                 </button>
               ))}
             </>
