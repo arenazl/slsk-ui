@@ -286,8 +286,9 @@ const GENRE_COLORS = [
 ]
 
 function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPause, onStop, agentConnected }) {
-  // Use audioRef.current if available (always fresh), fallback to prop
-  const audio = audioRef?.current || audioProp
+  // Helper: always read fresh audio from ref
+  const getAudio = () => audioRef?.current || audioProp
+  const audio = getAudio()
   const canvasRef = useRef(null)
   const waveformRef = useRef(null) // Float32Array of peaks
   const animFrameRef = useRef(null)
@@ -355,36 +356,30 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
 
     const draw = () => {
       animFrameRef.current = requestAnimationFrame(draw)
+      const a = getAudio() // always fresh from ref
       const w = canvas.width
       const h = canvas.height
       ctx.clearRect(0, 0, w, h)
 
       const peaks = waveformRef.current
-      if (audio) {
-        setCurrentTime(audio.currentTime || 0)
-        setDuration(audio.duration || 0)
+      if (a) {
+        setCurrentTime(a.currentTime || 0)
+        setDuration(a.duration || 0)
       }
       if (!peaks) {
-        // Simple progress bar (for previews or while loading)
-        const pct = (audio && audio.duration) ? (audio.currentTime / audio.duration) : 0
+        const pct = (a && a.duration) ? (a.currentTime / a.duration) : 0
         const barY = h / 2 - 3
         const barH = 6
-        // Read accent color from CSS variable
         const accentRgb = getComputedStyle(document.documentElement).getPropertyValue('--color-accent-rgb').trim() || '59,130,246'
-        // Background
         ctx.fillStyle = 'rgba(100,116,139,0.2)'
         ctx.beginPath()
         ctx.roundRect(0, barY, w, barH, 3)
         ctx.fill()
-        // Progress
         if (pct > 0) {
           ctx.fillStyle = `rgba(${accentRgb},0.8)`
           ctx.beginPath()
           ctx.roundRect(0, barY, w * pct, barH, 3)
           ctx.fill()
-        }
-        // Cursor dot
-        if (pct > 0) {
           ctx.fillStyle = `rgb(${accentRgb})`
           ctx.beginPath()
           ctx.arc(w * pct, h / 2, 5, 0, Math.PI * 2)
@@ -393,21 +388,17 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
         return
       }
 
-      // Read accent color from CSS variable
       const accentRgb = getComputedStyle(document.documentElement).getPropertyValue('--color-accent-rgb').trim() || '59,130,246'
       const bars = peaks.length
       const barW = Math.max((w / bars) - 1, 1)
-      const gap = 1
-      const pct = (audio && audio.duration) ? (audio.currentTime / audio.duration) : 0
+      const pct = (a && a.duration) ? (a.currentTime / a.duration) : 0
 
       for (let i = 0; i < bars; i++) {
         const x = (i / bars) * w
         const amp = peaks[i]
         const barH = Math.max(amp * h * 0.9, 2)
         const y = (h - barH) / 2
-        const progress = (i / bars)
-
-        if (progress < pct) {
+        if ((i / bars) < pct) {
           ctx.fillStyle = `rgba(${accentRgb},0.9)`
         } else {
           ctx.fillStyle = 'rgba(100,116,139,0.35)'
@@ -415,16 +406,10 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
         ctx.fillRect(x, y, barW, barH)
       }
 
-      // Playhead line
       if (pct > 0) {
         const px = pct * w
         ctx.fillStyle = 'rgba(255,255,255,0.8)'
         ctx.fillRect(px - 1, 0, 2, h)
-      }
-
-      if (audio) {
-        setCurrentTime(audio.currentTime || 0)
-        setDuration(audio.duration || 0)
       }
     }
     draw()
@@ -432,7 +417,7 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
     }
-  }, [file, audio, isPlaying])
+  }, [file, isPlaying])
 
   useEffect(() => {
     return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current) }
@@ -446,17 +431,18 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
   }
 
   const handleSeek = (e) => {
-    if (!audio) return
-    const dur = audio.duration || duration
+    const a = getAudio()
+    if (!a) return
+    const dur = a.duration || duration
     if (!dur || !isFinite(dur)) return
     const rect = e.currentTarget.getBoundingClientRect()
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    const wasPlaying = !audio.paused
+    const wasPlaying = !a.paused
     try {
-      audio.currentTime = pct * dur
+      a.currentTime = pct * dur
     } catch {}
     if (wasPlaying) {
-      audio.play().catch(() => {})
+      a.play().catch(() => {})
     }
   }
 
