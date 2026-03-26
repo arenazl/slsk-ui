@@ -676,11 +676,19 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       return [...prev.slice(0, idx), ...prev.slice(idx + 1)]
     })
     try {
-      // Delete file from agent
-      await fetch(`${AGENT_BASE}/api/delete`, {
+      // Delete from agent (local files)
+      if (agentConnected) {
+        await fetch(`${AGENT_BASE}/api/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.filename }),
+        })
+      }
+      // Delete from Heroku manifest (Cloudinary)
+      await fetch(`${API_BASE}/api/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.filename }),
+        body: JSON.stringify({ filename: file.filename, username: authUser?.name || '' }),
       })
     } catch (e) {
       console.error('Failed to delete', e)
