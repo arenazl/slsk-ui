@@ -5592,7 +5592,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       {/* Context menu / Bottom sheet */}
       {discoverCtx && (<>
         {/* Backdrop */}
-        <div className="fixed inset-0 z-40 bg-black/50 md:bg-transparent" onClick={() => setDiscoverCtx(null)} />
+        <div className="fixed inset-0 z-40 bg-black/50 md:bg-transparent animate-fade-in" onClick={() => setDiscoverCtx(null)} />
 
         {/* Desktop: positioned dropdown */}
         <div
@@ -5637,7 +5637,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         </div>
 
         {/* Mobile: bottom sheet */}
-        <div ref={discoverCtxRef} className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-[var(--bg-panel)] rounded-t-2xl shadow-2xl border-t border-[var(--border-color)] animate-in slide-in-from-bottom duration-200">
+        <div ref={discoverCtxRef} className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-[var(--bg-panel)] rounded-t-2xl shadow-2xl border-t border-[var(--border-color)] animate-sheet-up">
           {/* Drag handle */}
           <div className="flex justify-center py-2">
             <div className="w-10 h-1 rounded-full bg-gray-600" />
