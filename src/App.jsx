@@ -580,7 +580,9 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [deletingDupes, setDeletingDupes] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null) // { x, y, file }
   const [customGenre, setCustomGenre] = useState('')
+  const [toolsOpen, setToolsOpen] = useState(false)
   const ctxRef = useRef(null)
+  const toolsRef = useRef(null)
 
   const fetchIdRef = useRef(0)
   const fetchLibrary = useCallback(async () => {
@@ -656,6 +658,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [ctxMenu])
+
+  // Close tools dropdown on outside click
+  useEffect(() => {
+    if (!toolsOpen) return
+    const handleClick = (e) => {
+      if (toolsRef.current && !toolsRef.current.contains(e.target)) setToolsOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [toolsOpen])
 
   const handleContextMenu = (e, file) => {
     e.preventDefault()
@@ -1224,6 +1236,73 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </div>
         )}
 
+        {/* Tools dropdown - visible on mobile/tablet instead of individual buttons */}
+        <div className="md:hidden relative flex-shrink-0" ref={toolsRef}>
+          <button
+            onClick={() => setToolsOpen(p => !p)}
+            className={`p-1.5 rounded-lg transition-all active:scale-95 ${toolsOpen ? 'bg-[var(--color-accent)] text-white' : 'text-gray-400 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+          </button>
+          {toolsOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl shadow-2xl py-1 min-w-48 animate-fade-in">
+              {/* Star filter */}
+              <div className="px-3 py-2 border-b border-[var(--border-color)]">
+                <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Rating</div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => { setStarFilter('0'); setToolsOpen(false) }}
+                    className={`px-2 py-0.5 rounded text-xs ${selectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500'}`}>All</button>
+                  {[1,2,3,4,5].map(s => (
+                    <button key={s} onClick={() => { const next = selectedStars.includes(s) ? selectedStars.filter(x=>x!==s) : [...selectedStars,s]; setStarFilter(next.length > 0 ? next.join(',') : '0') }}
+                      className={`px-1.5 py-0.5 rounded text-xs ${selectedStars.includes(s) ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500'}`}>{'★'.repeat(s)}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Actions */}
+              {ungrouped.length > 0 && (
+                <button onClick={() => { classifyWithAI(); setToolsOpen(false) }} disabled={classifying}
+                  className="w-full text-left px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5 disabled:opacity-50">
+                  {classifying ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                    : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>}
+                  {classifying ? 'Clasificando...' : `Clasificar (${ungrouped.length})`}
+                </button>
+              )}
+              {files.some(f => !f.in_subfolder && f.genre) && (
+                <button onClick={() => { organizeAll(); setToolsOpen(false) }} disabled={organizing}
+                  className="w-full text-left px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5 disabled:opacity-50">
+                  {organizing ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                    : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>}
+                  {organizing ? 'Organizando...' : 'Organizar'}
+                </button>
+              )}
+              {files.some(f => !f.key) && (
+                <button onClick={() => { detectKeys(); setToolsOpen(false) }} disabled={detectingKeys}
+                  className="w-full text-left px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5 disabled:opacity-50">
+                  {detectingKeys ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                    : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" /></svg>}
+                  {detectingKeys ? 'Detectando...' : `Detectar Keys (${files.filter(f => !f.key).length})`}
+                </button>
+              )}
+              {dupeKeys.size > 0 && (
+                <button onClick={() => { setShowDupes(d => !d); setToolsOpen(false) }}
+                  className="w-full text-left px-3 py-2.5 text-sm text-red-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  Duplicados ({dupeKeys.size})
+                </button>
+              )}
+              <div className="border-t border-[var(--border-color)] mt-1 pt-1">
+                <button onClick={() => { openFolder(''); setToolsOpen(false) }}
+                  className="w-full text-left px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" /></svg>
+                  Abrir carpeta
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Search */}
         <div className="relative flex-1 min-w-20 md:min-w-24 ml-auto">
           <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1493,7 +1572,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       ) : (view === 'cards' && !q) ? (
         /* Genre grid (cards view) */
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 md:p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start auto-rows-min">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3 items-start auto-rows-min">
             {genres.map((g, i) => {
               const c = GENRE_COLORS[i % GENRE_COLORS.length]
               return (
