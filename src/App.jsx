@@ -1921,7 +1921,6 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     setSetTracks(prev => [...prev, track])
     setTotalMin(prev => prev + 6)
     setSuggestions(prev => prev.filter(s => s.filename !== track.filename))
-    // Refresh suggestions with new last track
     fetchSuggestions([...setTracks, track])
   }
 
@@ -2043,7 +2042,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
           {[60, 90, 120].map(d => (
             <button
               key={d}
-              onClick={() => setDuration(d)}
+              onClick={() => { setDuration(d); if (method) generateSet(method, undefined, d) }}
               className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex-shrink-0 ${
                 duration === d ? 'font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
