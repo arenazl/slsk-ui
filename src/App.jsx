@@ -1075,20 +1075,20 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Toolbar */}
-      <div className="flex-shrink-0 flex items-center gap-3 px-5 py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-lg font-bold text-[var(--text-primary)]">{filtered.length}</span>
-          <span className="text-sm text-gray-500">{q || selectedStars.length > 0 || genreFilter.length > 0 ? `/ ${files.length}` : 'tracks'}</span>
+      {/* Toolbar - row 1: count, view toggle, search, actions */}
+      <div className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 md:px-5 py-2 md:py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-base md:text-lg font-bold text-[var(--text-primary)]">{filtered.length}</span>
+          <span className="text-xs md:text-sm text-gray-500">{q || selectedStars.length > 0 || genreFilter.length > 0 ? `/ ${files.length}` : 'tracks'}</span>
         </div>
 
         {/* View toggle */}
-        <div className="flex gap-1 flex-shrink-0">
+        <div className="flex gap-0.5 md:gap-1 flex-shrink-0">
           {['cards', 'list', 'tracks'].map(v => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`px-3 py-1.5 rounded-lg text-sm ${
+              className={`px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-xs md:text-sm ${
                 view === v ? 'btn-accent font-semibold' : 'btn-ghost'
               }`}
             >
@@ -1097,8 +1097,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           ))}
         </div>
 
-        {/* Star filter (multi-select) */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Star filter - hidden on mobile */}
+        <div className="hidden md:flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => setStarFilter('0')}
             className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
@@ -1124,20 +1124,20 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           })}
         </div>
 
+        {/* Action buttons - hidden on mobile, shown on md+ */}
         {view === 'tracks' && dupeGroups.length > 0 && (
           <button
             onClick={async () => {
               if (!showDupes) {
                 setShowDupes(true)
               } else {
-                // Second click: auto-delete all inferior dupes
                 const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
                 await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                 fetchLibrary()
                 setShowDupes(false)
               }
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 ${
+            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 ${
               showDupes ? 'bg-red-600 text-[var(--text-primary)] font-semibold' : 'bg-red-900/50 hover:bg-red-800 text-red-300'
             }`}
           >
@@ -1152,7 +1152,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           <button
             onClick={classifyWithAI}
             disabled={classifying}
-            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
             style={{ background: 'var(--color-accent)' }}
           >
             {classifying ? (
@@ -1169,7 +1169,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           <button
             onClick={organizeAll}
             disabled={organizing}
-            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
             style={{ background: 'var(--color-accent)' }}
           >
             {organizing ? (
@@ -1186,7 +1186,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           <button
             onClick={detectKeys}
             disabled={detectingKeys}
-            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
             style={{ background: 'var(--color-accent)' }}
           >
             {detectingKeys ? (
@@ -1201,7 +1201,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         )}
 
         {dupeKeys.size > 0 && (
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="hidden md:flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => setShowDupes(d => !d)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-l-lg text-sm transition-all duration-200 active:scale-95 ${
@@ -1225,7 +1225,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         )}
 
         {/* Search */}
-        <div className="relative flex-1 min-w-24 ml-auto">
+        <div className="relative flex-1 min-w-20 md:min-w-24 ml-auto">
           <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -1236,11 +1236,11 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             className="w-full pl-7 pr-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
           />
         </div>
-        <div className="flex items-center gap-1 ml-auto flex-shrink-0">
-          {(moving || organizing) && <span className="text-xs text-yellow-400 animate-pulse mr-2">{organizing ? 'Organizando...' : 'Moviendo...'}</span>}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {(moving || organizing) && <span className="hidden md:inline text-xs text-yellow-400 animate-pulse mr-2">{organizing ? 'Organizando...' : 'Moviendo...'}</span>}
           <button
             onClick={() => openFolder('')}
-            className="p-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-[var(--text-primary,white)] transition-all duration-200 active:scale-95"
+            className="hidden md:flex p-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-[var(--text-primary,white)] transition-all duration-200 active:scale-95"
             title="Abrir carpeta"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1249,10 +1249,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </button>
           <button
             onClick={fetchLibrary}
-            className="p-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-[var(--text-primary,white)] transition-all duration-200 active:scale-95"
+            className="p-1.5 md:p-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-[var(--text-primary,white)] transition-all duration-200 active:scale-95"
             title="Refrescar"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
@@ -1261,7 +1261,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
       {/* Genre filter pills */}
       {availGenres.length > 1 && (
-        <div className="flex-shrink-0 flex items-center gap-1 px-5 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex-wrap">
+        <div className="flex-shrink-0 flex items-center gap-1 px-3 md:px-5 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto md:flex-wrap scrollbar-none">
           <button
             onClick={() => setGenreFilter([])}
             className={`px-2.5 py-1 rounded-full text-xs ${
@@ -1280,7 +1280,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 onClick={() => setGenreFilter(prev =>
                   active ? prev.filter(g => g !== genre) : [...prev, genre]
                 )}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200`}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200`}
                 style={{
                   background: active ? `rgba(${gColor.rgb}, 0.3)` : `rgba(${gColor.rgb}, 0.08)`,
                   color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.6)`,
@@ -1410,14 +1410,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         /* Tracks view - flat table by rating only */
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Table header */}
-          <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-[var(--bg-surface)] border-b border-[var(--border-color)] text-xs text-gray-500 uppercase tracking-wider select-none">
-            <span className="w-8 text-center">#</span>
+          <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--bg-surface)] border-b border-[var(--border-color)] text-xs text-gray-500 uppercase tracking-wider select-none">
+            <span className="w-6 md:w-8 text-center">#</span>
             <span className="w-8"></span>
             <button onClick={() => toggleSort('artist')} className={`flex-1 min-w-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'artist' ? 'text-[var(--color-accent)]' : ''}`}>Artista - Título<SortArrow col="artist" /></button>
-            <button onClick={() => toggleSort('genre')} className={`w-32 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'genre' ? 'text-[var(--color-accent)]' : ''}`}>Género<SortArrow col="genre" /></button>
-            <button onClick={() => toggleSort('key')} className={`w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'key' ? 'text-[var(--color-accent)]' : ''}`}>Key<SortArrow col="key" /></button>
-            <button onClick={() => toggleSort('rating')} className={`w-24 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'rating' ? 'text-[var(--color-accent)]' : ''}`}>Rating<SortArrow col="rating" /></button>
-            <button onClick={() => toggleSort('date')} className={`w-20 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'date' ? 'text-[var(--color-accent)]' : ''}`}>Fecha<SortArrow col="date" /></button>
+            <button onClick={() => toggleSort('genre')} className={`hidden md:block w-32 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'genre' ? 'text-[var(--color-accent)]' : ''}`}>Género<SortArrow col="genre" /></button>
+            <button onClick={() => toggleSort('key')} className={`hidden sm:block w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'key' ? 'text-[var(--color-accent)]' : ''}`}>Key<SortArrow col="key" /></button>
+            <button onClick={() => toggleSort('rating')} className={`w-20 md:w-24 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'rating' ? 'text-[var(--color-accent)]' : ''}`}>Rating<SortArrow col="rating" /></button>
+            <button onClick={() => toggleSort('date')} className={`hidden lg:block w-20 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'date' ? 'text-[var(--color-accent)]' : ''}`}>Fecha<SortArrow col="date" /></button>
           </div>
 
           {/* Table rows */}
@@ -1429,42 +1429,42 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   key={`${f.filename}-${i}`}
                   onDoubleClick={() => handlePlay(f)}
                   onContextMenu={(e) => handleContextMenu(e, f)}
-                  className={`flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-default ${
+                  className={`flex items-center gap-2 px-3 md:px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-default ${
                     isPlaying ? 'bg-white/5' : ''
                   }`}
                 >
-                  <span className="w-8 text-center text-xs text-gray-600">{i + 1}</span>
+                  <span className="w-6 md:w-8 text-center text-xs text-gray-600">{i + 1}</span>
                   <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
                   <div className="flex-1 min-w-0 flex items-center gap-1">
-                    <div className={`text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
+                    <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
                       {f.artist ? `${f.artist} - ` : ''}{f.title || f.filename}
                     </div>
-                    <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((f.artist || '') + ' ' + (f.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
+                    <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((f.artist || '') + ' ' + (f.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hidden sm:flex flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
                       <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
                     </a>
                   </div>
-                  <span className="w-32 flex-shrink-0 text-xs text-gray-500 truncate">{f.genre || '-'}</span>
-                  <span className={`w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
-                  <div className="w-24 flex-shrink-0 flex justify-center">
+                  <span className="hidden md:block w-32 flex-shrink-0 text-xs text-gray-500 truncate">{f.genre || '-'}</span>
+                  <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
+                  <div className="w-20 md:w-24 flex-shrink-0 flex justify-center">
                     <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                   </div>
-                  <span className="w-20 flex-shrink-0 text-center text-xs text-gray-600">{f.date ? new Date(f.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '-'}</span>
+                  <span className="hidden lg:block w-20 flex-shrink-0 text-center text-xs text-gray-600">{f.date ? new Date(f.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '-'}</span>
                 </div>
               )
             })}
           </div>
 
           {/* Export bar */}
-          <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
-            <span className="text-sm text-gray-400 flex-shrink-0">{finalList.length} tracks</span>
+          <div className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
+            <span className="hidden sm:inline text-sm text-gray-400 flex-shrink-0">{finalList.length} tracks</span>
             <input
               value={exportName}
               onChange={e => setExportName(e.target.value)}
               placeholder="Nombre del set..."
-              className="flex-1 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+              className="flex-1 min-w-0 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
               onKeyDown={e => e.key === 'Enter' && handleExport()}
             />
-            <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos">
+            <label className="hidden sm:flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos">
               <div
                 onClick={() => setExportWithTracks(v => !v)}
                 className={`w-8 h-4 rounded-full transition-colors duration-200 ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
@@ -1492,8 +1492,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         </div>
       ) : (view === 'cards' && !q) ? (
         /* Genre grid (cards view) */
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4">
-          <div className="grid grid-cols-3 gap-3 items-start auto-rows-min">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 md:p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start auto-rows-min">
             {genres.map((g, i) => {
               const c = GENRE_COLORS[i % GENRE_COLORS.length]
               return (
