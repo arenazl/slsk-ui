@@ -174,14 +174,14 @@ function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, c
     >
       {/* Card header with gradient accent */}
       <div
-        className="relative px-4 py-3 cursor-pointer select-none group"
+        className="relative px-3 md:px-4 py-2.5 md:py-3 cursor-pointer select-none group"
         onClick={onToggle}
         style={{ background: `linear-gradient(135deg, rgba(${colorRgb},0.15) 0%, transparent 60%)` }}
       >
-        <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full flex-shrink-0 ${color} ring-2 ring-white/10`} />
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className={`w-2.5 md:w-3 h-2.5 md:h-3 rounded-full flex-shrink-0 ${color} ring-2 ring-white/10`} />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-[var(--text-primary)] truncate">{genre || 'Unsorted'}</div>
+            <div className="text-xs md:text-sm font-bold text-[var(--text-primary)] truncate">{genre || 'Unsorted'}</div>
           </div>
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}/20 text-[var(--text-primary)]/80`}>
             {files.length}
@@ -1246,61 +1246,82 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
           </button>
-          {toolsOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl shadow-2xl py-1 min-w-48 animate-fade-in">
+          {toolsOpen && (<>
+            <div className="fixed inset-0 z-40 bg-black/50 animate-fade-in" onClick={() => setToolsOpen(false)} />
+            <div ref={toolsRef} className="fixed inset-x-0 bottom-0 z-50 bg-[var(--bg-panel)] rounded-t-2xl shadow-2xl border-t border-[var(--border-color)] animate-sheet-up">
+              <div className="flex justify-center py-2"><div className="w-10 h-1 rounded-full bg-gray-600" /></div>
+              <div className="px-5 pb-2">
+                <span className="text-sm font-semibold text-[var(--text-primary)]">Herramientas</span>
+              </div>
               {/* Star filter */}
-              <div className="px-3 py-2 border-b border-[var(--border-color)]">
-                <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Rating</div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => { setStarFilter('0'); setToolsOpen(false) }}
-                    className={`px-2 py-0.5 rounded text-xs ${selectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500'}`}>All</button>
+              <div className="px-5 py-2 border-t border-[var(--border-color)]">
+                <div className="text-[10px] text-gray-500 uppercase font-bold mb-2">Rating</div>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => { setStarFilter('0') }}
+                    className={`px-3 py-1 rounded-full text-xs ${selectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 bg-white/5'}`}>All</button>
                   {[1,2,3,4,5].map(s => (
                     <button key={s} onClick={() => { const next = selectedStars.includes(s) ? selectedStars.filter(x=>x!==s) : [...selectedStars,s]; setStarFilter(next.length > 0 ? next.join(',') : '0') }}
-                      className={`px-1.5 py-0.5 rounded text-xs ${selectedStars.includes(s) ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500'}`}>{'★'.repeat(s)}</button>
+                      className={`px-2 py-1 rounded-full text-xs ${selectedStars.includes(s) ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 bg-white/5'}`}>{'★'.repeat(s)}</button>
                   ))}
                 </div>
               </div>
               {/* Actions */}
-              {ungrouped.length > 0 && (
-                <button onClick={() => { classifyWithAI(); setToolsOpen(false) }} disabled={classifying}
-                  className="w-full text-left px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5 disabled:opacity-50">
-                  {classifying ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                    : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>}
-                  {classifying ? 'Clasificando...' : `Clasificar (${ungrouped.length})`}
-                </button>
-              )}
-              {files.some(f => !f.in_subfolder && f.genre) && (
-                <button onClick={() => { organizeAll(); setToolsOpen(false) }} disabled={organizing}
-                  className="w-full text-left px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5 disabled:opacity-50">
-                  {organizing ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                    : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>}
-                  {organizing ? 'Organizando...' : 'Organizar'}
-                </button>
-              )}
-              {files.some(f => !f.key) && (
-                <button onClick={() => { detectKeys(); setToolsOpen(false) }} disabled={detectingKeys}
-                  className="w-full text-left px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5 disabled:opacity-50">
-                  {detectingKeys ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                    : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" /></svg>}
-                  {detectingKeys ? 'Detectando...' : `Detectar Keys (${files.filter(f => !f.key).length})`}
-                </button>
-              )}
-              {dupeKeys.size > 0 && (
-                <button onClick={() => { setShowDupes(d => !d); setToolsOpen(false) }}
-                  className="w-full text-left px-3 py-2.5 text-sm text-red-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                  Duplicados ({dupeKeys.size})
-                </button>
-              )}
-              <div className="border-t border-[var(--border-color)] mt-1 pt-1">
+              <div className="py-2 px-2">
+                {ungrouped.length > 0 && (
+                  <button onClick={() => { classifyWithAI(); setToolsOpen(false) }} disabled={classifying}
+                    className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
+                    <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 flex items-center justify-center">
+                      {classifying ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                        : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>}
+                    </div>
+                    {classifying ? 'Clasificando...' : `Clasificar (${ungrouped.length})`}
+                  </button>
+                )}
+                {files.some(f => !f.in_subfolder && f.genre) && (
+                  <button onClick={() => { organizeAll(); setToolsOpen(false) }} disabled={organizing}
+                    className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
+                    <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 flex items-center justify-center">
+                      {organizing ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                        : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>}
+                    </div>
+                    {organizing ? 'Organizando...' : 'Organizar en carpetas'}
+                  </button>
+                )}
+                {files.some(f => !f.key) && (
+                  <button onClick={() => { detectKeys(); setToolsOpen(false) }} disabled={detectingKeys}
+                    className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
+                    <div className="w-8 h-8 rounded-full bg-amber-500/15 flex items-center justify-center">
+                      {detectingKeys ? <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                        : <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" /></svg>}
+                    </div>
+                    {detectingKeys ? 'Detectando...' : `Detectar Keys (${files.filter(f => !f.key).length})`}
+                  </button>
+                )}
+                {dupeKeys.size > 0 && (
+                  <button onClick={() => { setShowDupes(d => !d); setToolsOpen(false) }}
+                    className="w-full text-left px-4 py-3 rounded-xl text-sm text-red-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
+                    <div className="w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </div>
+                    Duplicados ({dupeKeys.size})
+                  </button>
+                )}
                 <button onClick={() => { openFolder(''); setToolsOpen(false) }}
-                  className="w-full text-left px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2.5">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" /></svg>
+                  className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" /></svg>
+                  </div>
                   Abrir carpeta
                 </button>
               </div>
+              <div className="px-4 pb-6 pt-1">
+                <button onClick={() => setToolsOpen(false)}
+                  className="w-full py-3 rounded-xl text-sm font-medium text-gray-400 bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] transition-colors active:scale-[0.98]">
+                  Cancelar
+                </button>
+              </div>
             </div>
-          )}
+          </>)}
         </div>
 
         {/* Search */}
@@ -1571,8 +1592,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         </div>
       ) : (view === 'cards' && !q) ? (
         /* Genre grid (cards view) */
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 md:p-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3 items-start auto-rows-min">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-2 md:p-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3 items-start auto-rows-min w-full">
             {genres.map((g, i) => {
               const c = GENRE_COLORS[i % GENRE_COLORS.length]
               return (
