@@ -281,7 +281,9 @@ const GENRE_COLORS = [
   { bg: 'bg-slate-400', rgb: '148,163,184' },
 ]
 
-function AudioPlayerBar({ file, isPlaying, audio, onPlayPause, onStop, agentConnected }) {
+function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPause, onStop, agentConnected }) {
+  // Use audioRef.current if available (always fresh), fallback to prop
+  const audio = audioRef?.current || audioProp
   const canvasRef = useRef(null)
   const waveformRef = useRef(null) // Float32Array of peaks
   const animFrameRef = useRef(null)
@@ -4472,6 +4474,7 @@ function App() {
         file={nowPlaying}
         isPlaying={isAudioPlaying}
         audio={audioRef.current}
+        audioRef={audioRef}
         onPlayPause={handleAppPlayPause}
         onStop={handleAppStop}
         agentConnected={agentConnected}
