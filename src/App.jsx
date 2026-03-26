@@ -2395,8 +2395,17 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     return 0
   }, [mixTracks])
 
-  // Effective duration accounting for trims
-  const effectiveDuration = useCallback((t) => t.duration - (t.trimStart || 0) - (t.trimEnd || 0), [])
+  // BPM ratio: how much a track's duration changes when time-stretched to masterBPM
+  const bpmRatio = useCallback((t) => {
+    if (!t.bpm || !masterBPM || t.bpm === masterBPM) return 1
+    return t.bpm / masterBPM // >1 means track plays slower (longer), <1 means faster (shorter)
+  }, [masterBPM])
+
+  // Effective duration accounting for trims AND BPM time-stretch
+  const effectiveDuration = useCallback((t) => {
+    const raw = t.duration - (t.trimStart || 0) - (t.trimEnd || 0)
+    return raw * bpmRatio(t)
+  }, [bpmRatio])
 
   // Total mix duration (must be before togglePlay/keyboard effects)
   const totalDuration = useMemo(() => {
@@ -2602,6 +2611,10 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
       const laid = []
       let cumStart = 0
       for (let i = 0; i < results.length; i++) {
+        // BPM ratio: adjust duration when time-stretching to masterBPM
+        const trackBpm = results[i].bpm || masterBPM
+        const ratio = trackBpm / masterBPM // >1 = track gets longer, <1 = shorter
+        const stretchedDuration = results[i].duration * ratio
         laid.push({
           ...results[i],
           startTime: cumStart,
@@ -2616,7 +2629,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           _introEnd: 0,
           _outroStart: results[i].duration,
         })
-        cumStart += results[i].duration - (i === results.length - 1 ? 0 : DEFAULT_FADE)
+        cumStart += stretchedDuration - (i === results.length - 1 ? 0 : DEFAULT_FADE)
       }
       setMixTracks(laid)
       setLoading(false)
@@ -2942,6 +2955,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     try {
       const payload = {
         name: mixName.trim() || 'mix',
+        master_bpm: masterBPM,
         tracks: mixTracks.map(t => ({
           filename: t.filename,
           subfolder: t.subfolder || '',
@@ -2951,6 +2965,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           fade_out: t.customFadeOut ?? t.fadeOut,
           trim_start: t.trimStart || 0,
           trim_end: t.trimEnd || 0,
+          bpm: t.bpm || null,
         })),
         format: exportFormat,
         bitrate: '320k',
