@@ -2493,61 +2493,76 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
       }
       if (cancelled) return
 
-      // Fetch energy analysis for each track to detect intro/outro boundaries
-      const analyses = []
-      for (const t of results) {
-        const path = t.subfolder
-          ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
-          : encodeURIComponent(t.filename)
-        try {
-          const res = await fetch(`${AGENT_BASE}/api/track-analysis/${path}`)
-          if (res.ok) {
-            analyses.push(await res.json())
-          } else {
-            analyses.push({ intro_end: 16, outro_start: t.duration - 16, duration: t.duration })
-          }
-        } catch {
-          analyses.push({ intro_end: 16, outro_start: t.duration - 16, duration: t.duration })
-        }
-      }
-
-      if (cancelled) return
-
-      // Calculate initial layout with smart per-track overlaps from energy analysis
+      // First: lay out immediately with default 16s overlap so UI is responsive
+      const DEFAULT_FADE = 16
       const laid = []
       let cumStart = 0
       for (let i = 0; i < results.length; i++) {
-        const analysis = analyses[i]
-        // Overlap = how much of this track's outro overlaps with next track's intro
-        // Use current track's outro length, clamped by next track's intro length
-        const outroLen = Math.max(0, results[i].duration - analysis.outro_start)
-        const nextIntroLen = i < results.length - 1 ? analyses[i + 1].intro_end : 0
-        // Smart overlap: use the shorter of outro/intro (both tracks must have content to mix)
-        // Minimum 8s, max 90s to stay reasonable
-        const smartOverlap = i < results.length - 1
-          ? Math.max(8, Math.min(90, Math.min(outroLen, nextIntroLen) || Math.max(outroLen, nextIntroLen) || 16))
-          : 0
-        const fadeOut = smartOverlap
-        const fadeIn = i === 0 ? 0 : laid[i - 1]._autoOverlap || 16
-
         laid.push({
           ...results[i],
           startTime: cumStart,
-          fadeIn,
-          fadeOut,
+          fadeIn: i === 0 ? 0 : DEFAULT_FADE,
+          fadeOut: i === results.length - 1 ? 0 : DEFAULT_FADE,
           transitionType: 'auto',
           trimStart: 0,
           trimEnd: 0,
           customFadeIn: null,
           customFadeOut: null,
-          _autoOverlap: smartOverlap, // store the computed overlap for reference
-          _introEnd: analysis.intro_end,
-          _outroStart: analysis.outro_start,
+          _autoOverlap: DEFAULT_FADE,
+          _introEnd: 0,
+          _outroStart: results[i].duration,
         })
-        cumStart += results[i].duration - smartOverlap
+        cumStart += results[i].duration - (i === results.length - 1 ? 0 : DEFAULT_FADE)
       }
       setMixTracks(laid)
       setLoading(false)
+
+      // Then: fetch energy analysis in background (parallel) and recalculate
+      const analyzeAll = async () => {
+        const paths = results.map(t => t.subfolder
+          ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
+          : encodeURIComponent(t.filename))
+
+        const analyses = await Promise.all(paths.map(async (path, idx) => {
+          try {
+            const res = await fetch(`${AGENT_BASE}/api/track-analysis/${path}`)
+            if (res.ok) return await res.json()
+          } catch { /* ignore */ }
+          return { intro_end: DEFAULT_FADE, outro_start: results[idx].duration - DEFAULT_FADE, duration: results[idx].duration }
+        }))
+
+        if (cancelled) return
+
+        // Recalculate layout with smart per-track overlaps
+        const smartLaid = []
+        let cs = 0
+        for (let i = 0; i < results.length; i++) {
+          const a = analyses[i]
+          const outroLen = Math.max(0, results[i].duration - a.outro_start)
+          const nextIntroLen = i < results.length - 1 ? analyses[i + 1].intro_end : 0
+          const smartOverlap = i < results.length - 1
+            ? Math.max(8, Math.min(90, Math.min(outroLen, nextIntroLen) || Math.max(outroLen, nextIntroLen) || DEFAULT_FADE))
+            : 0
+
+          smartLaid.push({
+            ...results[i],
+            startTime: cs,
+            fadeIn: i === 0 ? 0 : smartLaid[i - 1]._autoOverlap || DEFAULT_FADE,
+            fadeOut: smartOverlap,
+            transitionType: 'auto',
+            trimStart: 0,
+            trimEnd: 0,
+            customFadeIn: null,
+            customFadeOut: null,
+            _autoOverlap: smartOverlap,
+            _introEnd: a.intro_end,
+            _outroStart: a.outro_start,
+          })
+          cs += results[i].duration - smartOverlap
+        }
+        setMixTracks(smartLaid)
+      }
+      analyzeAll()
     }
     fetchDurations()
     return () => { cancelled = true }
