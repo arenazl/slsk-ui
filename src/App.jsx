@@ -602,7 +602,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         const agentFiles = await agentRes.json()
 
         // Merge: agent file info + Cloudinary metadata by filename
-        const merged = agentFiles.map(f => {
+        // Only include files that exist in the filtered metadata (current collection)
+        const merged = agentFiles
+          .filter(f => metadata[f.filename])
+          .map(f => {
           const meta = metadata[f.filename] || {}
           return {
             filename: f.filename,
