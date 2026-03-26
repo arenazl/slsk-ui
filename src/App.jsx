@@ -5304,18 +5304,25 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                   {/* Artwork - long press opens context menu on mobile */}
                   <button
                     onClick={() => playPreview(t)}
+                    onContextMenu={(e) => e.preventDefault()}
                     onTouchStart={(e) => {
-                      const timer = setTimeout(() => {
+                      const el = e.currentTarget
+                      el._longPressTriggered = false
+                      el._longPressTimer = setTimeout(() => {
+                        el._longPressTriggered = true
                         const touch = e.touches[0]
                         setDiscoverCtx({ x: touch.clientX, y: touch.clientY, track: t })
-                      }, 500)
-                      e.currentTarget._longPressTimer = timer
+                      }, 400)
                     }}
-                    onTouchEnd={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
+                    onTouchEnd={(e) => {
+                      clearTimeout(e.currentTarget._longPressTimer)
+                      if (e.currentTarget._longPressTriggered) e.preventDefault()
+                    }}
                     onTouchMove={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
-                    className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative group/art transition-all duration-200 ${
+                    className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative group/art transition-all duration-200 select-none ${
                       isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                     }`}
+                    style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
                   >
                     {t.artwork_url ? (
                       <img src={t.artwork_url.replace('1400x1400', '250x250')} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -5469,18 +5476,25 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       </div>
                       <button
                         onClick={() => playPreview(t)}
+                        onContextMenu={(e) => e.preventDefault()}
                         onTouchStart={(e) => {
-                          const timer = setTimeout(() => {
+                          const el = e.currentTarget
+                          el._longPressTriggered = false
+                          el._longPressTimer = setTimeout(() => {
+                            el._longPressTriggered = true
                             const touch = e.touches[0]
                             setDiscoverCtx({ x: touch.clientX, y: touch.clientY, track: t })
-                          }, 500)
-                          e.currentTarget._longPressTimer = timer
+                          }, 400)
                         }}
-                        onTouchEnd={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
+                        onTouchEnd={(e) => {
+                          clearTimeout(e.currentTarget._longPressTimer)
+                          if (e.currentTarget._longPressTriggered) e.preventDefault()
+                        }}
                         onTouchMove={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
-                        className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 ${
+                        className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 select-none ${
                           isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                         }`}
+                        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
                       >
                         {t.artwork_url ? (
                           <img src={t.artwork_url} alt="" className="w-full h-full object-cover" loading="lazy" />
