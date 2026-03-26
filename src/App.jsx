@@ -3767,6 +3767,16 @@ function App() {
       clearTimeout(previewTimerRef.current)
       previewTimerRef.current = null
     }
+    if (audioRef.current) {
+      audioRef.current.oncanplaythrough = null
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    setPlayingFile(null)
+    setNowPlaying(null)
+    setIsAudioPlaying(false)
   }
 
   const playPreviewTrack = async (list, idx) => {
@@ -3774,23 +3784,35 @@ function App() {
       stopPreviewModeApp()
       return
     }
-    const file = list[idx]
-    if (audioRef.current) audioRef.current.pause()
+    // Clean up previous audio completely
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+    if (audioRef.current) {
+      audioRef.current.oncanplaythrough = null
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current.pause()
+      audioRef.current.src = ''
+      audioRef.current = null
+    }
 
+    const file = list[idx]
     try {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
+      let started = false
       audio.oncanplaythrough = () => {
+        if (started) return // prevent double-fire
+        started = true
         const startTime = audio.duration > 120 ? 60 : audio.duration * 0.3
         audio.currentTime = startTime
         audio.play().catch(() => {})
+        // Start 30s timer only after playback begins
+        previewTimerRef.current = setTimeout(() => {
+          playPreviewTrack(list, idx + 1)
+        }, 30000)
       }
-      audio.onended = () => {
-        playPreviewTrack(list, idx + 1)
-      }
-      audio.onerror = () => {
-        playPreviewTrack(list, idx + 1)
-      }
+      audio.onended = () => playPreviewTrack(list, idx + 1)
+      audio.onerror = () => playPreviewTrack(list, idx + 1)
       audioRef.current = audio
       setPlayingFile(file.filename)
       setNowPlaying(file)
@@ -3798,11 +3820,6 @@ function App() {
     } catch {
       playPreviewTrack(list, idx + 1)
     }
-
-    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
-    previewTimerRef.current = setTimeout(() => {
-      playPreviewTrack(list, idx + 1)
-    }, 30000)
   }
 
   const startPreviewModeApp = (startFile, list) => {
