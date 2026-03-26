@@ -5301,9 +5301,18 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     <PlayPauseBtn isPlaying={isPlaying} onClick={() => playPreview(t)} className={`hidden group-hover:flex ${isPlaying ? '!text-green-400' : ''}`} />
                   </div>
 
-                  {/* Artwork */}
+                  {/* Artwork - long press opens context menu on mobile */}
                   <button
                     onClick={() => playPreview(t)}
+                    onTouchStart={(e) => {
+                      const timer = setTimeout(() => {
+                        const touch = e.touches[0]
+                        setDiscoverCtx({ x: touch.clientX, y: touch.clientY, track: t })
+                      }, 500)
+                      e.currentTarget._longPressTimer = timer
+                    }}
+                    onTouchEnd={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
+                    onTouchMove={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
                     className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative group/art transition-all duration-200 ${
                       isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                     }`}
@@ -5460,6 +5469,15 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       </div>
                       <button
                         onClick={() => playPreview(t)}
+                        onTouchStart={(e) => {
+                          const timer = setTimeout(() => {
+                            const touch = e.touches[0]
+                            setDiscoverCtx({ x: touch.clientX, y: touch.clientY, track: t })
+                          }, 500)
+                          e.currentTarget._longPressTimer = timer
+                        }}
+                        onTouchEnd={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
+                        onTouchMove={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
                         className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 ${
                           isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                         }`}
@@ -5538,10 +5556,19 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             {discoverCtx.track?.artist} - {discoverCtx.track?.title}
           </div>
           <button
-            onClick={() => { handlePreviewFromCtx(discoverCtx.track); setDiscoverCtx(null) }}
-            className="w-full text-left px-3 py-2 text-sm text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors flex items-center gap-2"
+            onClick={() => { searchAndDownload(discoverCtx.track); setDiscoverCtx(null) }}
+            className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Descargar
+          </button>
+          <button
+            onClick={() => { handlePreviewFromCtx(discoverCtx.track); setDiscoverCtx(null) }}
+            className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
+          >
+            <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
