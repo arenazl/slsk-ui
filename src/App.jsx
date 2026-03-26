@@ -635,15 +635,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     }
   }, [agentConnected, authUser, collection])
 
-  const hasFetched = useRef(false)
   useEffect(() => {
-    hasFetched.current = false
-  }, [agentConnected, authUser, collection])
-  useEffect(() => {
-    if (!hasFetched.current) {
-      hasFetched.current = true
-      fetchLibrary()
-    }
+    fetchLibrary()
   }, [fetchLibrary])
 
   useImperativeHandle(ref, () => ({
