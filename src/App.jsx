@@ -2445,6 +2445,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
       if (e.target.closest('input, select, textarea')) return
       if (e.code === 'Space') {
         e.preventDefault()
+        e.stopImmediatePropagation()
         togglePlay()
       } else if (e.code === 'ArrowRight') {
         e.preventDefault()
@@ -3791,11 +3792,12 @@ function App() {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
 
-  // Global spacebar → play/pause
+  // Global spacebar → play/pause (disabled when Mix Editor is active)
   useEffect(() => {
     const handler = (e) => {
       if (e.code !== 'Space') return
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
+      if (page === 'mix') return
       if (!audioRef.current) return
       e.preventDefault()
       if (audioRef.current.paused) {
@@ -3808,7 +3810,7 @@ function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [page])
 
   const handleStart = () => {
     if (!wsRef.current || !inputText.trim() || !username || !password) return
