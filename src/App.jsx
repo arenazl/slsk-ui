@@ -6,7 +6,11 @@ function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
   const show = useCallback((msg, type = 'success', duration = 3000) => {
     const id = Date.now()
-    setToasts(prev => [...prev, { id, msg, type }])
+    // Prevent duplicate messages (skip if same msg already showing)
+    setToasts(prev => {
+      if (prev.some(t => t.msg === msg)) return prev
+      return [...prev.slice(-4), { id, msg, type }]
+    })
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration)
   }, [])
   return (
