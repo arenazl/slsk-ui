@@ -2008,9 +2008,10 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Controls */}
-      <div className="flex-shrink-0 flex items-center gap-4 px-6 py-4 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex-wrap">
-        <div className="flex items-center gap-1">
+      {/* Controls - row 1: genre pills + duration + algorithms */}
+      <div className="flex-shrink-0 flex items-center gap-2 md:gap-4 px-3 md:px-6 py-2 md:py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
+        {/* Star filter */}
+        <div className="hidden md:flex items-center gap-1">
           <button
             onClick={() => { setSetSelectedStars([]); setMinStars(1) }}
             className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
@@ -2037,42 +2038,13 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
             )
           })}
         </div>
-        {availableGenres.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onClick={() => setSelectedGenres([])}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 ${
-                selectedGenres.length === 0 ? 'btn-accent font-semibold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >All</button>
-            {availableGenres.map(({ genre, count }, idx) => {
-              const active = selectedGenres.includes(genre)
-              const gColor = GENRE_COLORS[idx % GENRE_COLORS.length]
-              return (
-                <button
-                  key={genre}
-                  onClick={() => setSelectedGenres(prev => active ? prev.filter(g => g !== genre) : [...prev, genre])}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95`}
-                  style={{
-                    background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.1)`,
-                    color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.7)`,
-                    boxShadow: active ? `0 0 8px rgba(${gColor.rgb}, 0.15)` : 'none',
-                  }}
-                >
-                  {genre} ({count})
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm text-gray-400">Duración:</span>
+        {/* Duration */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           {[60, 90, 120].map(d => (
             <button
               key={d}
               onClick={() => setDuration(d)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+              className={`px-2 md:px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
                 duration === d ? 'font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
               style={duration === d ? { background: 'color-mix(in srgb, var(--color-accent) 20%, transparent)', color: 'var(--color-accent)' } : {}}
@@ -2081,82 +2053,65 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1.5">
+        {/* Generation algorithms */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           {[
-            { id: 'camelot', label: 'Camelot Greedy', icon: '🎯' },
-            { id: 'energy', label: 'Energy Wave', icon: '⚡' },
-            { id: 'genre', label: 'Genre Journey', icon: '🎭' },
-            { id: 'peak', label: 'Peak Time', icon: '📈' },
+            { id: 'camelot', label: 'Camelot', icon: '🎯' },
+            { id: 'energy', label: 'Energy', icon: '⚡' },
+            { id: 'genre', label: 'Genre', icon: '🎭' },
+            { id: 'peak', label: 'Peak', icon: '📈' },
           ].map(m => (
             <button
               key={m.id}
               onClick={() => generateSet(m.id)}
               disabled={generating}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 disabled:opacity-50`}
+              className={`flex items-center gap-1 px-2 md:px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 disabled:opacity-50 flex-shrink-0`}
               style={method === m.id
                 ? { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.25)', color: 'var(--color-accent)' }
                 : { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.08)', color: 'rgba(var(--color-accent-rgb, 59,130,246), 0.6)' }
               }
             >
               {generating && method === m.id ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>{m.icon}</span>}
-              {m.label}
+              <span className="hidden sm:inline">{m.label}</span>
             </button>
           ))}
         </div>
-        {setTracks.length > 0 && (
-          <>
-            <span className="text-sm text-gray-400">
-              {setTracks.length} tracks · ~{totalMin} min
-            </span>
-            <div className="flex items-center gap-2">
-              <input
-                value={setName}
-                onChange={e => setSetName(e.target.value)}
-                placeholder="Nombre del set..."
-                className="w-40 px-2 py-1 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-green-500"
-              />
-              <label className="flex items-center gap-1.5 cursor-pointer" title="Incluir copia de archivos + metadata">
-                <div
-                  onClick={() => setExportWithTracks(v => !v)}
-                  className={`w-8 h-4 rounded-full transition-colors duration-200 cursor-pointer ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
-                </div>
-                <span className="text-xs text-gray-400">+ Tracks</span>
-              </label>
-              <button
-                onClick={exportSet}
-                disabled={exporting}
-                className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95"
-                style={{ background: 'var(--color-accent)' }}
-              >
-                {exporting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                )}
-                Exportar
-              </button>
-              {agentConnected && (
-                <button
-                  onClick={() => onEditMix(setTracks)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 active:scale-95 bg-purple-600 hover:bg-purple-500 text-white"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                  </svg>
-                  Editar Mix
-                </button>
-              )}
-            </div>
-          </>
-        )}
       </div>
 
-      {/* Search & add tracks manually */}
-      <div className="flex-shrink-0 px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-bold text-[var(--text-primary)]">{allTracks.length} tracks</span>
+      {/* Controls row 2: genre pills */}
+      {availableGenres.length > 0 && (
+        <div className="flex-shrink-0 flex items-center gap-1.5 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setSelectedGenres([])}
+            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 ${
+              selectedGenres.length === 0 ? 'btn-accent font-semibold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >All</button>
+          {availableGenres.map(({ genre, count }, idx) => {
+            const active = selectedGenres.includes(genre)
+            const gColor = GENRE_COLORS[idx % GENRE_COLORS.length]
+            return (
+              <button
+                key={genre}
+                onClick={() => setSelectedGenres(prev => active ? prev.filter(g => g !== genre) : [...prev, genre])}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95`}
+                style={{
+                  background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.1)`,
+                  color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.7)`,
+                  boxShadow: active ? `0 0 8px rgba(${gColor.rgb}, 0.15)` : 'none',
+                }}
+              >
+                {genre} ({count})
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Search & export bar */}
+      <div className="flex-shrink-0 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
+        <div className="flex items-center gap-2 md:gap-3">
+          <span className="hidden md:inline text-sm font-bold text-[var(--text-primary)]">{allTracks.length} tracks</span>
           <div className="flex-1 relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -2227,7 +2182,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                     e.dataTransfer.setData('text/plain', url)
                     e.dataTransfer.setData('DownloadURL', `audio/mpeg:${t.filename}:${url}`)
                   }}
-                  className={`flex items-center gap-3 px-6 py-3 transition-all duration-150 border-b border-[var(--border-color)]/30 cursor-grab active:cursor-grabbing ${
+                  className={`flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3 transition-all duration-150 border-b border-[var(--border-color)]/30 cursor-grab active:cursor-grabbing ${
                     isPlaying ? 'bg-[var(--color-accent)]/5' : 'hover:bg-[var(--bg-hover)]'}`}
                 >
                   {/* Move buttons */}
@@ -2248,24 +2203,24 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                     </button>
                   </div>
                   <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(t)} />
-                  <span className="w-6 text-center text-xs text-gray-600 font-mono flex-shrink-0">{i + 1}</span>
+                  <span className="w-5 md:w-6 text-center text-xs text-gray-600 font-mono flex-shrink-0">{i + 1}</span>
                   <div className="flex-1 min-w-0">
-                    <div className={`text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
+                    <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
                       {t.artist ? `${t.artist} - ` : ''}{t.title || t.filename}
                     </div>
                   </div>
-                  <span className="w-24 flex-shrink-0 text-xs text-gray-500 truncate text-center">{t.genre || '-'}</span>
-                  <span className={`w-10 flex-shrink-0 text-xs text-center ${
+                  <span className="hidden lg:block w-24 flex-shrink-0 text-xs text-gray-500 truncate text-center">{t.genre || '-'}</span>
+                  <span className={`hidden md:block w-10 flex-shrink-0 text-xs text-center ${
                     t.format === 'FLAC' || t.format === 'flac' ? 'text-purple-400' : 'text-gray-500'
                   }`}>{(t.format || t.filename?.split('.').pop() || '').toUpperCase()}</span>
-                  <span className="w-14 flex-shrink-0 text-xs text-gray-500 text-center">{t.size_mb ? `${t.size_mb}MB` : `~${t.duration_est || 6}m`}</span>
-                  <span className={`w-20 flex-shrink-0 text-xs font-mono px-2 py-0.5 rounded text-center ${
+                  <span className="hidden md:block w-14 flex-shrink-0 text-xs text-gray-500 text-center">{t.size_mb ? `${t.size_mb}MB` : `~${t.duration_est || 6}m`}</span>
+                  <span className={`w-16 md:w-20 flex-shrink-0 text-[10px] md:text-xs font-mono px-1 md:px-2 py-0.5 rounded text-center ${
                     i > 0 && t.camelot === setTracks[i-1].camelot ? 'bg-green-500/20 text-green-400' :
                     'bg-amber-500/20 text-amber-400'
                   }`}>
-                    {t.key} · {t.camelot}
+                    {t.key}{t.camelot ? <span className="hidden sm:inline"> · {t.camelot}</span> : ''}
                   </span>
-                  <span className="w-16 flex-shrink-0 text-xs text-[var(--text-primary)] text-center">{'★'.repeat(t.rating || 0)}</span>
+                  <span className="hidden sm:block w-16 flex-shrink-0 text-xs text-[var(--text-primary)] text-center">{'★'.repeat(t.rating || 0)}</span>
                   <button
                     onClick={() => removeFromSet(i)}
                     className="w-6 h-6 flex items-center justify-center rounded-full text-gray-700 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 active:scale-95 flex-shrink-0"
@@ -2284,13 +2239,13 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
         {/* Suggestions */}
         {setTracks.length > 0 && (
           <div className="flex-shrink-0 border-t border-[var(--border-color)]">
-            <div className="flex items-center gap-2 px-6 py-2 bg-[var(--bg-panel)]">
-              <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-2 px-3 md:px-6 py-2 bg-[var(--bg-panel)]">
+              <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              <span className="text-sm font-semibold text-[var(--text-primary)]">Sugerencias para extender</span>
+              <span className="text-sm font-semibold text-[var(--text-primary)]">Sugerencias</span>
               {loadingSuggestions && <div className="w-3.5 h-3.5 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />}
-              <span className="text-xs text-[var(--text-muted)]">compatibles con el último track</span>
+              <span className="hidden md:inline text-xs text-[var(--text-muted)]">compatibles con el último track</span>
             </div>
             <div className="max-h-48 overflow-y-auto">
               {suggestions.length === 0 && !loadingSuggestions && (
@@ -2302,23 +2257,23 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                   <div
                     key={s.filename}
                     onDoubleClick={() => handlePlay(s)}
-                    className={`flex items-center gap-3 px-6 py-2 hover:bg-[var(--bg-hover)] transition-colors cursor-default ${isPlaying ? 'bg-white/5' : ''}`}
+                    className={`flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 hover:bg-[var(--bg-hover)] transition-colors cursor-default ${isPlaying ? 'bg-white/5' : ''}`}
                   >
                     <PlayPauseBtn isPlaying={isPlaying} onClick={(e) => { e.stopPropagation(); handlePlay(s) }} size="sm" />
                     <div className="flex-1 min-w-0">
-                      <div className={`text-sm truncate ${isPlaying ? 'text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>{s.artist ? `${s.artist} - ` : ''}{s.title || s.filename}</div>
+                      <div className={`text-xs md:text-sm truncate ${isPlaying ? 'text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>{s.artist ? `${s.artist} - ` : ''}{s.title || s.filename}</div>
                     </div>
-                    <span className="w-24 flex-shrink-0 text-xs text-gray-500 truncate text-center">{s.genre || '-'}</span>
-                    <span className={`w-10 flex-shrink-0 text-xs text-center ${
+                    <span className="hidden lg:block w-24 flex-shrink-0 text-xs text-gray-500 truncate text-center">{s.genre || '-'}</span>
+                    <span className={`hidden md:block w-10 flex-shrink-0 text-xs text-center ${
                       s.format === 'FLAC' ? 'text-purple-400' : 'text-gray-500'
                     }`}>{(s.format || '').toUpperCase()}</span>
-                    <span className="w-14 flex-shrink-0 text-xs text-gray-500 text-center">{s.size_mb ? `${s.size_mb}MB` : '-'}</span>
-                    <span className={`w-20 flex-shrink-0 text-xs font-mono px-1.5 py-0.5 rounded text-center ${
+                    <span className="hidden md:block w-14 flex-shrink-0 text-xs text-gray-500 text-center">{s.size_mb ? `${s.size_mb}MB` : '-'}</span>
+                    <span className={`w-16 md:w-20 flex-shrink-0 text-[10px] md:text-xs font-mono px-1 md:px-1.5 py-0.5 rounded text-center ${
                       s.distance <= 1 ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'
                     }`}>
-                      {s.key} · {s.camelot}
+                      {s.key}{s.camelot ? <span className="hidden sm:inline"> · {s.camelot}</span> : ''}
                     </span>
-                    <span className="w-16 flex-shrink-0 text-xs text-[var(--text-primary)] text-center">{'★'.repeat(s.rating)}</span>
+                    <span className="hidden sm:block w-16 flex-shrink-0 text-xs text-[var(--text-primary)] text-center">{'★'.repeat(s.rating)}</span>
                     <button
                       onClick={() => addToSet(s)}
                       className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-[var(--color-accent-text)] font-medium transition-all duration-200 active:scale-95 flex-shrink-0"
@@ -2327,7 +2282,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
-                      Agregar
+                      <span className="hidden sm:inline">Agregar</span>
                     </button>
                   </div>
                 )
@@ -2336,6 +2291,54 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
           </div>
         )}
       </div>
+
+      {/* Export footer */}
+      {setTracks.length > 0 && (
+        <div className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-2.5 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
+          <span className="text-xs md:text-sm text-gray-400 flex-shrink-0">
+            {setTracks.length} tracks · ~{totalMin}'
+          </span>
+          <input
+            value={setName}
+            onChange={e => setSetName(e.target.value)}
+            placeholder="Nombre del set..."
+            className="flex-1 min-w-0 max-w-xs px-2 md:px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+          />
+          <label className="hidden sm:flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos + metadata">
+            <div
+              onClick={() => setExportWithTracks(v => !v)}
+              className={`w-8 h-4 rounded-full transition-colors duration-200 cursor-pointer ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
+            >
+              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
+            </div>
+            <span className="text-xs text-gray-400">+ Tracks</span>
+          </label>
+          <button
+            onClick={exportSet}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-xs md:text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            style={{ background: 'var(--color-accent)' }}
+          >
+            {exporting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            )}
+            Exportar
+          </button>
+          {agentConnected && (
+            <button
+              onClick={() => onEditMix(setTracks)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all duration-200 active:scale-95 bg-purple-600 hover:bg-purple-500 text-white flex-shrink-0"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+              </svg>
+              Mix
+            </button>
+          )}
+        </div>
+      )}
 
     </div>
   )
