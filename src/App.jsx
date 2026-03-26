@@ -2621,7 +2621,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
       setMixTracks(laid)
       setLoading(false)
 
-      // Then: fetch energy analysis in background (parallel) and recalculate
+      // Then: fetch energy analysis in background (parallel) — only adds metadata, never moves tracks
       const analyzeAll = async () => {
         const paths = results.map(t => t.subfolder
           ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
@@ -2637,34 +2637,17 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
 
         if (cancelled) return
 
-        // Recalculate layout with smart per-track overlaps
-        const smartLaid = []
-        let cs = 0
-        for (let i = 0; i < results.length; i++) {
+        // Only enrich existing tracks with analysis data — preserve all positions
+        setMixTracks(prev => prev.map((t, i) => {
           const a = analyses[i]
-          const outroLen = Math.max(0, results[i].duration - a.outro_start)
-          const nextIntroLen = i < results.length - 1 ? analyses[i + 1].intro_end : 0
-          const smartOverlap = i < results.length - 1
+          if (!a) return t
+          const outroLen = Math.max(0, t.duration - a.outro_start)
+          const nextIntroLen = i < prev.length - 1 && analyses[i + 1] ? analyses[i + 1].intro_end : 0
+          const smartOverlap = i < prev.length - 1
             ? Math.max(8, Math.min(90, Math.min(outroLen, nextIntroLen) || Math.max(outroLen, nextIntroLen) || DEFAULT_FADE))
             : 0
-
-          smartLaid.push({
-            ...results[i],
-            startTime: cs,
-            fadeIn: i === 0 ? 0 : smartLaid[i - 1]._autoOverlap || DEFAULT_FADE,
-            fadeOut: smartOverlap,
-            transitionType: 'auto',
-            trimStart: 0,
-            trimEnd: 0,
-            customFadeIn: null,
-            customFadeOut: null,
-            _autoOverlap: smartOverlap,
-            _introEnd: a.intro_end,
-            _outroStart: a.outro_start,
-          })
-          cs += results[i].duration - smartOverlap
-        }
-        setMixTracks(smartLaid)
+          return { ...t, _introEnd: a.intro_end, _outroStart: a.outro_start, _autoOverlap: smartOverlap }
+        }))
       }
       analyzeAll()
     }
