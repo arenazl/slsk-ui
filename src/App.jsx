@@ -4591,8 +4591,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           if (audioRef?.current) { audioRef.current.pause() }
           const a = new Audio(data.results[0].previewUrl)
           a.volume = audioRef?.current?.volume ?? 0.8
-          setPlayingFile({ ...t, isPreview: true, filename: `${t.artist} - ${t.title}` })
-          setNowPlaying(`${t.artist} - ${t.title}`)
+          audioRef.current = a
+          setPlayingFile(`discover-preview-${current}`)
+          setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
           setIsAudioPlaying(true)
           a.play()
           // After 30s, go to next
