@@ -2258,6 +2258,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
   const [pxPerSec, setPxPerSec] = useState(10)
   const [dragging, setDragging] = useState(null) // { index, startX, origStartTime }
   const [resizing, setResizing] = useState(null) // { index, side: 'left'|'right', startX, origTrimStart, origTrimEnd }
+  const [fadeDragging, setFadeDragging] = useState(null) // { index, side: 'in'|'out', startX, origFade }
   const wasDraggingRef = useRef(false)
   const [contextMenu, setContextMenu] = useState(null) // { x, y, trackIndex, side: 'left'|'right' }
   const [exporting, setExporting] = useState(false)
@@ -2746,6 +2747,37 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     }
   }, [resizing, pxPerSec, effectiveDuration])
 
+  // Handle fade drag
+  useEffect(() => {
+    if (!fadeDragging) return
+    const handleMouseMove = (e) => {
+      const dx = e.clientX - fadeDragging.startX
+      const dtSec = dx / pxPerSec
+      setMixTracks(prev => {
+        const next = [...prev]
+        const track = { ...next[fadeDragging.index] }
+        const maxFade = (track.duration - (track.trimStart || 0) - (track.trimEnd || 0)) * 0.5
+        if (fadeDragging.side === 'in') {
+          track.customFadeIn = Math.max(0, Math.min(maxFade, Math.round(fadeDragging.origFade + dtSec)))
+        } else {
+          track.customFadeOut = Math.max(0, Math.min(maxFade, Math.round(fadeDragging.origFade - dtSec)))
+        }
+        next[fadeDragging.index] = track
+        return next
+      })
+    }
+    const handleMouseUp = () => {
+      wasDraggingRef.current = true
+      setFadeDragging(null)
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [fadeDragging, pxPerSec])
+
   // Close context menu on click outside
   useEffect(() => {
     if (!contextMenu) return
@@ -3112,26 +3144,54 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
                       style={{ cursor: 'col-resize' }}
                       onMouseDown={(e) => handleResizeStart(e, i, 'right')}
                     />
-                    {/* Fade in gradient */}
-                    {(track.customFadeIn ?? track.fadeIn) > 0 && (
-                      <div
-                        className="absolute inset-y-0 left-0"
-                        style={{
-                          width: (track.customFadeIn ?? track.fadeIn) * pxPerSec,
-                          background: `linear-gradient(to right, transparent, rgba(${color.rgb}, 0.3))`,
-                        }}
-                      />
-                    )}
-                    {/* Fade out gradient */}
-                    {(track.customFadeOut ?? track.fadeOut) > 0 && (
-                      <div
-                        className="absolute inset-y-0 right-0"
-                        style={{
-                          width: (track.customFadeOut ?? track.fadeOut) * pxPerSec,
-                          background: `linear-gradient(to left, transparent, rgba(${color.rgb}, 0.3))`,
-                        }}
-                      />
-                    )}
+                    {/* Fade in gradient + drag handle */}
+                    {(() => {
+                      const fi = track.customFadeIn ?? track.fadeIn
+                      return fi > 0 && (<>
+                        <div
+                          className="absolute inset-y-0 left-0"
+                          style={{
+                            width: fi * pxPerSec,
+                            background: `linear-gradient(to right, transparent, rgba(${color.rgb}, 0.3))`,
+                          }}
+                        />
+                        <div
+                          className="absolute inset-y-0 z-20 group/fade"
+                          style={{ left: fi * pxPerSec - 2, width: 8, cursor: 'col-resize' }}
+                          onMouseDown={(e) => {
+                            e.preventDefault(); e.stopPropagation()
+                            setFadeDragging({ index: i, side: 'in', startX: e.clientX, origFade: fi })
+                          }}
+                        >
+                          <div className="absolute inset-y-1 left-1/2 -translate-x-1/2 w-0.5 bg-white/30 group-hover/fade:bg-white/80 rounded-full transition-colors" />
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 text-[8px] text-white/50 group-hover/fade:text-white/90 font-mono whitespace-nowrap pointer-events-none" style={{ top: -12 }}>{Math.round(fi)}s</div>
+                        </div>
+                      </>)
+                    })()}
+                    {/* Fade out gradient + drag handle */}
+                    {(() => {
+                      const fo = track.customFadeOut ?? track.fadeOut
+                      return fo > 0 && (<>
+                        <div
+                          className="absolute inset-y-0 right-0"
+                          style={{
+                            width: fo * pxPerSec,
+                            background: `linear-gradient(to left, transparent, rgba(${color.rgb}, 0.3))`,
+                          }}
+                        />
+                        <div
+                          className="absolute inset-y-0 z-20 group/fade"
+                          style={{ right: fo * pxPerSec - 2, width: 8, cursor: 'col-resize' }}
+                          onMouseDown={(e) => {
+                            e.preventDefault(); e.stopPropagation()
+                            setFadeDragging({ index: i, side: 'out', startX: e.clientX, origFade: fo })
+                          }}
+                        >
+                          <div className="absolute inset-y-1 left-1/2 -translate-x-1/2 w-0.5 bg-white/30 group-hover/fade:bg-white/80 rounded-full transition-colors" />
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 text-[8px] text-white/50 group-hover/fade:text-white/90 font-mono whitespace-nowrap pointer-events-none" style={{ top: -12 }}>{Math.round(fo)}s</div>
+                        </div>
+                      </>)
+                    })()}
                     {/* Intro/outro boundary markers from energy analysis */}
                     {track._introEnd > 0 && (
                       <div
