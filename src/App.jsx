@@ -85,32 +85,34 @@ const STATUS_COLORS = {
 
 function TrackRow({ track }) {
   return (
-    <div className={`flex items-center gap-3 px-4 py-2.5 border-b border-[var(--border-color)] transition-all duration-200 ${
+    <div className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 border-b border-[var(--border-color)] transition-all duration-200 ${
       track.status === 'downloading' ? 'bg-[var(--color-accent)]/5' :
       track.status === 'completed' ? 'bg-green-500/5' :
       track.status === 'skipped' ? 'bg-cyan-500/5' : ''
     }`}>
-      <span className="text-gray-500 text-sm w-8 text-right flex-shrink-0">{track.id + 1}</span>
+      <span className="text-gray-500 text-xs md:text-sm w-6 md:w-8 text-right flex-shrink-0">{track.id + 1}</span>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-[var(--text-primary)] truncate font-medium">{track.title}</span>
+          <span className="text-[var(--text-primary)] truncate font-medium text-xs md:text-sm">{track.title}</span>
           {track.format && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 flex-shrink-0">
+            <span className="hidden sm:inline text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 flex-shrink-0">
               {track.format}
             </span>
           )}
         </div>
-        <div className="text-sm text-gray-400 truncate">
+        <div className="text-xs md:text-sm text-gray-400 truncate">
           {track.artist}
-          {track.source_user && <span className="text-gray-600"> &middot; de {track.source_user}</span>}
-          {track.size_mb > 0 && <span className="text-gray-600"> &middot; {track.size_mb} MB</span>}
+          <span className="hidden sm:inline">
+            {track.source_user && <span className="text-gray-600"> &middot; de {track.source_user}</span>}
+            {track.size_mb > 0 && <span className="text-gray-600"> &middot; {track.size_mb} MB</span>}
+          </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-shrink-0">
+      <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
         {track.status === 'downloading' && track.progress > 0 && (
-          <div className="w-24 flex items-center gap-2">
+          <div className="w-16 md:w-24 flex items-center gap-1 md:gap-2">
             <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-300 bg-[var(--color-accent)]"
@@ -121,9 +123,9 @@ function TrackRow({ track }) {
           </div>
         )}
         {track.status === 'searching' && (
-          <div className="w-5 h-5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
         )}
-        <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[track.status] || 'bg-gray-700'}`}>
+        <span className={`text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded-full ${STATUS_COLORS[track.status] || 'bg-gray-700'}`}>
           {STATUS_LABELS[track.status] || track.status}
         </span>
       </div>
@@ -3525,6 +3527,7 @@ function App() {
   })
   const [page, setPage] = useQS('page', 'discover')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [dlPanelOpen, setDlPanelOpen] = useState(false)
   const [pendingRadioTrack, setPendingRadioTrack] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [collection, setCollection] = useState(() => localStorage.getItem('collection') || 'edm')
@@ -4200,15 +4203,24 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-          <label className="hidden lg:flex cursor-pointer flex-shrink-0" title="Color de acento">
-            <input
-              type="color"
-              value={accentColor}
-              onChange={e => setAccentColor(e.target.value)}
-              className="w-5 h-5 rounded-full border-0 cursor-pointer bg-transparent"
-              style={{appearance: 'none', WebkitAppearance: 'none', padding: 0}}
-            />
-          </label>
+          <div className="hidden md:flex items-center gap-1 flex-shrink-0" title="Color de acento">
+            {[
+              { color: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
+              { color: '#8b5cf6', gradient: 'from-violet-500 to-purple-600' },
+              { color: '#f43f5e', gradient: 'from-rose-500 to-pink-600' },
+              { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500' },
+              { color: '#22c55e', gradient: 'from-green-400 to-emerald-600' },
+            ].map(p => (
+              <button
+                key={p.color}
+                onClick={() => setAccentColor(p.color)}
+                className={`w-4.5 h-4.5 rounded-full bg-gradient-to-br ${p.gradient} transition-all duration-200 hover:scale-125 active:scale-95 ${
+                  accentColor === p.color ? 'ring-2 ring-white/60 scale-110' : 'ring-1 ring-white/10'
+                }`}
+                style={{ width: '18px', height: '18px' }}
+              />
+            ))}
+          </div>
           <button
             onClick={toggleTheme}
             className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary,white)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
@@ -4294,10 +4306,24 @@ function App() {
                   className="p-2 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all flex-shrink-0" title="Reiniciar SoulSeek">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 </button>
-                <label className="cursor-pointer" title="Color de acento">
-                  <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)}
-                    className="w-5 h-5 rounded-full border-0 cursor-pointer bg-transparent" style={{appearance: 'none', WebkitAppearance: 'none', padding: 0}} />
-                </label>
+              </div>
+              <div className="flex items-center gap-1.5 px-1">
+                {[
+                  { color: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
+                  { color: '#8b5cf6', gradient: 'from-violet-500 to-purple-600' },
+                  { color: '#f43f5e', gradient: 'from-rose-500 to-pink-600' },
+                  { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500' },
+                  { color: '#22c55e', gradient: 'from-green-400 to-emerald-600' },
+                ].map(p => (
+                  <button
+                    key={p.color}
+                    onClick={() => setAccentColor(p.color)}
+                    className={`rounded-full bg-gradient-to-br ${p.gradient} transition-all duration-200 active:scale-95 ${
+                      accentColor === p.color ? 'ring-2 ring-white/60 scale-110' : 'ring-1 ring-white/10'
+                    }`}
+                    style={{ width: '22px', height: '22px' }}
+                  />
+                ))}
               </div>
               <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
                 <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -4344,9 +4370,75 @@ function App() {
       </div>
 
       {/* Download page */}
-      <div className={`flex-1 flex min-h-0 ${page !== 'download' ? 'hidden' : ''}`}>
-        {/* Sidebar - Input */}
-        <aside className="flex-shrink-0 w-80 flex flex-col bg-[var(--bg-panel)] border-r border-[var(--border-color)]">
+      <div className={`flex-1 flex flex-col md:flex-row min-h-0 ${page !== 'download' ? 'hidden' : ''}`}>
+
+        {/* Mobile: collapsible input panel */}
+        <div className="md:hidden flex-shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-panel)]">
+          <button
+            onClick={() => setDlPanelOpen(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-2.5"
+          >
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span className="text-sm font-medium text-[var(--text-primary)]">Pegar tracks</span>
+              {tracks.length > 0 && <span className="text-xs text-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2 py-0.5 rounded-full">{tracks.length}</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              {isRunning && <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-pulse" />}
+              <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${dlPanelOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+          {dlPanelOpen && (
+            <div className="px-4 pb-4 space-y-2 animate-fade-in">
+              <input
+                value={genre}
+                onChange={e => setGenre(e.target.value)}
+                placeholder="Estilo: Tech House, Melodic Techno..."
+                className="w-full px-3 py-2 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+              />
+              <textarea
+                value={inputText}
+                onChange={e => setInputText(e.target.value)}
+                placeholder={"1. Artist - Title - Mix\n\nO pegar HTML de Beatport..."}
+                rows={5}
+                className="w-full px-3 py-2 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm font-mono resize-none focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleParse}
+                  disabled={!inputText.trim() || !connected}
+                  className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 rounded-lg text-sm transition-all active:scale-95"
+                >
+                  Previsualizar
+                </button>
+                {!isRunning ? (
+                  <button
+                    onClick={() => { handleStart(); setDlPanelOpen(false) }}
+                    disabled={!inputText.trim() || !username || !password || !connected}
+                    className="flex-1 py-2 disabled:opacity-40 rounded-lg text-sm font-semibold transition-all active:scale-95"
+                    style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                  >
+                    Descargar {tracks.length > 0 ? `(${tracks.length})` : ''}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStop}
+                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-semibold transition-all active:scale-95"
+                  >
+                    Detener
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop: Sidebar - Input */}
+        <aside className="hidden md:flex flex-shrink-0 w-80 flex-col bg-[var(--bg-panel)] border-r border-[var(--border-color)]">
           <div className="flex-1 min-h-0 flex flex-col px-4 pb-4">
             <label className="text-sm text-gray-400 mb-1">Estilo / Género:</label>
             <input
@@ -4400,15 +4492,15 @@ function App() {
         </aside>
 
         {/* Main - Track list */}
-        <main className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* Tabs */}
           {tracks.length > 0 && (
-            <div className="flex-shrink-0 flex items-center gap-1 px-4 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto">
+            <div className="flex-shrink-0 flex items-center gap-1 px-3 md:px-4 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
               {tabs.map(tab => (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-200 flex-shrink-0 ${
+                  className={`px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm transition-all duration-200 flex-shrink-0 ${
                     activeTab === tab.key
                       ? 'font-semibold'
                       : 'text-gray-400 hover:text-[var(--text-primary,white)] hover:bg-gray-800'
@@ -4416,7 +4508,7 @@ function App() {
                   style={activeTab === tab.key ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
                 >
                   {tab.label}
-                  <span className={`ml-1.5 text-xs ${activeTab === tab.key ? 'opacity-70' : 'text-gray-600'}`}>
+                  <span className={`ml-1 text-xs ${activeTab === tab.key ? 'opacity-70' : 'text-gray-600'}`}>
                     {tab.count}
                   </span>
                 </button>
@@ -4429,7 +4521,7 @@ function App() {
             <div className="flex-shrink-0 border-b border-[var(--border-color)] bg-yellow-500/5">
               <button
                 onClick={() => setPendingExpanded(prev => !prev)}
-                className="w-full px-4 py-2 flex items-center justify-between text-sm hover:bg-yellow-500/10 transition-colors"
+                className="w-full px-3 md:px-4 py-2 flex items-center justify-between text-sm hover:bg-yellow-500/10 transition-colors"
               >
                 <span className="flex items-center gap-2 text-yellow-400">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -4438,7 +4530,7 @@ function App() {
                 <svg className={`w-4 h-4 text-gray-400 transition-transform ${pendingExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </button>
               {pendingExpanded && (
-                <div className="px-4 pb-3 space-y-1">
+                <div className="px-3 md:px-4 pb-3 space-y-1">
                   {pendingTracks.map((t, idx) => (
                     <div key={idx} className="flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg bg-[var(--bg-input)] text-xs">
                       <span className="truncate min-w-0 text-[var(--text-primary)]">{t.artist} - {t.title}</span>
@@ -4480,12 +4572,11 @@ function App() {
                 </div>
               ) : (
                 <div>
-                  <div className="sticky top-0 z-10 px-4 py-2 bg-[var(--bg-genre-header)] border-b border-[var(--border-color)] flex items-center gap-3">
+                  <div className="sticky top-0 z-10 px-3 md:px-4 py-2 bg-[var(--bg-genre-header)] border-b border-[var(--border-color)] flex items-center gap-3">
                     <span className="text-sm font-semibold text-[var(--color-accent)]">Resultados SoulSeek</span>
                     <span className="text-xs text-gray-500">{(() => { const grouped = {}; searchResults.forEach(r => { if (!grouped[r.filename]) grouped[r.filename] = []; grouped[r.filename].push(r) }); return Object.keys(grouped).length })()} archivos</span>
                   </div>
                   {(() => {
-                    // Group by filename, keep best source first (already sorted by score)
                     const grouped = {}
                     searchResults.forEach(r => {
                       if (!grouped[r.filename]) grouped[r.filename] = []
@@ -4499,19 +4590,19 @@ function App() {
                       return (
                         <div key={filename}
                           onDoubleClick={() => dlSt === 'completed' && goToLibraryTrack(filename)}
-                          className={`flex items-center gap-3 px-4 py-2 border-b border-[var(--border-color)]/50 hover:bg-gray-800/30 transition-colors text-sm ${dlSt === 'completed' ? 'cursor-pointer' : ''}`}>
+                          className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-2 border-b border-[var(--border-color)]/50 hover:bg-gray-800/30 transition-colors text-sm ${dlSt === 'completed' ? 'cursor-pointer' : ''}`}>
                           <PlayPauseBtn
                             isPlaying={playingFile === filename && isAudioPlaying}
                             loading={previewLoading === filename}
                             onClick={() => handlePreview(filename)}
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="truncate text-[var(--text-primary)]">{filename}</div>
-                            <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                            <div className="truncate text-xs md:text-sm text-[var(--text-primary)]">{filename}</div>
+                            <div className="flex items-center gap-2 md:gap-3 text-xs text-gray-500 mt-0.5">
                               <span className="text-purple-400">{best.ext}</span>
                               <span>{best.size_mb} MB</span>
-                              {best.bitrate > 0 && <span>{best.bitrate} kbps</span>}
-                              {best.duration > 0 && <span>{Math.floor(best.duration / 60)}:{String(best.duration % 60).padStart(2, '0')}</span>}
+                              <span className="hidden sm:inline">{best.bitrate > 0 ? `${best.bitrate} kbps` : ''}</span>
+                              <span className="hidden sm:inline">{best.duration > 0 ? `${Math.floor(best.duration / 60)}:${String(best.duration % 60).padStart(2, '0')}` : ''}</span>
                               <span className="text-gray-600">{sources.length} fuente{sources.length > 1 ? 's' : ''}</span>
                             </div>
                           </div>
@@ -4521,10 +4612,10 @@ function App() {
                             <div className="flex-shrink-0 flex items-center gap-2">
                               <div className="flex flex-col items-end">
                                 <span className="text-yellow-400 text-xs animate-pulse">
-                                  En cola ({dlInfo.source}) q:{dlInfo.queue || '?'}
+                                  En cola <span className="hidden sm:inline">({dlInfo.source})</span> q:{dlInfo.queue || '?'}
                                 </span>
                                 {dlInfo.wait_secs > 0 && (
-                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                  <div className="hidden sm:flex items-center gap-1.5 mt-0.5">
                                     <div className="w-16 h-1 bg-gray-700 rounded-full overflow-hidden">
                                       <div className="h-full rounded-full bg-yellow-500/60 transition-all duration-1000" style={{ width: `${Math.min(100, (dlInfo.wait_secs / (dlInfo.timeout_secs || 300)) * 100)}%` }} />
                                     </div>
@@ -4537,10 +4628,10 @@ function App() {
                             <div className="flex-shrink-0 flex items-center gap-2">
                               {dlPct != null ? (
                                 <>
-                                  <div className="w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                  <div className="w-16 md:w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                                     <div className="h-full rounded-full transition-all duration-300 bg-[var(--color-accent)]" style={{ width: `${dlPct}%` }} />
                                   </div>
-                                  <span className="text-[var(--color-accent)] text-xs w-12 text-right">{dlPct}%{dlInfo?.speed > 0 ? ` ${dlInfo.speed}k` : ''}</span>
+                                  <span className="text-[var(--color-accent)] text-xs w-10 md:w-12 text-right">{dlPct}%{dlInfo?.speed > 0 ? ` ${dlInfo.speed}k` : ''}</span>
                                 </>
                               ) : (
                                 <span className="text-yellow-400 text-xs animate-pulse">Iniciando...</span>
@@ -4554,7 +4645,7 @@ function App() {
                           ) : (
                             <button
                               onClick={() => handleDownloadSingle({ ...best, sources })}
-                              className="flex-shrink-0 px-3 py-1 rounded text-xs transition-all duration-200 active:scale-95"
+                              className="flex-shrink-0 px-2 md:px-3 py-1 rounded text-xs transition-all duration-200 active:scale-95"
                               style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                             >
                               Descargar
@@ -4568,17 +4659,17 @@ function App() {
               )
             ) : tracks.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-600">
-                <div className="text-center space-y-2">
+                <div className="text-center space-y-2 px-6">
                   <p className="text-4xl">&#127925;</p>
-                  <p>Pega tu lista de tracks a la izquierda</p>
-                  <p className="text-sm">Soporta Beatport (texto o HTML), Rekordbox</p>
+                  <p className="text-sm md:text-base">Pega tu lista de tracks <span className="hidden md:inline">a la izquierda</span><span className="md:hidden">arriba</span></p>
+                  <p className="text-xs md:text-sm text-gray-500">Soporta Beatport (texto o HTML), Rekordbox</p>
                 </div>
               </div>
             ) : activeTab === 'by_genre' ? (
               <>
                 {genres.map(g => (
                   <div key={g}>
-                    <div className="sticky top-0 z-10 px-4 py-2 bg-[var(--bg-genre-header)] border-b border-[var(--border-color)] flex items-center gap-2">
+                    <div className="sticky top-0 z-10 px-3 md:px-4 py-2 bg-[var(--bg-genre-header)] border-b border-[var(--border-color)] flex items-center gap-2">
                       <span className="text-sm font-semibold text-[var(--color-accent)]">{g}</span>
                       <span className="text-xs text-gray-500">{tracksByGenre[g].length} tracks</span>
                       <span className="text-xs text-green-500">{tracksByGenre[g].filter(t => t.status === 'completed').length} completados</span>
@@ -4588,7 +4679,7 @@ function App() {
                 ))}
                 {ungrouped.length > 0 && (
                   <div>
-                    <div className="sticky top-0 z-10 px-4 py-2 bg-[var(--bg-genre-header)] border-b border-[var(--border-color)]">
+                    <div className="sticky top-0 z-10 px-3 md:px-4 py-2 bg-[var(--bg-genre-header)] border-b border-[var(--border-color)]">
                       <span className="text-sm font-semibold text-gray-400">Sin estilo</span>
                       <span className="text-xs text-gray-500 ml-2">{ungrouped.length} tracks</span>
                     </div>
@@ -4603,7 +4694,7 @@ function App() {
 
           {/* Logs */}
           {logs.length > 0 && (
-            <div className="flex-shrink-0 max-h-40 overflow-y-auto border-t border-[var(--border-color)] bg-[var(--bg-surface)] px-4 py-2 font-mono text-xs">
+            <div className="flex-shrink-0 max-h-28 md:max-h-40 overflow-y-auto border-t border-[var(--border-color)] bg-[var(--bg-surface)] px-3 md:px-4 py-2 font-mono text-xs">
               {logs.map((log, i) => (
                 <div key={i} className={`py-0.5 ${
                   log.includes('✓') ? 'text-green-400' :
@@ -4620,8 +4711,8 @@ function App() {
 
           {/* Summary */}
           {summary && (
-            <div className="flex-shrink-0 px-4 py-3 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
-              <div className="flex items-center gap-4 text-sm">
+            <div className="flex-shrink-0 px-3 md:px-4 py-2 md:py-3 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
+              <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm">
                 <span className="font-semibold">Resumen:</span>
                 <span className="text-green-400">{summary.completed} descargados</span>
                 {summary.skipped > 0 && <span className="text-cyan-400">{summary.skipped} omitidos</span>}
