@@ -2008,10 +2008,10 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Controls - row 1: genre pills + duration + algorithms */}
-      <div className="flex-shrink-0 flex items-center gap-2 md:gap-4 px-3 md:px-6 py-2 md:py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
-        {/* Star filter */}
-        <div className="hidden md:flex items-center gap-1">
+      {/* Controls: single compact row - duration + algorithms + search */}
+      <div className="flex-shrink-0 flex items-center gap-1.5 md:gap-3 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
+        {/* Star filter - desktop only */}
+        <div className="hidden lg:flex items-center gap-1">
           <button
             onClick={() => { setSetSelectedStars([]); setMinStars(1) }}
             className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
@@ -2039,13 +2039,13 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
           })}
         </div>
         {/* Duration */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-0.5 md:gap-1 flex-shrink-0">
           {[60, 90, 120].map(d => (
             <button
               key={d}
               onClick={() => setDuration(d)}
-              className={`px-2 md:px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
-                duration === d ? 'font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+              className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex-shrink-0 ${
+                duration === d ? 'font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
               style={duration === d ? { background: 'color-mix(in srgb, var(--color-accent) 20%, transparent)', color: 'var(--color-accent)' } : {}}
             >
@@ -2053,37 +2053,51 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
             </button>
           ))}
         </div>
+        {/* Separator */}
+        <div className="w-px h-5 bg-[var(--border-color)] flex-shrink-0" />
         {/* Generation algorithms */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {[
-            { id: 'camelot', label: 'Camelot', icon: '🎯' },
-            { id: 'energy', label: 'Energy', icon: '⚡' },
-            { id: 'genre', label: 'Genre', icon: '🎭' },
-            { id: 'peak', label: 'Peak', icon: '📈' },
-          ].map(m => (
-            <button
-              key={m.id}
-              onClick={() => generateSet(m.id)}
-              disabled={generating}
-              className={`flex items-center gap-1 px-2 md:px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 disabled:opacity-50 flex-shrink-0`}
-              style={method === m.id
-                ? { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.25)', color: 'var(--color-accent)' }
-                : { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.08)', color: 'rgba(var(--color-accent-rgb, 59,130,246), 0.6)' }
-              }
-            >
-              {generating && method === m.id ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>{m.icon}</span>}
-              <span className="hidden sm:inline">{m.label}</span>
-            </button>
-          ))}
+        {[
+          { id: 'camelot', label: 'Camelot', icon: '🎯' },
+          { id: 'energy', label: 'Energy', icon: '⚡' },
+          { id: 'genre', label: 'Genre', icon: '🎭' },
+          { id: 'peak', label: 'Peak', icon: '📈' },
+        ].map(m => (
+          <button
+            key={m.id}
+            onClick={() => generateSet(m.id)}
+            disabled={generating}
+            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 disabled:opacity-50 flex-shrink-0`}
+            style={method === m.id
+              ? { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.25)', color: 'var(--color-accent)' }
+              : { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.08)', color: 'rgba(var(--color-accent-rgb, 59,130,246), 0.6)' }
+            }
+          >
+            {generating && method === m.id ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>{m.icon}</span>}
+            <span className="hidden md:inline">{m.label}</span>
+          </button>
+        ))}
+        {/* Separator */}
+        <div className="w-px h-5 bg-[var(--border-color)] flex-shrink-0" />
+        {/* Search inline */}
+        <div className="flex-1 min-w-32 md:min-w-48 relative flex-shrink-0">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Agregar track..."
+            className="w-full pl-8 pr-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+          />
         </div>
       </div>
 
-      {/* Controls row 2: genre pills */}
+      {/* Genre pills - single scrollable row */}
       {availableGenres.length > 0 && (
-        <div className="flex-shrink-0 flex items-center gap-1.5 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
+        <div className="flex-shrink-0 flex items-center gap-1 px-3 md:px-6 py-1.5 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
           <button
             onClick={() => setSelectedGenres([])}
-            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 ${
+            className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all duration-200 active:scale-95 ${
               selectedGenres.length === 0 ? 'btn-accent font-semibold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >All</button>
@@ -2094,11 +2108,10 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
               <button
                 key={genre}
                 onClick={() => setSelectedGenres(prev => active ? prev.filter(g => g !== genre) : [...prev, genre])}
-                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95`}
+                className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all duration-200 active:scale-95`}
                 style={{
-                  background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.1)`,
-                  color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.7)`,
-                  boxShadow: active ? `0 0 8px rgba(${gColor.rgb}, 0.15)` : 'none',
+                  background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.08)`,
+                  color: active ? `rgb(${gColor.rgb})` : `rgba(${gColor.rgb}, 0.5)`,
                 }}
               >
                 {genre} ({count})
@@ -2108,22 +2121,8 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
         </div>
       )}
 
-      {/* Search & export bar */}
-      <div className="flex-shrink-0 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
-        <div className="flex items-center gap-2 md:gap-3">
-          <span className="hidden md:inline text-sm font-bold text-[var(--text-primary)]">{allTracks.length} tracks</span>
-          <div className="flex-1 relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar en tu biblioteca para agregar al set..."
-              className="w-full pl-10 pr-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
-            />
-          </div>
-        </div>
+      {/* Search results dropdown */}
+      <div className="flex-shrink-0">
         {searchQuery.length >= 2 && (() => {
           const q = searchQuery.toLowerCase()
           const results = allTracks
@@ -2131,28 +2130,26 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
             .filter(t => (t.title || t.filename || '').toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q) || (t.genre || '').toLowerCase().includes(q))
             .slice(0, 8)
           return results.length > 0 ? (
-            <div className="mt-2 rounded-lg border border-gray-700 overflow-hidden">
+            <div className="border-b border-[var(--border-color)] bg-[var(--bg-surface)]">
               {results.map(t => (
                 <button
                   key={t.filename}
                   onClick={() => { addToSet(t); setSearchQuery('') }}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-[var(--bg-hover)] transition-colors border-b border-gray-800 last:border-0"
+                  className="w-full flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 text-left hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-color)]/30 last:border-0"
                 >
                   <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-[var(--text-primary)] truncate">{t.title || t.filename}</div>
-                    <div className="text-xs text-gray-500 truncate">{t.artist} · {t.genre} · {t.bpm || '?'} BPM · {t.key || '?'}</div>
+                    <div className="text-xs md:text-sm text-[var(--text-primary)] truncate">{t.title || t.filename}</div>
+                    <div className="text-xs text-gray-500 truncate">{t.artist}<span className="hidden sm:inline"> · {t.genre} · {t.bpm || '?'} BPM</span> · {t.key || '?'}</div>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {t.rating > 0 && <span className="text-xs text-yellow-500">{'★'.repeat(t.rating)}</span>}
-                  </div>
+                  {t.rating > 0 && <span className="hidden sm:inline text-xs text-yellow-500 flex-shrink-0">{'★'.repeat(t.rating)}</span>}
                 </button>
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-xs text-gray-600">No se encontraron tracks para "{searchQuery}"</p>
+            <div className="px-3 md:px-6 py-2 text-xs text-gray-600 border-b border-[var(--border-color)]">Sin resultados para "{searchQuery}"</div>
           )
         })()}
       </div>
