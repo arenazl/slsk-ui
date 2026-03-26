@@ -670,7 +670,11 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const deleteFile = async (file) => {
     setCtxMenu(null)
-    setFiles(prev => prev.filter(f => f.filename !== file.filename))
+    setFiles(prev => {
+      const idx = prev.findIndex(f => f.filename === file.filename)
+      if (idx === -1) return prev
+      return [...prev.slice(0, idx), ...prev.slice(idx + 1)]
+    })
     try {
       // Delete file from agent
       await fetch(`${AGENT_BASE}/api/delete`, {
