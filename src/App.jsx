@@ -1592,8 +1592,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         </div>
       ) : (view === 'cards' && !q) ? (
         /* Genre grid (cards view) */
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-2 md:p-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3 items-start auto-rows-min w-full">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-3 md:p-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 md:gap-3 items-start auto-rows-min w-full">
             {genres.map((g, i) => {
               const c = GENRE_COLORS[i % GENRE_COLORS.length]
               return (
