@@ -4439,27 +4439,28 @@ function App() {
             </nav>
             {/* Mobile menu footer */}
             <div className="flex-shrink-0 border-t border-[var(--border-color)] p-4 space-y-4">
-              {/* Accent color */}
-              <div>
-                <div className="text-[10px] text-gray-500 uppercase font-bold mb-2">Color</div>
-                <div className="flex items-center gap-2.5">
-                  {[
-                    { color: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
-                    { color: '#8b5cf6', gradient: 'from-violet-500 to-purple-600' },
-                    { color: '#f43f5e', gradient: 'from-rose-500 to-pink-600' },
-                    { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500' },
-                    { color: '#22c55e', gradient: 'from-green-400 to-emerald-600' },
-                  ].map(p => (
-                    <button
-                      key={p.color}
-                      onClick={() => setAccentColor(p.color)}
-                      className={`rounded-full bg-gradient-to-br ${p.gradient} transition-all duration-200 active:scale-95 ${
-                        accentColor === p.color ? 'ring-2 ring-white/60 ring-offset-2 ring-offset-[var(--bg-panel)] scale-110' : 'ring-1 ring-white/10'
-                      }`}
-                      style={{ width: '28px', height: '28px' }}
-                    />
-                  ))}
-                </div>
+              {/* Accent color - segmented picker */}
+              <div className="flex items-center gap-0.5 p-1 rounded-xl bg-[var(--bg-surface)]">
+                {[
+                  { color: '#3b82f6', label: 'Azul', gradient: 'from-blue-500 to-blue-600' },
+                  { color: '#8b5cf6', label: 'Violeta', gradient: 'from-violet-500 to-purple-600' },
+                  { color: '#f43f5e', label: 'Rosa', gradient: 'from-rose-500 to-pink-600' },
+                  { color: '#f59e0b', label: 'Amber', gradient: 'from-amber-400 to-orange-500' },
+                  { color: '#22c55e', label: 'Verde', gradient: 'from-green-400 to-emerald-600' },
+                ].map(p => (
+                  <button
+                    key={p.color}
+                    onClick={() => setAccentColor(p.color)}
+                    className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all duration-200 active:scale-95 ${
+                      accentColor === p.color ? 'bg-white/10' : ''
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${p.gradient} ${
+                      accentColor === p.color ? 'ring-2 ring-white/50' : ''
+                    }`} />
+                    <span className={`text-[9px] leading-none ${accentColor === p.color ? 'text-[var(--text-primary)] font-semibold' : 'text-gray-600'}`}>{p.label}</span>
+                  </button>
+                ))}
               </div>
 
               {/* Agent downloads */}
