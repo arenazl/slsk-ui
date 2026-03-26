@@ -4144,34 +4144,6 @@ function App() {
               {logs[logs.length - 1]}
             </span>
           )}
-          {page === 'download' && (
-            <div className="relative flex-shrink-0 w-40 md:w-64 flex items-center gap-1">
-              <div className="relative flex-1">
-                <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  value={dlSearch}
-                  onChange={e => setDlSearch(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSearchSlsk() }}
-                  placeholder="Buscar en SoulSeek..."
-                  className="w-full pl-8 pr-3 py-1 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
-                />
-              </div>
-              {searchStatus !== 'idle' && (
-                <span className="text-xs text-yellow-400 animate-pulse flex-shrink-0">
-                  {searchStatus === 'connecting' ? 'Conectando...' : 'Buscando...'}
-                </span>
-              )}
-              {searchResults && (
-                <button
-                  onClick={() => { setSearchResults(null); setDlSearch(''); setSearchDlStatus({}) }}
-                  className="text-xs text-gray-500 hover:text-[var(--text-primary,white)] flex-shrink-0"
-                  title="Cerrar resultados"
-                >✕</button>
-              )}
-            </div>
-          )}
           <a
             href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
             className="hidden md:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
@@ -4373,7 +4345,41 @@ function App() {
       </div>
 
       {/* Download page */}
-      <div className={`flex-1 flex flex-col md:flex-row min-h-0 ${page !== 'download' ? 'hidden' : ''}`}>
+      <div className={`flex-1 flex flex-col min-h-0 ${page !== 'download' ? 'hidden' : ''}`}>
+
+        {/* SoulSeek search bar */}
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              value={dlSearch}
+              onChange={e => setDlSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSearchSlsk() }}
+              placeholder="Buscar en SoulSeek..."
+              className="w-full pl-9 pr-3 py-2 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+            />
+          </div>
+          {searchStatus !== 'idle' && (
+            <span className="text-xs text-yellow-400 animate-pulse flex-shrink-0">
+              {searchStatus === 'connecting' ? 'Conectando...' : 'Buscando...'}
+            </span>
+          )}
+          {searchResults && (
+            <button
+              onClick={() => { setSearchResults(null); setDlSearch(''); setSearchDlStatus({}) }}
+              className="p-1.5 rounded-lg text-gray-500 hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all flex-shrink-0"
+              title="Cerrar resultados"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        <div className="flex-1 flex flex-col md:flex-row min-h-0">
 
         {/* Mobile: collapsible input panel */}
         <div className="md:hidden flex-shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-panel)]">
@@ -4727,6 +4733,7 @@ function App() {
           )}
 
         </main>
+      </div>
       </div>
 
       {/* Set Builder page */}
