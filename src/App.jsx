@@ -3441,6 +3441,7 @@ function App() {
     return saved ? JSON.parse(saved) : null
   })
   const [page, setPage] = useQS('page', 'discover')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [pendingRadioTrack, setPendingRadioTrack] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [collection, setCollection] = useState(() => localStorage.getItem('collection') || 'edm')
@@ -3997,13 +3998,22 @@ function App() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
       {/* Header */}
-      <header className="flex-shrink-0 h-14 flex items-center justify-between px-6 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
+      <header className="flex-shrink-0 h-14 flex items-center justify-between px-3 md:px-6 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileMenuOpen(prev => !prev)}
+            className="md:hidden p-1.5 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div className="flex items-center gap-2">
             <img src="/logo.png" alt="Groove Sync" className="h-6 object-contain" />
-            <span className="font-semibold text-base text-[var(--text-primary)]">Groove Sync</span>
+            <span className="font-semibold text-base text-[var(--text-primary)] hidden sm:inline">Groove Sync</span>
           </div>
-          <div className="flex gap-1">
+          <div className="hidden md:flex gap-1">
             {[
               { id: 'discover', label: 'Discover' },
               { id: 'download', label: 'Descargar' },
@@ -4029,7 +4039,7 @@ function App() {
             ].map(c => (
               <button key={c.id}
                 onClick={() => setCollection(c.id)}
-                className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                className={`px-2 md:px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
                   collection === c.id ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/60'
                 }`}
               >
@@ -4039,14 +4049,14 @@ function App() {
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-3 min-w-0 flex-1 justify-end">
+        <div className="flex items-center gap-1.5 md:gap-3 min-w-0 flex-1 justify-end">
           {logs.length > 0 && isRunning && (
-            <span className="text-sm text-yellow-400 truncate max-w-lg">
+            <span className="hidden lg:inline text-sm text-yellow-400 truncate max-w-lg">
               {logs[logs.length - 1]}
             </span>
           )}
           {page === 'download' && (
-            <div className="relative flex-shrink-0 w-64 flex items-center gap-1">
+            <div className="relative flex-shrink-0 w-40 md:w-64 flex items-center gap-1">
               <div className="relative flex-1">
                 <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -4075,7 +4085,7 @@ function App() {
           )}
           <a
             href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
-            className="relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden md:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows)'}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -4085,7 +4095,7 @@ function App() {
           </a>
           <a
             href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
-            className="relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden md:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Mac) - Click derecho para Mac viejo'}
             onContextMenu={(e) => { e.preventDefault(); window.prompt('Copiá este comando y pegalo en Terminal:', 'curl -sL https://bootstrap.pypa.io/get-pip.py | python3 && python3 -m pip install pystray pillow aiohttp cloudinary && curl -sL https://raw.githubusercontent.com/arenazl/slsk-agent/master/agent.py -o /tmp/agent.py && python3 /tmp/agent.py') }}
           >
@@ -4100,35 +4110,22 @@ function App() {
                 connectWs()
               } catch (e) { console.error('Restart failed', e) }
             }}
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden md:flex p-1.5 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title="Reiniciar conexión SoulSeek"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <label className="cursor-pointer" title="Color de acento">
-              <input
-                type="color"
-                value={accentColor}
-                onChange={e => setAccentColor(e.target.value)}
-                className="w-5 h-5 rounded-full border-0 cursor-pointer bg-transparent"
-                style={{appearance: 'none', WebkitAppearance: 'none', padding: 0}}
-              />
-            </label>
+          <label className="hidden lg:flex cursor-pointer flex-shrink-0" title="Color de acento">
             <input
-              type="range"
-              min="0.3"
-              max="1"
-              step="0.05"
-              value={accentOpacity}
-              onChange={e => setAccentOpacity(parseFloat(e.target.value))}
-              className="w-12 h-1 accent-current cursor-pointer"
-              style={{accentColor: accentColor}}
-              title={`Opacidad: ${Math.round(accentOpacity * 100)}%`}
+              type="color"
+              value={accentColor}
+              onChange={e => setAccentColor(e.target.value)}
+              className="w-5 h-5 rounded-full border-0 cursor-pointer bg-transparent"
+              style={{appearance: 'none', WebkitAppearance: 'none', padding: 0}}
             />
-          </div>
+          </label>
           <button
             onClick={toggleTheme}
             className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary,white)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
@@ -4145,7 +4142,7 @@ function App() {
             )}
           </button>
           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="text-sm text-[var(--text-muted)] flex-shrink-0">
+          <span className="hidden sm:inline text-sm text-[var(--text-muted)] flex-shrink-0">
             {connected ? (isRunning ? 'Descargando...' : 'Conectado') : 'Desconectado'}
           </span>
           {authUser && (
@@ -4155,11 +4152,79 @@ function App() {
               title="Cerrar sesión"
             >
               <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{authUser.name?.[0]?.toUpperCase()}</span>
-              {authUser.name}
+              <span className="hidden sm:inline">{authUser.name}</span>
             </button>
           )}
         </div>
       </header>
+
+      {/* Mobile menu overlay */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 bg-black/60" onClick={() => setMobileMenuOpen(false)}>
+          <div className="absolute left-0 top-0 bottom-0 w-64 bg-[var(--bg-panel)] border-r border-[var(--border-color)] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
+              <div className="flex items-center gap-2">
+                <img src="/logo.png" alt="Groove Sync" className="h-6 object-contain" />
+                <span className="font-semibold text-base text-[var(--text-primary)]">Groove Sync</span>
+              </div>
+              <button onClick={() => setMobileMenuOpen(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-[var(--bg-hover)]">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+              {[
+                { id: 'discover', label: 'Discover', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+                { id: 'download', label: 'Descargar', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' },
+                { id: 'library', label: 'Biblioteca', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
+                { id: 'set', label: 'Set Builder', icon: 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3' },
+                ...(mixTracks ? [{ id: 'mix', label: 'Mix Editor', icon: 'M9 19V6l12-3v13' }] : []),
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => { setPage(tab.id); setMobileMenuOpen(false) }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                    page === tab.id ? 'bg-[var(--color-accent)] text-white font-semibold' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <svg className="w-4.5 h-4.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
+                  </svg>
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+            {/* Mobile menu footer with agent/settings */}
+            <div className="flex-shrink-0 border-t border-[var(--border-color)] p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <a href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
+                  className="relative p-2 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all flex-shrink-0" title="Agente Windows">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
+                  <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-panel)] ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
+                </a>
+                <a href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
+                  className="p-2 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all flex-shrink-0" title="Agente Mac">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" /></svg>
+                </a>
+                <button onClick={async () => { try { await fetch(`${API_BASE}/api/restart-slsk`, { method: 'POST' }); connectWs() } catch {} }}
+                  className="p-2 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all flex-shrink-0" title="Reiniciar SoulSeek">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </button>
+                <label className="cursor-pointer" title="Color de acento">
+                  <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)}
+                    className="w-5 h-5 rounded-full border-0 cursor-pointer bg-transparent" style={{appearance: 'none', WebkitAppearance: 'none', padding: 0}} />
+                </label>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+                {connected ? (isRunning ? 'Descargando...' : 'Conectado') : 'Desconectado'}
+                {agentConnected && <span className="text-green-400">| Agente v{agentVersion}</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Library - always mounted, hidden when not active */}
       <div className={`flex-1 flex min-h-0 ${page !== 'library' ? 'hidden' : ''}`}>
@@ -4972,7 +5037,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[var(--bg-app)] relative">
       {/* Header with artwork mosaic background */}
-      <div className="flex-shrink-0 relative overflow-hidden h-36">
+      <div className="flex-shrink-0 relative overflow-hidden h-28 md:h-36">
         {/* Artwork mosaic background from first tracks */}
         <div className="absolute inset-0 flex flex-wrap opacity-30">
           {tracks.slice(0, 20).map((t, i) => t.artwork_url && (
@@ -4984,11 +5049,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         {/* Blur overlay for smoothness */}
         <div className="absolute inset-0 backdrop-blur-sm" />
 
-        <div className="relative h-full flex flex-col justify-end gap-3 px-8 pb-4">
+        <div className="relative h-full flex flex-col justify-end gap-2 md:gap-3 px-4 md:px-8 pb-3 md:pb-4">
           <div className="flex items-start justify-between">
             <div>
-              <div className="flex items-center gap-5 mt-1">
-                <h1 className="text-3xl font-bold text-white tracking-tight">
+              <div className="flex items-center gap-3 md:gap-5 mt-1">
+                <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">
                   {discoverSource === 'beatport'
                     ? (selectedGenre ? selectedGenre.name : 'Top 100')
                     : (spotifyPlaylistName || selectedSpotifyCategory?.name || 'Top 50 Argentina')
@@ -5047,10 +5112,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             </div>
             {/* Featured artwork */}
             {tracks[0]?.artwork_url && (
-              <div className="flex gap-2">
+              <div className="hidden sm:flex gap-2">
                 {tracks.slice(0, 3).map((t, i) => t.artwork_url && (
                   <img key={i} src={t.artwork_url.replace('1400x1400', '250x250')} alt=""
-                    className="w-16 h-16 rounded-lg object-cover ring-1 ring-white/10 shadow-xl"
+                    className="w-12 h-12 md:w-16 md:h-16 rounded-lg object-cover ring-1 ring-white/10 shadow-xl"
                     style={{opacity: 1 - i * 0.2, transform: `rotate(${(i - 1) * 3}deg)`}}
                   />
                 ))}
@@ -5124,18 +5189,45 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="px-6 py-3">
+          {/* Preview continuo sub-bar */}
+          <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-6 py-2 border-b border-[var(--border-color)] bg-[var(--bg-panel)]/50">
+            <button
+              onClick={() => tracks.length > 0 && handlePreviewFromCtx(tracks[0])}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-all active:scale-95"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="hidden sm:inline">Preview continuo</span>
+              <span className="sm:hidden">Preview</span>
+            </button>
+            {playingId && (
+              <button
+                onClick={() => { if (audioRef?.current) audioRef.current.pause(); clearDiscoverAudio(); if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-all active:scale-95"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+                Stop
+              </button>
+            )}
+            <span className="text-xs text-[var(--text-muted)]">{tracks.length} tracks</span>
+          </div>
+          <div className="px-3 md:px-6 py-2 md:py-3">
             {tracks.map((t, i) => {
               const isPlaying = playingId === t.id
               return (
                 <div key={t.id || i}
                   onContextMenu={(e) => { e.preventDefault(); setDiscoverCtx({ x: e.clientX, y: e.clientY, track: t }) }}
-                  className={`group flex items-center gap-4 px-4 py-3 rounded-xl mb-1 transition-all duration-200 ${
+                  className={`group flex items-center gap-2 md:gap-4 px-2 md:px-4 py-2 md:py-3 rounded-xl mb-1 transition-all duration-200 ${
                   isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-[var(--bg-hover)]'
                 }`}>
                   {/* Position number - shows play on hover */}
-                  <div className="w-8 flex-shrink-0 text-center">
-                    <span className={`text-sm font-mono group-hover:hidden ${isPlaying ? 'text-green-400 font-bold' : 'text-gray-600'}`}>
+                  <div className="w-6 md:w-8 flex-shrink-0 text-center">
+                    <span className={`text-xs md:text-sm font-mono group-hover:hidden ${isPlaying ? 'text-green-400 font-bold' : 'text-gray-600'}`}>
                       {t.position || i + 1}
                     </span>
                     <PlayPauseBtn isPlaying={isPlaying} onClick={() => playPreview(t)} className={`hidden group-hover:flex ${isPlaying ? '!text-green-400' : ''}`} />
@@ -5144,7 +5236,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                   {/* Artwork */}
                   <button
                     onClick={() => playPreview(t)}
-                    className={`w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden relative group/art transition-all duration-200 ${
+                    className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative group/art transition-all duration-200 ${
                       isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                     }`}
                   >
@@ -5169,7 +5261,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
                   {/* Track info */}
                   <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-medium truncate flex items-center gap-1.5 ${isPlaying ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>
+                    <div className={`text-xs md:text-sm font-medium truncate flex items-center gap-1.5 ${isPlaying ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>
                       {t.title}
                       {isInLibrary(t) && <span className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500" title="En tu biblioteca" />}
                     </div>
@@ -5186,8 +5278,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     )}
                   </div>
 
-                  {/* BPM & Key */}
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  {/* BPM & Key - hidden on mobile */}
+                  <div className="hidden md:flex items-center gap-3 flex-shrink-0">
                     <span className="text-xs text-gray-500 font-mono w-8 text-center">{t.bpm || '-'}</span>
                     <span className={`text-xs font-mono px-2 py-0.5 rounded ${t.key ? 'bg-amber-500/10 text-amber-400' : 'text-gray-700'}`}>{t.key || '-'}</span>
                     <span className="text-xs text-gray-600 w-10 text-center">{formatDuration(t.duration_ms)}</span>
@@ -5199,49 +5291,49 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     if (!dl) return (
                       <button
                         onClick={() => searchAndDownload(t)}
-                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 opacity-60 group-hover:opacity-100"
+                        className="flex-shrink-0 flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 opacity-60 group-hover:opacity-100"
                         style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
-                        Descargar
+                        <span className="hidden sm:inline">Descargar</span>
                       </button>
                     )
                     if (dl.status === 'searching') return (
-                      <span className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs text-yellow-400 animate-pulse">
+                      <span className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-yellow-400 animate-pulse">
                         <div className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                        Buscando...
+                        <span className="hidden sm:inline">Buscando...</span>
                       </span>
                     )
                     if (dl.status === 'downloading') return (
-                      <span className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs text-[var(--color-accent)] animate-pulse">
+                      <span className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-[var(--color-accent)] animate-pulse">
                         <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                        Descargando
+                        <span className="hidden sm:inline">Descargando</span>
                       </span>
                     )
                     if (dl.status === 'done') return (
-                      <span className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs text-green-400 bg-green-500/10">
+                      <span className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-green-400 bg-green-500/10">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
-                        Listo
+                        <span className="hidden sm:inline">Listo</span>
                       </span>
                     )
                     if (dl.status === 'not_found') return (
                       <button
                         onClick={() => { setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }); searchAndDownload(t) }}
-                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs text-gray-500 bg-gray-800 hover:bg-gray-700 transition-all"
+                        className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-gray-500 bg-gray-800 hover:bg-gray-700 transition-all"
                       >
-                        No encontrado - Reintentar
+                        <span className="hidden sm:inline">No encontrado -</span> Reintentar
                       </button>
                     )
                     return (
                       <button
                         onClick={() => { setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }) }}
-                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-all"
+                        className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-all"
                       >
-                        Error - Cerrar
+                        Error
                       </button>
                     )
                   })()}
@@ -5256,7 +5348,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       {radioTracks !== null && (
         <div className="absolute inset-0 z-20 bg-[var(--bg-app)] flex flex-col">
           {/* Radio header */}
-          <div className="flex-shrink-0 px-6 py-4 border-b border-[var(--border-color)] bg-[var(--bg-panel)]">
+          <div className="flex-shrink-0 px-3 md:px-6 py-3 md:py-4 border-b border-[var(--border-color)] bg-[var(--bg-panel)]">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => { setRadioTracks(null); setRadioSeed(''); setRadioSource('') }}
@@ -5266,7 +5358,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-[var(--text-primary)]">Radio</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-gray-400 uppercase tracking-wider">{radioSource}</span>
@@ -5283,24 +5375,24 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             </div>
           ) : (
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="px-6 py-3">
+              <div className="px-3 md:px-6 py-2 md:py-3">
                 {radioTracks.map((t, i) => {
                   const isPlaying = playingId === t.id
                   return (
                     <div key={t.id || i}
                       onContextMenu={(e) => { e.preventDefault(); setDiscoverCtx({ x: e.clientX, y: e.clientY, track: t }) }}
-                      className={`group flex items-center gap-4 px-4 py-3 rounded-xl mb-1 transition-all duration-200 ${
+                      className={`group flex items-center gap-2 md:gap-4 px-2 md:px-4 py-2 md:py-3 rounded-xl mb-1 transition-all duration-200 ${
                       isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-[var(--bg-hover)]'
                     }`}>
-                      <div className="w-8 flex-shrink-0 text-center">
-                        <span className={`text-sm font-mono group-hover:hidden ${isPlaying ? 'text-green-400 font-bold' : 'text-gray-600'}`}>
+                      <div className="w-6 md:w-8 flex-shrink-0 text-center">
+                        <span className={`text-xs md:text-sm font-mono group-hover:hidden ${isPlaying ? 'text-green-400 font-bold' : 'text-gray-600'}`}>
                           {t.position || i + 1}
                         </span>
                         <PlayPauseBtn isPlaying={isPlaying} onClick={() => playPreview(t)} className={`hidden group-hover:flex ${isPlaying ? '!text-green-400' : ''}`} />
                       </div>
                       <button
                         onClick={() => playPreview(t)}
-                        className={`w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 ${
+                        className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 ${
                           isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                         }`}
                       >
@@ -5323,13 +5415,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                         )}
                       </button>
                       <div className="flex-1 min-w-0">
-                        <div className={`text-sm font-medium truncate ${isPlaying ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>{t.title}</div>
+                        <div className={`text-xs md:text-sm font-medium truncate ${isPlaying ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>{t.title}</div>
                         <div className="text-xs text-gray-500 truncate mt-0.5">{t.artist}</div>
                       </div>
                       <div className="hidden xl:flex items-center gap-2 flex-shrink-0">
                         {t.genre && <span className="px-2 py-0.5 rounded-full bg-white/5 text-xs text-gray-400">{t.genre}</span>}
                       </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="hidden md:flex items-center gap-3 flex-shrink-0">
                         {t.match > 0 && <span className="text-[10px] text-gray-600 w-8 text-center">{t.match}%</span>}
                         <span className="text-xs text-gray-500 font-mono w-8 text-center">{t.bpm || '-'}</span>
                         <span className={`text-xs font-mono px-2 py-0.5 rounded w-20 text-center ${t.key ? (t.key_compat <= 2 ? 'bg-green-500/20 text-green-400' : t.key_compat <= 4 ? 'bg-amber-500/10 text-amber-400' : 'bg-white/5 text-gray-400') : 'text-gray-700'}`}>{t.key || '-'}</span>
@@ -5340,17 +5432,17 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                         if (!dl) return (
                           <button
                             onClick={() => searchAndDownload(t)}
-                            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 opacity-60 group-hover:opacity-100"
+                            className="flex-shrink-0 flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 opacity-60 group-hover:opacity-100"
                             style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
-                            Descargar
+                            <span className="hidden sm:inline">Descargar</span>
                           </button>
                         )
-                        if (dl.status === 'searching') return <span className="flex-shrink-0 text-xs text-yellow-400 animate-pulse">Buscando...</span>
-                        if (dl.status === 'downloading') return <span className="flex-shrink-0 text-xs text-[var(--color-accent)] animate-pulse">Descargando</span>
+                        if (dl.status === 'searching') return <span className="flex-shrink-0 text-xs text-yellow-400 animate-pulse"><span className="hidden sm:inline">Buscando...</span><span className="sm:hidden">...</span></span>
+                        if (dl.status === 'downloading') return <span className="flex-shrink-0 text-xs text-[var(--color-accent)] animate-pulse"><span className="hidden sm:inline">Descargando</span><span className="sm:hidden">...</span></span>
                         if (dl.status === 'done') return <span className="flex-shrink-0 text-xs text-green-400">Listo</span>
                         if (dl.status === 'not_found') return (
                           <button onClick={() => { setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }); searchAndDownload(t) }}
@@ -5431,7 +5523,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         const errors = Object.entries(downloadQueue).filter(([, d]) => d.status === 'not_found' || d.status === 'error')
         if (active.length === 0 && done.length === 0) return null
         return (
-          <div className="flex-shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-panel)] px-6 py-2.5 flex items-center justify-between">
+          <div className="flex-shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-panel)] px-3 md:px-6 py-2 md:py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-4">
               {active.length > 0 && (
                 <span className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
