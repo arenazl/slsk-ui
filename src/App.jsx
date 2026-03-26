@@ -4089,6 +4089,7 @@ function App() {
       {/* Library - always mounted, hidden when not active */}
       <div className={`flex-1 flex min-h-0 ${page !== 'library' ? 'hidden' : ''}`}>
         <Library
+          key={`library-${collection}`}
           ref={libraryRef}
           playingFile={playingFile}
           onPlay={handleAppPlay}
