@@ -724,7 +724,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       // After classification, tell agent to organize files into genre folders
       if (agentConnected && data.classified > 0) {
         // Get updated metadata from Heroku to build move list
-        const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}`)
+        const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`)
         const metadata = await metaRes.json()
         const moves = Object.entries(metadata)
           .filter(([, info]) => info.genre)
@@ -1754,7 +1754,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   )
 })
 
-function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser }) {
+function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection }) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
   const [setSelectedStars, setSetSelectedStars] = useState([])
@@ -1776,7 +1776,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   // Fetch genres that have tracks with >= minStars
   useEffect(() => {
     if (page !== 'set') return
-    fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}`).then(r => r.json()).then(tracks => {
+    fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(tracks => {
       const genreCounts = {}
       tracks.forEach(t => {
         if ((setSelectedStars.length > 0 ? setSelectedStars.includes(t.rating || 0) : (t.rating || 0) >= minStars) && t.genre && t.key) {
@@ -1788,7 +1788,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       // Keep only previously selected genres that still exist
       setSelectedGenres(prev => prev.filter(g => genreCounts[g]))
     }).catch(() => {})
-  }, [page, minStars, setSelectedStars, authUser])
+  }, [page, minStars, setSelectedStars, authUser, collection])
 
   const fetchSuggestions = async (currentTracks) => {
     if (!currentTracks.length) return
@@ -4404,7 +4404,7 @@ function App() {
       </div>
 
       {/* Set Builder page */}
-      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} />
+      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} />
 
       {/* Mix Editor page */}
       {page === 'mix' && mixTracks && (
@@ -4483,8 +4483,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Library manifest for marking already-downloaded tracks
   const [libraryManifest, setLibraryManifest] = useState({})
   useEffect(() => {
-    fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
-  }, [authUser])
+    fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
+  }, [authUser, collection])
 
   const isInLibrary = useMemo(() => {
     // Normalize: lowercase, strip parens content like (Extended Mix), remove non-alphanumeric
@@ -4837,7 +4837,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             if (data.status === 'completed') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Descargado' } }))
               // Refresh manifest to update "in library" marks
-              fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
+              fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
               wsRef.current.removeEventListener('message', handler)
             } else if (data.status === 'error') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: 'Error al descargar' } }))
