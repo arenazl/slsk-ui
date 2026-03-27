@@ -4424,10 +4424,20 @@ function App() {
               </svg>
             )}
           </button>
-          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="hidden sm:inline text-sm text-[var(--text-muted)] flex-shrink-0">
-            {connected ? (isRunning ? 'Descargando...' : 'Conectado') : 'Desconectado'}
-          </span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="hidden sm:inline text-xs text-[var(--text-muted)]">
+              {connected ? (isRunning ? 'Descargando...' : 'Server') : 'Desconectado'}
+            </span>
+            {agentConnected && (
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/20" title={`Agente ${agentVersion} — ${AGENT_MODE === 'local' ? 'local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'proxy'}`}>
+                <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
+                <span className="text-xs text-green-400 hidden sm:inline">
+                  {AGENT_MODE === 'local' ? 'Local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'Remoto'}
+                </span>
+              </div>
+            )}
+          </div>
           {authUser && (
             <button
               onClick={() => { localStorage.removeItem('auth_token'); localStorage.removeItem('auth_user'); setAuthUser(null) }}
