@@ -5092,15 +5092,19 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
       const startAudio = (url) => {
         if (audioRef?.current) { audioRef.current.pause() }
+        if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
         const a = new Audio(url)
         a.volume = vol
         audioRef.current = a
         setPlayingFile(`discover-preview-${current}`)
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
-        a.play().catch(() => { current++; playNext() })
-        previewIntervalRef.current = setTimeout(() => { a.pause(); current++; playNext() }, 30000)
         a.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
+        a.onerror = () => { current++; playNext() }
+        a.play().then(() => {
+          // Only set timeout after play actually starts
+          previewIntervalRef.current = setTimeout(() => { a.pause(); current++; playNext() }, 30000)
+        }).catch(() => { current++; playNext() })
       }
 
       // 1) Use track's own preview URL (Beatport sample_url or Spotify preview_url)
