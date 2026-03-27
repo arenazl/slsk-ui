@@ -134,10 +134,27 @@ function TrackRow({ track }) {
 }
 
 const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://slsk-backend-7da97b8a965d.herokuapp.com'
-const AGENT_BASE = 'http://localhost:9900'
+let AGENT_BASE = 'http://localhost:9900'
+let AGENT_MODE = 'local' // 'local' = direct, 'proxy' = through server
+let AGENT_USER = ''
+
+// Build agent API URL — direct or proxied through the server
+function agentUrl(path) {
+  if (AGENT_MODE === 'proxy') {
+    const sep = path.includes('?') ? '&' : '?'
+    return `${API_BASE}/api/agent/proxy/${path}${sep}u=${encodeURIComponent(AGENT_USER)}`
+  }
+  return `${AGENT_BASE}/api/${path}`
+}
 
 function getAudioUrl(file, useAgent) {
-  const base = useAgent ? AGENT_BASE + '/api/audio/' : API_BASE + '/audio/'
+  if (useAgent) {
+    const path = file.in_subfolder && file.subfolder
+      ? 'audio/' + encodeURIComponent(file.subfolder) + '/' + encodeURIComponent(file.filename)
+      : 'audio/' + encodeURIComponent(file.filename)
+    return agentUrl(path)
+  }
+  const base = API_BASE + '/audio/'
   if (file.in_subfolder && file.subfolder) {
     return base + encodeURIComponent(file.subfolder) + '/' + encodeURIComponent(file.filename)
   }
@@ -594,7 +611,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
       if (agentConnected) {
         // Fetch file list from agent (file info only)
-        const agentRes = await fetch(`${AGENT_BASE}/api/library`)
+        const agentRes = await fetch(agentUrl('library'))
         const agentFiles = await agentRes.json()
 
         // Merge: agent file info + Cloudinary metadata by filename
@@ -692,7 +709,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     try {
       // Delete from agent (local files)
       if (agentConnected) {
-        await fetch(`${AGENT_BASE}/api/delete`, {
+        await fetch(agentUrl('delete'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: file.filename }),
@@ -712,7 +729,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const downloadGenreZip = (genre) => {
     if (agentConnected) {
-      fetch(`${AGENT_BASE}/api/open-folder?folder=${encodeURIComponent(genre)}`)
+      fetch(agentUrl(`open-folder?folder=${encodeURIComponent(genre)}`))
     } else {
       window.open(`${API_BASE}/api/download-genre?genre=${encodeURIComponent(genre)}`, '_blank')
     }
@@ -720,7 +737,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const openFolder = async (folder) => {
     if (agentConnected) {
-      await fetch(`${AGENT_BASE}/api/open-folder?folder=${encodeURIComponent(folder || '')}`)
+      await fetch(agentUrl(`open-folder?folder=${encodeURIComponent(folder || '')}`))
     } else {
       await fetch(`${API_BASE}/api/open-folder`, {
         method: 'POST',
@@ -743,7 +760,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         const moves = Object.entries(metadata)
           .filter(([, info]) => info.genre)
           .map(([filename, info]) => ({ filename, genre: info.genre }))
-        await fetch(`${AGENT_BASE}/api/organize`, {
+        await fetch(agentUrl('organize'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ moves }),
@@ -760,7 +777,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const organizeAll = async () => {
     setOrganizing(true)
     try {
-      await fetch(`${AGENT_BASE}/api/organize`, {
+      await fetch(agentUrl('organize'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -784,11 +801,11 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
       // For each track, fetch audio from agent and send to Heroku for analysis
       // Heroku's detect-key endpoint now also updates Cloudinary manifest
-      const audioBase = agentConnected ? AGENT_BASE : API_BASE
       let detected = 0
       for (const fname of toDetect) {
         try {
-          const audioRes = await fetch(`${audioBase}/api/audio/${encodeURIComponent(fname)}`)
+          const audioUrl = agentConnected ? agentUrl(`audio/${encodeURIComponent(fname)}`) : `${API_BASE}/api/audio/${encodeURIComponent(fname)}`
+          const audioRes = await fetch(audioUrl)
           if (!audioRes.ok) continue
           const blob = await audioRes.blob()
           const form = new FormData()
@@ -814,7 +831,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     if (!confirm(`Borrar ${toDelete.length} duplicados? Se mantienen los de mejor rating/calidad.`)) return
     setDeletingDupes(true)
     try {
-      const res = await fetch(`${AGENT_BASE}/api/delete-dupes`, {
+      const res = await fetch(agentUrl('delete-dupes'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filenames: toDelete }),
@@ -837,7 +854,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     ))
     try {
       // Move file on agent
-      const res = await fetch(`${AGENT_BASE}/api/move-file`, {
+      const res = await fetch(agentUrl('move-file'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename, genre: newGenre }),
@@ -895,7 +912,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       const filesToExport = finalList.map(f => f.filename)
       const metadata = {}
       finalList.forEach(f => { metadata[f.filename] = { genre: f.genre, key: f.key, bpm: f.bpm, rating: f.rating, artist: f.artist, title: f.title } })
-      const res = await fetch(`${AGENT_BASE}/api/export`, {
+      const res = await fetch(agentUrl('export'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: exportName.trim(), files: filesToExport, include_tracks: exportWithTracks, metadata }),
@@ -1144,7 +1161,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 setShowDupes(true)
               } else {
                 const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
+                await fetch(agentUrl('delete-dupes'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                 fetchLibrary()
                 setShowDupes(false)
               }
@@ -1418,7 +1435,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               <button
                 onClick={async () => {
                   const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                  await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
+                  await fetch(agentUrl('delete-dupes'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                   fetchLibrary()
                   setShowDupes(false)
                 }}
@@ -1455,7 +1472,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         if (isBest) return
                         e.preventDefault()
                         if (confirm(`Borrar "${f.filename}"?`)) {
-                          fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
+                          fetch(agentUrl('delete-dupes'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             .then(() => fetchLibrary())
                         }
                       }}
@@ -1486,7 +1503,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       ) : (
                         <button
                           onClick={async () => {
-                            await fetch(`${AGENT_BASE}/api/delete-dupes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
+                            await fetch(agentUrl('delete-dupes'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             fetchLibrary()
                           }}
                           className="flex-shrink-0 px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded font-medium hover:bg-red-500/40 transition-all duration-200 active:scale-95 text-center"
@@ -1970,7 +1987,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     try {
       const metadata = {}
       setTracks.forEach(t => { metadata[t.filename] = { genre: t.genre, key: t.key, bpm: t.bpm, rating: t.rating, artist: t.artist, title: t.title } })
-      const res = await fetch(`${AGENT_BASE}/api/export`, {
+      const res = await fetch(agentUrl('export'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, files: setTracks.map(t => t.filename), include_tracks: exportWithTracks, metadata }),
@@ -2378,7 +2395,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     const path = track.subfolder
       ? `${encodeURIComponent(track.subfolder)}/${encodeURIComponent(track.filename)}`
       : encodeURIComponent(track.filename)
-    return `${AGENT_BASE}/api/audio/${path}`
+    return agentUrl(`audio/${path}`)
   }
 
   // Find which track should be playing at a given time
@@ -2589,7 +2606,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
           : encodeURIComponent(t.filename)
         try {
-          const res = await fetch(`${AGENT_BASE}/api/track-info/${path}`)
+          const res = await fetch(agentUrl(`track-info/${path}`))
           const info = await res.json()
           return {
             ...t,
@@ -2653,7 +2670,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
             ? `${encodeURIComponent(r.subfolder)}/${encodeURIComponent(r.filename)}`
             : encodeURIComponent(r.filename)
           try {
-            const res = await fetch(`${AGENT_BASE}/api/track-analysis/${path}`)
+            const res = await fetch(agentUrl(`track-analysis/${path}`))
             if (res.ok) return await res.json()
           } catch { /* ignore */ }
           return null
@@ -2979,7 +2996,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         format: exportFormat,
         bitrate: '320k',
       }
-      const res = await fetch(`${AGENT_BASE}/api/mix-export`, {
+      const res = await fetch(agentUrl('mix-export'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -3743,20 +3760,50 @@ function App() {
   const [agentVersion, setAgentVersion] = useState('')
   useEffect(() => {
     if (!authUser) return
+    AGENT_USER = authUser.name
+    const connectAgent = async (mode, statusUrl, configFn) => {
+      const res = await fetch(statusUrl, { signal: AbortSignal.timeout(3000) })
+      if (res.ok) {
+        AGENT_MODE = mode
+        const status = await res.json()
+        setAgentConnected(true); agentConnectedRef.current = true
+        setAgentVersion(status.version || '')
+        await configFn()
+        return true
+      }
+      return false
+    }
     const checkAgent = async () => {
+      const configBody = JSON.stringify({ username: authUser.name })
+      const configHeaders = { 'Content-Type': 'application/json' }
       try {
-        const res = await fetch(`${AGENT_BASE}/api/status`, { signal: AbortSignal.timeout(2000) })
-        if (res.ok) {
-          const status = await res.json()
-          setAgentConnected(true); agentConnectedRef.current = true
-          setAgentVersion(status.version || '')
-          await fetch(`${AGENT_BASE}/api/config`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: authUser.name })
-          })
+        // Try localhost first (desktop / same machine)
+        if (await connectAgent('local',
+          'http://localhost:9900/api/status',
+          () => fetch('http://localhost:9900/api/config', { method: 'POST', headers: configHeaders, body: configBody })
+        )) { AGENT_BASE = 'http://localhost:9900'; return }
+      } catch { /* localhost failed */ }
+      try {
+        // Ask server for agent's public host (Tailscale Funnel HTTPS or LAN IP)
+        const lookupRes = await fetch(`${API_BASE}/api/agent/lookup?username=${encodeURIComponent(authUser.name)}`, { signal: AbortSignal.timeout(3000) })
+        const lookupData = await lookupRes.json()
+        if (lookupData.agent_host) {
+          // If agent has HTTPS URL (Tailscale Funnel), connect directly — no mixed content
+          if (lookupData.agent_host.startsWith('https://')) {
+            if (await connectAgent('local',
+              `${lookupData.agent_host}/api/status`,
+              () => fetch(`${lookupData.agent_host}/api/config`, { method: 'POST', headers: configHeaders, body: configBody })
+            )) { AGENT_BASE = lookupData.agent_host; return }
+          }
+          // Otherwise use server proxy (avoids mixed content for HTTP agents)
+          const proxyStatus = `${API_BASE}/api/agent/proxy/status?u=${encodeURIComponent(authUser.name)}`
+          if (await connectAgent('proxy',
+            proxyStatus,
+            () => fetch(agentUrl('config'), { method: 'POST', headers: configHeaders, body: configBody })
+          )) return
         }
-      } catch { setAgentConnected(false); agentConnectedRef.current = false }
+      } catch { /* remote also failed */ }
+      setAgentConnected(false); agentConnectedRef.current = false
     }
     checkAgent()
     const interval = setInterval(checkAgent, 30000)
@@ -3839,7 +3886,7 @@ function App() {
                 form.append('filename', data.track.filename)
                 form.append('genre', data.track.genre || '')
                 form.append('metadata', JSON.stringify({ title: data.track.title || '', artist: data.track.artist || '', genre: data.track.genre || '', key: data.track.key || '', rating: data.track.rating }))
-                return fetch(`${AGENT_BASE}/api/save-file`, { method: 'POST', body: form })
+                return fetch(agentUrl('save-file'), { method: 'POST', body: form })
               })
               .then(r => { console.log('Agent save-file response:', r.status); return r.json() })
               .then(d => { console.log('Agent saved:', d); libraryRef.current?.refresh() })
@@ -3891,7 +3938,7 @@ function App() {
               const form = new FormData()
               form.append('file', blob, data.filename)
               form.append('filename', data.filename)
-              return fetch(`${AGENT_BASE}/api/save-file`, { method: 'POST', body: form })
+              return fetch(agentUrl('save-file'), { method: 'POST', body: form })
             })
             .then(r => { console.log('Agent save-file response:', r.status); return r.json() })
             .then(d => { console.log('Agent saved:', d); libraryRef.current?.refresh() })
@@ -4494,7 +4541,7 @@ function App() {
                       title="Reiniciar Agente"
                       onClick={async () => {
                         try {
-                          const res = await fetch(`${AGENT_BASE}/api/restart`, { method: 'POST' })
+                          const res = await fetch(agentUrl('restart'), { method: 'POST' })
                           if (res.ok) toast('Reiniciando agente...', 'info')
                         } catch {}
                         toast('Agente reiniciándose...', 'info')
@@ -4725,21 +4772,50 @@ function App() {
               </button>
               {pendingExpanded && (
                 <div className="px-3 md:px-4 pb-3 space-y-1">
-                  {pendingTracks.map((t, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg bg-[var(--bg-input)] text-xs">
-                      <span className="truncate min-w-0 text-[var(--text-primary)]">{t.artist} - {t.title}</span>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => { setDlSearch(`${t.artist} - ${t.title}`); handleSearchSlsk() }}
-                          className="px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-80 transition-opacity"
-                        >Buscar</button>
-                        <button
-                          onClick={() => removeFromPending(idx)}
-                          className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-                        >✕</button>
+                  <button
+                    onClick={() => {
+                      if (!wsRef.current || wsRef.current.readyState !== 1 || !username || !password) return
+                      pendingTracks.forEach((t, i) => {
+                        setTimeout(() => {
+                          const query = `${t.artist} - ${t.title}`
+                          setDlSearch(query)
+                          setSearchResults([])
+                          setSearchStatus('connecting')
+                          setSearchDlStatus({})
+                          wsRef.current.send(JSON.stringify({ type: 'search_slsk', query, username, password }))
+                        }, i * 500)
+                      })
+                    }}
+                    disabled={!connected}
+                    className="w-full py-1.5 rounded-lg bg-yellow-500/20 text-yellow-400 text-xs font-semibold hover:bg-yellow-500/30 disabled:opacity-40 transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    Reintentar todos
+                  </button>
+                  <div className="max-h-64 overflow-y-auto space-y-1 overscroll-contain">
+                    {pendingTracks.map((t, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg bg-[var(--bg-input)] text-xs">
+                        <span className="truncate min-w-0 text-[var(--text-primary)]">{t.artist} - {t.title}</span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => {
+                              const query = `${t.artist} - ${t.title}`
+                              setDlSearch(query)
+                              setSearchResults([])
+                              setSearchStatus('connecting')
+                              setSearchDlStatus({})
+                              wsRef.current?.send(JSON.stringify({ type: 'search_slsk', query, username, password }))
+                            }}
+                            className="px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-80 transition-opacity"
+                          >Buscar</button>
+                          <button
+                            onClick={() => removeFromPending(idx)}
+                            className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                          >✕</button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                   <button
                     onClick={() => savePending([])}
                     className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-1"
@@ -5471,7 +5547,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       if (agentConnected) {
                         try {
                           toast('Scrapeando Beatport...', 'warning', 5000)
-                          await fetch(`${AGENT_BASE}/api/refresh-charts`, { method: 'POST' })
+                          await fetch(agentUrl('refresh-charts'), { method: 'POST' })
                           toast('Charts actualizados')
                         } catch { toast('Error al scrapear', 'error') }
                       }
