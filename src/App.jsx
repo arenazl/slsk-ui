@@ -5340,8 +5340,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }
 
   const searchAndDownload = (track) => {
-    if (!wsRef?.current || wsRef.current.readyState !== 1 || !username || !password) {
-      setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: 'No conectado a SoulSeek' } }))
+    // Mobile: no SoulSeek available, send to pending queue for later download on desktop
+    const isMobile = window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    if (isMobile || !wsRef?.current || wsRef.current.readyState !== 1 || !username || !password) {
+      addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
+      setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Agregado a pendientes' } }))
       return
     }
     const query = `${track.artist} - ${track.title}`.replace(/[()[\]{}]/g, '')
@@ -5713,10 +5716,15 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                         className="flex-shrink-0 flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 opacity-60 group-hover:opacity-100"
                         style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {/* Mobile: bookmark icon (adds to pending), Desktop: download icon */}
+                        <svg className="w-3.5 h-3.5 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <svg className="w-3.5 h-3.5 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
-                        <span className="hidden sm:inline">Descargar</span>
+                        <span className="hidden sm:inline md:hidden">Pendiente</span>
+                        <span className="hidden md:inline">Descargar</span>
                       </button>
                     )
                     if (dl.status === 'searching') return (
@@ -5732,11 +5740,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       </span>
                     )
                     if (dl.status === 'done') return (
-                      <span className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-green-400 bg-green-500/10">
+                      <span className={`flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs ${dl.message === 'Agregado a pendientes' ? 'text-yellow-400 bg-yellow-500/10' : 'text-green-400 bg-green-500/10'}`}>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={dl.message === 'Agregado a pendientes' ? 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' : 'M5 13l4 4L19 7'} />
                         </svg>
-                        <span className="hidden sm:inline">Listo</span>
+                        <span className="hidden sm:inline">{dl.message === 'Agregado a pendientes' ? 'Pendiente' : 'Listo'}</span>
                       </span>
                     )
                     if (dl.status === 'not_found') return (
@@ -5967,10 +5975,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           <div className="py-2 px-2">
             <button onClick={() => { searchAndDownload(discoverCtx.track); setDiscoverCtx(null) }}
               className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
-              <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 flex items-center justify-center">
-                <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              <div className="w-8 h-8 rounded-full bg-yellow-500/15 flex items-center justify-center">
+                <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </div>
-              Descargar
+              Agregar a pendientes
             </button>
             <button onClick={() => { playPreview(discoverCtx.track); setDiscoverCtx(null) }}
               className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
