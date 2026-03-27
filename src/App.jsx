@@ -147,6 +147,23 @@ function agentUrl(path) {
   return `${AGENT_BASE}/api/${path}`
 }
 
+// Fetch wrapper for agent calls — emits toast on errors/timeouts
+async function agentFetch(path, opts = {}) {
+  const url = typeof path === 'string' && !path.startsWith('http') ? agentUrl(path) : path
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(30000), ...opts })
+    if (!res.ok) {
+      const msg = await res.text().catch(() => res.statusText)
+      window.dispatchEvent(new CustomEvent('agent-error', { detail: `Agent ${res.status}: ${msg.slice(0, 120)}` }))
+    }
+    return res
+  } catch (e) {
+    const msg = e.name === 'TimeoutError' ? 'Agent timeout' : `Agent error: ${e.message}`
+    window.dispatchEvent(new CustomEvent('agent-error', { detail: msg }))
+    throw e
+  }
+}
+
 function getAudioUrl(file, useAgent) {
   if (useAgent) {
     const path = file.in_subfolder && file.subfolder
@@ -611,7 +628,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
       if (agentConnected) {
         // Fetch file list from agent (file info only)
-        const agentRes = await fetch(agentUrl('library'))
+        const agentRes = await agentFetch('library')
         const agentFiles = await agentRes.json()
 
         // Merge: agent file info + Cloudinary metadata by filename
@@ -709,7 +726,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     try {
       // Delete from agent (local files)
       if (agentConnected) {
-        await fetch(agentUrl('delete'), {
+        await agentFetch('delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: file.filename }),
@@ -729,7 +746,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const downloadGenreZip = (genre) => {
     if (agentConnected) {
-      fetch(agentUrl(`open-folder?folder=${encodeURIComponent(genre)}`))
+      agentFetch(`open-folder?folder=${encodeURIComponent(genre)}`)
     } else {
       window.open(`${API_BASE}/api/download-genre?genre=${encodeURIComponent(genre)}`, '_blank')
     }
@@ -737,7 +754,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const openFolder = async (folder) => {
     if (agentConnected) {
-      await fetch(agentUrl(`open-folder?folder=${encodeURIComponent(folder || '')}`))
+      await agentFetch(`open-folder?folder=${encodeURIComponent(folder || '')}`)
     } else {
       await fetch(`${API_BASE}/api/open-folder`, {
         method: 'POST',
@@ -760,7 +777,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         const moves = Object.entries(metadata)
           .filter(([, info]) => info.genre)
           .map(([filename, info]) => ({ filename, genre: info.genre }))
-        await fetch(agentUrl('organize'), {
+        await agentFetch('organize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ moves }),
@@ -777,7 +794,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const organizeAll = async () => {
     setOrganizing(true)
     try {
-      await fetch(agentUrl('organize'), {
+      await agentFetch('organize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -831,7 +848,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     if (!confirm(`Borrar ${toDelete.length} duplicados? Se mantienen los de mejor rating/calidad.`)) return
     setDeletingDupes(true)
     try {
-      const res = await fetch(agentUrl('delete-dupes'), {
+      const res = await agentFetch('delete-dupes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filenames: toDelete }),
@@ -854,7 +871,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     ))
     try {
       // Move file on agent
-      const res = await fetch(agentUrl('move-file'), {
+      const res = await agentFetch('move-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.filename, genre: newGenre }),
@@ -912,7 +929,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       const filesToExport = finalList.map(f => f.filename)
       const metadata = {}
       finalList.forEach(f => { metadata[f.filename] = { genre: f.genre, key: f.key, bpm: f.bpm, rating: f.rating, artist: f.artist, title: f.title } })
-      const res = await fetch(agentUrl('export'), {
+      const res = await agentFetch('export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: exportName.trim(), files: filesToExport, include_tracks: exportWithTracks, metadata }),
@@ -1161,7 +1178,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 setShowDupes(true)
               } else {
                 const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                await fetch(agentUrl('delete-dupes'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
+                await agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                 fetchLibrary()
                 setShowDupes(false)
               }
@@ -1435,7 +1452,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               <button
                 onClick={async () => {
                   const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                  await fetch(agentUrl('delete-dupes'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
+                  await agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
                   fetchLibrary()
                   setShowDupes(false)
                 }}
@@ -1472,7 +1489,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         if (isBest) return
                         e.preventDefault()
                         if (confirm(`Borrar "${f.filename}"?`)) {
-                          fetch(agentUrl('delete-dupes'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
+                          agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             .then(() => fetchLibrary())
                         }
                       }}
@@ -1503,7 +1520,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       ) : (
                         <button
                           onClick={async () => {
-                            await fetch(agentUrl('delete-dupes'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
+                            await agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             fetchLibrary()
                           }}
                           className="flex-shrink-0 px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded font-medium hover:bg-red-500/40 transition-all duration-200 active:scale-95 text-center"
@@ -1987,7 +2004,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     try {
       const metadata = {}
       setTracks.forEach(t => { metadata[t.filename] = { genre: t.genre, key: t.key, bpm: t.bpm, rating: t.rating, artist: t.artist, title: t.title } })
-      const res = await fetch(agentUrl('export'), {
+      const res = await agentFetch('export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, files: setTracks.map(t => t.filename), include_tracks: exportWithTracks, metadata }),
@@ -2606,7 +2623,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
           ? `${encodeURIComponent(t.subfolder)}/${encodeURIComponent(t.filename)}`
           : encodeURIComponent(t.filename)
         try {
-          const res = await fetch(agentUrl(`track-info/${path}`))
+          const res = await agentFetch(`track-info/${path}`)
           const info = await res.json()
           return {
             ...t,
@@ -2670,7 +2687,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
             ? `${encodeURIComponent(r.subfolder)}/${encodeURIComponent(r.filename)}`
             : encodeURIComponent(r.filename)
           try {
-            const res = await fetch(agentUrl(`track-analysis/${path}`))
+            const res = await agentFetch(`track-analysis/${path}`)
             if (res.ok) return await res.json()
           } catch { /* ignore */ }
           return null
@@ -2996,7 +3013,7 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         format: exportFormat,
         bitrate: '320k',
       }
-      const res = await fetch(agentUrl('mix-export'), {
+      const res = await agentFetch('mix-export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -3706,6 +3723,11 @@ function LoginScreen({ onLogin }) {
 
 function App() {
   const toast = useToast()
+  useEffect(() => {
+    const handler = (e) => toast(e.detail, 'error', 4000)
+    window.addEventListener('agent-error', handler)
+    return () => window.removeEventListener('agent-error', handler)
+  }, [toast])
   const [authUser, setAuthUser] = useState(() => {
     const saved = localStorage.getItem('auth_user')
     return saved ? JSON.parse(saved) : null
@@ -3799,7 +3821,7 @@ function App() {
           const proxyStatus = `${API_BASE}/api/agent/proxy/status?u=${encodeURIComponent(authUser.name)}`
           if (await connectAgent('proxy',
             proxyStatus,
-            () => fetch(agentUrl('config'), { method: 'POST', headers: configHeaders, body: configBody })
+            () => agentFetch('config', { method: 'POST', headers: configHeaders, body: configBody })
           )) return
         }
       } catch { /* remote also failed */ }
@@ -3886,7 +3908,7 @@ function App() {
                 form.append('filename', data.track.filename)
                 form.append('genre', data.track.genre || '')
                 form.append('metadata', JSON.stringify({ title: data.track.title || '', artist: data.track.artist || '', genre: data.track.genre || '', key: data.track.key || '', rating: data.track.rating }))
-                return fetch(agentUrl('save-file'), { method: 'POST', body: form })
+                return agentFetch('save-file', { method: 'POST', body: form })
               })
               .then(r => { console.log('Agent save-file response:', r.status); return r.json() })
               .then(d => { console.log('Agent saved:', d); libraryRef.current?.refresh() })
@@ -3938,7 +3960,7 @@ function App() {
               const form = new FormData()
               form.append('file', blob, data.filename)
               form.append('filename', data.filename)
-              return fetch(agentUrl('save-file'), { method: 'POST', body: form })
+              return agentFetch('save-file', { method: 'POST', body: form })
             })
             .then(r => { console.log('Agent save-file response:', r.status); return r.json() })
             .then(d => { console.log('Agent saved:', d); libraryRef.current?.refresh() })
@@ -4551,7 +4573,7 @@ function App() {
                       title="Reiniciar Agente"
                       onClick={async () => {
                         try {
-                          const res = await fetch(agentUrl('restart'), { method: 'POST' })
+                          const res = await agentFetch('restart', { method: 'POST' })
                           if (res.ok) toast('Reiniciando agente...', 'info')
                         } catch {}
                         toast('Agente reiniciándose...', 'info')
@@ -5557,7 +5579,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       if (agentConnected) {
                         try {
                           toast('Scrapeando Beatport...', 'warning', 5000)
-                          await fetch(agentUrl('refresh-charts'), { method: 'POST' })
+                          await agentFetch('refresh-charts', { method: 'POST' })
                           toast('Charts actualizados')
                         } catch { toast('Error al scrapear', 'error') }
                       }
