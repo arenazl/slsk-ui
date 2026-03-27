@@ -5094,22 +5094,35 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     const playNext = async () => {
       if (current >= playlist.length) return
       const t = playlist[current]
+      const vol = audioRef?.current?.volume ?? 0.8
+
+      const startAudio = (url) => {
+        if (audioRef?.current) { audioRef.current.pause() }
+        const a = new Audio(url)
+        a.volume = vol
+        audioRef.current = a
+        setPlayingFile(`discover-preview-${current}`)
+        setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
+        setIsAudioPlaying(true)
+        a.play().catch(() => { current++; playNext() })
+        previewIntervalRef.current = setTimeout(() => { a.pause(); current++; playNext() }, 30000)
+        a.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
+      }
+
+      // 1) Use track's own preview URL (Beatport sample_url or Spotify preview_url)
+      const directUrl = t.sample_url || t.preview_url
+      if (directUrl) {
+        startAudio(directUrl)
+        return
+      }
+
+      // 2) Fallback: search iTunes
       const query = `${t.artist} ${t.title}`.trim()
       try {
         const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=1`)
         const data = await res.json()
         if (data.results?.[0]?.previewUrl) {
-          if (audioRef?.current) { audioRef.current.pause() }
-          const a = new Audio(data.results[0].previewUrl)
-          a.volume = audioRef?.current?.volume ?? 0.8
-          audioRef.current = a
-          setPlayingFile(`discover-preview-${current}`)
-          setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
-          setIsAudioPlaying(true)
-          a.play()
-          // After 30s, go to next
-          previewIntervalRef.current = setTimeout(() => { a.pause(); current++; playNext() }, 30000)
-          a.onended = () => { current++; playNext() }
+          startAudio(data.results[0].previewUrl)
         } else {
           current++; playNext()
         }
