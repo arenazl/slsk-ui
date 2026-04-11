@@ -4842,22 +4842,27 @@ function App() {
                   <button
                     onClick={() => {
                       if (!wsRef.current || wsRef.current.readyState !== 1 || !username || !password) return
-                      pendingTracks.forEach((t, i) => {
-                        setTimeout(() => {
-                          const query = `${t.artist} - ${t.title}`
-                          setDlSearch(query)
-                          setSearchResults([])
-                          setSearchStatus('connecting')
-                          setSearchDlStatus({})
-                          wsRef.current.send(JSON.stringify({ type: 'search_slsk', query, username, password }))
-                        }, i * 500)
-                      })
+                      // Use batch download flow: send all pending tracks as a single job
+                      const tracksText = pendingTracks.map(t => `${t.artist} - ${t.title}`).join('\n')
+                      setSearchResults(null) // Hide search results view so track list is visible
+                      setDlSearch('')
+                      setSummary(null)
+                      setLogs([])
+                      wsRef.current.send(JSON.stringify({
+                        type: 'start',
+                        tracks_text: tracksText,
+                        username,
+                        password,
+                        genre: '',
+                        app_user: authUser?.name || '',
+                      }))
+                      setPendingExpanded(false)
                     }}
                     disabled={!connected}
                     className="w-full py-1.5 rounded-lg bg-yellow-500/20 text-yellow-400 text-xs font-semibold hover:bg-yellow-500/30 disabled:opacity-40 transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    Reintentar todos
+                    Reintentar todos ({pendingTracks.length})
                   </button>
                   <div className="max-h-64 overflow-y-auto space-y-1 overscroll-contain">
                     {pendingTracks.map((t, idx) => (
