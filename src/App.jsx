@@ -5323,45 +5323,56 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }, [wsRef?.current])
 
   const isInLibrary = useMemo(() => {
-    // Normalize: lowercase, strip parens content like (Extended Mix), remove non-alphanumeric
-    const norm = (s) => (s || '').toLowerCase()
-      .replace(/\(.*?\)/g, '')  // remove (Extended Mix), (Original Mix), etc
-      .replace(/\[.*?\]/g, '')  // remove [brackets]
-      .replace(/\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i, '') // remove extension
-      .replace(/^\d+[\s.\-]+/, '') // remove leading track numbers
-      .replace(/[^a-z0-9]/g, '') // only alphanumeric
+    // Normalize: strip accents, parens, featuring, mix names, extensions, non-alphanumeric
+    const norm = (s) => (s || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')      // strip accents
+      .toLowerCase()
+      .replace(/\(.*?\)/g, ' ')                               // remove (Extended Mix), etc
+      .replace(/\[.*?\]/g, ' ')                               // remove [brackets]
+      .replace(/\b(feat\.?|featuring|ft\.?|with)\s+[^-,]*/gi, ' ') // remove "feat. ..."
+      .replace(/\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i, '')     // remove extension
+      .replace(/^\d+[\s.\-]+/, '')                            // remove leading track numbers
+      .replace(/[^a-z0-9]/g, '')                              // only alphanumeric
       .trim()
 
-    // Build multiple indexes for fuzzy matching
-    const titleWords = new Set()  // individual normalized titles
-    const artistTitle = new Set() // "artist|title" combos
-    const filenames = new Set()   // normalized filenames
+    // Tokenized version (for word-overlap fuzzy match): returns array of words ≥3 chars
+    const tokens = (s) => (s || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\(.*?\)/g, ' ')
+      .replace(/\[.*?\]/g, ' ')
+      .replace(/\b(feat\.?|featuring|ft\.?|with)\s+[^-,]*/gi, ' ')
+      .replace(/\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 3 && !['the','and','feat','mix','ext','org','original','extended','edit','remix','club','radio','vocal','version'].includes(w))
+
+    // Build indexes
+    const titleWords = new Set()    // individual normalized titles
+    const artistTitle = new Set()   // "artist|title" combos
+    const filenames = []            // [{full, tokens}] for fuzzy search
 
     for (const [filename, meta] of Object.entries(libraryManifest)) {
       const fn = norm(filename)
-      if (fn) filenames.add(fn)
+      const fnTokens = tokens(filename)
+      if (fn) filenames.push({ full: fn, tokens: new Set(fnTokens) })
 
       const artist = norm(meta.artist || '')
       const title = norm(meta.title || '')
       if (title) titleWords.add(title)
       if (artist && title) artistTitle.add(`${artist}|${title}`)
 
-      // Also extract artist-title from filename pattern "Artist - Title"
-      // Handle multi-dash filenames like "2026 - 04 - Artist - Title" by splitting
-      // on FIRST dash and last dash to cover both forms.
+      // Extract artist/title from filename split on dashes
       const base = filename.replace(/\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i, '')
-      const firstSplit = base.split(/\s*-\s*/)
-      if (firstSplit.length >= 2) {
-        // Pattern: "Artist - Title" (split on first dash)
-        const fnArtist = norm(firstSplit[0])
-        const fnTitle = norm(firstSplit.slice(1).join(' '))
+      const parts = base.split(/\s*-\s*/)
+      if (parts.length >= 2) {
+        const fnArtist = norm(parts[0])
+        const fnTitle = norm(parts.slice(1).join(' '))
         if (fnArtist && fnTitle) artistTitle.add(`${fnArtist}|${fnTitle}`)
         if (fnTitle) titleWords.add(fnTitle)
-
-        // Pattern: "... - Artist - Title" (split on last dash)
-        if (firstSplit.length >= 3) {
-          const lastArtist = norm(firstSplit[firstSplit.length - 2])
-          const lastTitle = norm(firstSplit[firstSplit.length - 1])
+        if (parts.length >= 3) {
+          const lastArtist = norm(parts[parts.length - 2])
+          const lastTitle = norm(parts[parts.length - 1])
           if (lastArtist && lastTitle) artistTitle.add(`${lastArtist}|${lastTitle}`)
           if (lastTitle) titleWords.add(lastTitle)
         }
@@ -5371,17 +5382,23 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     return (track) => {
       const a = norm(track.artist || '')
       const t = norm(track.title || '')
-      // Exact artist+title match
-      if (a && t && artistTitle.has(`${a}|${t}`)) return true
-      // Title-only match
-      if (t && titleWords.has(t)) return true
-      // Check if track title+artist appears in any filename
-      const combined = a + t
-      if (combined && filenames.has(combined)) return true
-      // Check if any filename contains the title
-      if (t && t.length > 5) {
-        for (const fn of filenames) {
-          if (fn.includes(t)) return true
+      if (!t) return false
+
+      // 1) Exact artist+title
+      if (a && artistTitle.has(`${a}|${t}`)) return true
+      // 2) Title-only exact
+      if (titleWords.has(t)) return true
+      // 3) artist+title concatenated matches any full filename
+      if (a && filenames.some(f => f.full === a + t || f.full.includes(a + t))) return true
+      // 4) Substring: title of length ≥ 4 appearing inside any filename
+      if (t.length >= 4 && filenames.some(f => f.full.includes(t))) return true
+      // 5) Token overlap: title+artist words with ≥ 70% matching any filename tokens
+      const trackTokens = [...tokens(track.artist || ''), ...tokens(track.title || '')]
+      if (trackTokens.length >= 2) {
+        const needed = Math.max(2, Math.ceil(trackTokens.length * 0.7))
+        for (const f of filenames) {
+          const matches = trackTokens.filter(w => f.tokens.has(w)).length
+          if (matches >= needed) return true
         }
       }
       return false
@@ -6123,6 +6140,15 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                   {/* Action button */}
                   {(() => {
                     const dl = downloadQueue[t.id]
+                    const alreadyInLibrary = !dl && isInLibrary(t)
+                    if (alreadyInLibrary) return (
+                      <span className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-green-400 bg-green-500/10 border border-green-500/20">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="hidden sm:inline">Descargado</span>
+                      </span>
+                    )
                     if (!dl) return (
                       <button
                         onClick={() => searchAndDownload(t)}
