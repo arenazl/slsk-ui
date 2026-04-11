@@ -3976,6 +3976,27 @@ function App() {
           queue: data.queue, source: data.source, wait_secs: data.wait_secs,
           timeout_secs: data.timeout_secs, source_idx: data.source_idx, source_total: data.source_total,
         }}))
+        // When a single download finishes, drop the matching pending entry (logged on click in Discover)
+        if (data.status === 'completed' && data.filename) {
+          const fnameLower = data.filename.toLowerCase()
+          setPendingTracks(prev => {
+            const updated = prev.filter(p => {
+              const artist = (p.artist || '').toLowerCase()
+              const title = (p.title || '').toLowerCase()
+              // Match if filename contains both artist and title (loose match — filenames vary)
+              if (!artist || !title) return true
+              return !(fnameLower.includes(artist.slice(0, 10)) && fnameLower.includes(title.slice(0, 10)))
+            })
+            if (updated.length !== prev.length) {
+              fetch(`${API_BASE}/api/pending`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: username, tracks: updated }),
+              }).catch(() => {})
+            }
+            return updated
+          })
+        }
         if (data.status === 'completed' && data.filename && agentConnectedRef.current) {
           console.log('Transferring search file to agent:', data.filename)
           fetch(`${API_BASE}/audio/${encodeURIComponent(data.filename)}`)
@@ -5596,10 +5617,14 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }
 
   const searchAndDownload = (track) => {
+    // Always log the click in Discover to pending so we have a persistent record
+    // for later cross-reference in Descargas. Removed automatically when the track
+    // actually completes (see search_dl_status handler).
+    addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
+
     // Mobile: no SoulSeek available, send to pending queue for later download on desktop
     const isMobile = window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
     if (isMobile || !wsRef?.current || wsRef.current.readyState !== 1 || !username || !password) {
-      addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Agregado a pendientes' } }))
       return
     }
