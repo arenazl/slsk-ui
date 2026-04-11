@@ -4871,15 +4871,23 @@ function App() {
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <button
                             onClick={() => {
-                              const query = `${t.artist} - ${t.title}`
-                              setDlSearch(query)
-                              setSearchResults([])
-                              setSearchStatus('connecting')
-                              setSearchDlStatus({})
-                              wsRef.current?.send(JSON.stringify({ type: 'search_slsk', query, username, password }))
+                              // Batch flow with single track: auto-picks best source
+                              if (!wsRef.current || wsRef.current.readyState !== 1) return
+                              setSearchResults(null)
+                              setDlSearch('')
+                              setSummary(null)
+                              setLogs([])
+                              wsRef.current.send(JSON.stringify({
+                                type: 'start',
+                                tracks_text: `${t.artist} - ${t.title}`,
+                                username, password,
+                                genre: '',
+                                app_user: authUser?.name || '',
+                              }))
+                              setPendingExpanded(false)
                             }}
                             className="px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-80 transition-opacity"
-                          >Buscar</button>
+                          >Bajar</button>
                           <button
                             onClick={() => removeFromPending(idx)}
                             className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
