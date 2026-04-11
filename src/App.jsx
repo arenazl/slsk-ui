@@ -5474,6 +5474,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const radioTracksRef = useRef([])
 
   const loadRadio = (track) => {
+    if (!track) return
     setDiscoverCtx(null)
     setRadioLoading(true)
     setRadioTracks([])
@@ -5482,7 +5483,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     setRadioSource('radio')
 
     const ws = wsRef?.current
-    if (!ws || ws.readyState !== 1) return
+    if (!ws || ws.readyState !== 1) {
+      toast('Conexión no disponible — recargá la página', 'error', 5000)
+      setRadioLoading(false)
+      setRadioTracks(null)  // hide the radio view
+      return
+    }
+    toast(`Radio: buscando similar a ${track.artist} - ${track.title}`, 'info', 3000)
 
     // Remove previous listener
     if (radioListenerRef.current) {
