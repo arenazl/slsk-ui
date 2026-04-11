@@ -5264,6 +5264,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   // Library manifest for marking already-downloaded tracks
   const [libraryManifest, setLibraryManifest] = useState({})
+  const loadLibraryRef = useRef(null)
+
   useEffect(() => {
     // Merge Cloudinary metadata with agent's actual filesystem library
     const loadLibrary = async () => {
@@ -5271,6 +5273,15 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       try {
         const meta = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
         if (meta && typeof meta === 'object') Object.assign(merged, meta)
+      } catch {}
+      try {
+        // Also pull from /api/library (the source-of-truth manifest on Heroku)
+        const lib = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
+        const libTracks = Array.isArray(lib) ? lib : (lib?.tracks || [])
+        for (const t of libTracks) {
+          const fname = t.filename || t.original_name
+          if (fname && !merged[fname]) merged[fname] = { title: t.title || '', artist: t.artist || '', genre: t.genre || '' }
+        }
       } catch {}
       if (agentConnected) {
         try {
@@ -5286,8 +5297,28 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       }
       setLibraryManifest(merged)
     }
+    loadLibraryRef.current = loadLibrary
     loadLibrary()
   }, [authUser, collection, agentConnected])
+
+  // Refresh library manifest whenever any download completes (global WS listener).
+  // Avoids stale marks after batch downloads — the per-track handler in
+  // searchAndDownload only fires for the track it was registered for.
+  useEffect(() => {
+    const ws = wsRef?.current
+    if (!ws) return
+    const handler = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if ((data.type === 'search_dl_status' && data.status === 'completed') ||
+            (data.type === 'track_update' && data.track?.status === 'completed')) {
+          loadLibraryRef.current?.()
+        }
+      } catch {}
+    }
+    ws.addEventListener('message', handler)
+    return () => ws.removeEventListener('message', handler)
+  }, [wsRef?.current])
 
   const isInLibrary = useMemo(() => {
     // Normalize: lowercase, strip parens content like (Extended Mix), remove non-alphanumeric
@@ -5314,12 +5345,24 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       if (artist && title) artistTitle.add(`${artist}|${title}`)
 
       // Also extract artist-title from filename pattern "Artist - Title"
-      const parts = filename.replace(/\.(flac|mp3|wav|m4a)$/i, '').split(/\s*-\s*/)
-      if (parts.length >= 2) {
-        const fnArtist = norm(parts[0])
-        const fnTitle = norm(parts.slice(1).join(''))
+      // Handle multi-dash filenames like "2026 - 04 - Artist - Title" by splitting
+      // on FIRST dash and last dash to cover both forms.
+      const base = filename.replace(/\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i, '')
+      const firstSplit = base.split(/\s*-\s*/)
+      if (firstSplit.length >= 2) {
+        // Pattern: "Artist - Title" (split on first dash)
+        const fnArtist = norm(firstSplit[0])
+        const fnTitle = norm(firstSplit.slice(1).join(' '))
         if (fnArtist && fnTitle) artistTitle.add(`${fnArtist}|${fnTitle}`)
         if (fnTitle) titleWords.add(fnTitle)
+
+        // Pattern: "... - Artist - Title" (split on last dash)
+        if (firstSplit.length >= 3) {
+          const lastArtist = norm(firstSplit[firstSplit.length - 2])
+          const lastTitle = norm(firstSplit[firstSplit.length - 1])
+          if (lastArtist && lastTitle) artistTitle.add(`${lastArtist}|${lastTitle}`)
+          if (lastTitle) titleWords.add(lastTitle)
+        }
       }
     }
 
