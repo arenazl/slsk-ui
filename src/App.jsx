@@ -5237,8 +5237,29 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Library manifest for marking already-downloaded tracks
   const [libraryManifest, setLibraryManifest] = useState({})
   useEffect(() => {
-    fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
-  }, [authUser, collection])
+    // Merge Cloudinary metadata with agent's actual filesystem library
+    const loadLibrary = async () => {
+      const merged = {}
+      try {
+        const meta = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
+        if (meta && typeof meta === 'object') Object.assign(merged, meta)
+      } catch {}
+      if (agentConnected) {
+        try {
+          const agentRes = await agentFetch('library')
+          const agentFiles = await agentRes.json()
+          if (Array.isArray(agentFiles)) {
+            for (const f of agentFiles) {
+              // Use filename as key; merge with existing metadata if present
+              if (!merged[f.filename]) merged[f.filename] = { title: '', artist: '', genre: f.subfolder || '' }
+            }
+          }
+        } catch {}
+      }
+      setLibraryManifest(merged)
+    }
+    loadLibrary()
+  }, [authUser, collection, agentConnected])
 
   const isInLibrary = useMemo(() => {
     // Normalize: lowercase, strip parens content like (Extended Mix), remove non-alphanumeric
