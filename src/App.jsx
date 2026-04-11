@@ -3895,6 +3895,22 @@ function App() {
 
       if (data.type === 'track_update') {
         setTracks(prev => prev.map(t => t.id === data.track.id ? data.track : t))
+        // Remove from pending list if successfully downloaded or already in library
+        if (data.track.status === 'completed' || data.track.status === 'skipped') {
+          setPendingTracks(prev => {
+            const artist = (data.track.artist || '').toLowerCase()
+            const title = (data.track.title || '').toLowerCase()
+            const updated = prev.filter(p => !((p.artist || '').toLowerCase() === artist && (p.title || '').toLowerCase() === title))
+            if (updated.length !== prev.length) {
+              fetch(`${API_BASE}/api/pending`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: username, tracks: updated }),
+              }).catch(() => {})
+            }
+            return updated
+          })
+        }
         if (data.track.status === 'completed' && data.track.filename) {
           // Transfer file from Heroku to local agent
           if (agentConnectedRef.current) {
@@ -3972,14 +3988,38 @@ function App() {
     }
   }, [])
 
-  // Load pending tracks from Cloudinary on mount
+  // Load pending tracks from Cloudinary on mount, filter out ones already in library
   useEffect(() => {
-    if (!username) return
-    fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(username)}`)
-      .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setPendingTracks(data) })
-      .catch(() => {})
-  }, [username])
+    if (!username || !authUser?.name) return
+    Promise.all([
+      fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(username)}`).then(r => r.json()).catch(() => []),
+      fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser.name)}&collection=${collection || 'edm'}`).then(r => r.json()).catch(() => ({})),
+    ]).then(([pending, metadata]) => {
+      if (!Array.isArray(pending)) return
+      // Build a set of existing (artist, title) pairs from the library manifest
+      const existing = new Set()
+      Object.values(metadata || {}).forEach(m => {
+        if (m && typeof m === 'object') {
+          const a = (m.artist || '').toLowerCase().trim()
+          const t = (m.title || '').toLowerCase().trim()
+          if (a || t) existing.add(`${a}|${t}`)
+        }
+      })
+      const filtered = pending.filter(p => {
+        const key = `${(p.artist || '').toLowerCase().trim()}|${(p.title || '').toLowerCase().trim()}`
+        return !existing.has(key)
+      })
+      setPendingTracks(filtered)
+      // If we removed any, persist the cleaned list
+      if (filtered.length !== pending.length) {
+        fetch(`${API_BASE}/api/pending`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: username, tracks: filtered }),
+        }).catch(() => {})
+      }
+    })
+  }, [username, authUser?.name, collection])
 
   const savePending = (tracks) => {
     setPendingTracks(tracks)
