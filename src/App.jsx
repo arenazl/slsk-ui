@@ -5250,11 +5250,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const [tracks, setTracks] = useState([])
   const [loading, setLoading] = useState(false)
   const [playingId, setPlayingId] = useState(null)
-  // Label filter: when set, fetches all genre charts in parallel and shows only
-  // tracks from that label. Null = no filter (normal chart view).
-  const [labelFilter, setLabelFilter] = useState(null) // { name, count }
+  // Label filter: URL-synced via ?label=<name>. When set, the server scrapes
+  // Beatport's label page and returns up to 150 tracks.
+  const [labelName, setLabelName] = useQS('label', '')
+  const [labelTrackCount, setLabelTrackCount] = useState(0)
   const [labelTracks, setLabelTracks] = useState([])
   const [labelLoading, setLabelLoading] = useState(false)
+  const labelFilter = labelName ? { name: labelName, count: labelTrackCount } : null
 
   // Source derived from global collection toggle
   const discoverSource = collection === 'latin' ? 'spotify' : 'beatport'
@@ -5546,21 +5548,21 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Load "All" on mount
   useEffect(() => { loadChart(null) }, [])
 
-  // Filter by label: call the server-side Beatport scraper that searches
-  // across the whole Beatport catalog for tracks matching this label.
-  // Returns up to ~100 tracks.
-  const loadLabel = async (labelName) => {
-    if (!labelName) return
-    setLabelFilter({ name: labelName, count: 0 })
+  // Filter by label: call the server-side Beatport scraper that fetches the
+  // full label catalog page (up to 150 tracks in one request).
+  const loadLabel = async (name) => {
+    if (!name) return
+    setLabelName(name)           // updates URL ?label=<name>
     setLabelLoading(true)
     setLabelTracks([])
+    setLabelTrackCount(0)
     try {
-      const res = await fetch(`${API_BASE}/api/discover/label?name=${encodeURIComponent(labelName)}`)
+      const res = await fetch(`${API_BASE}/api/discover/label?name=${encodeURIComponent(name)}`)
       const data = await res.json()
-      // Assign synthetic ids to each track so React keys and downloadQueue work
-      const list = (data.tracks || []).map((t, i) => ({ ...t, id: t.id || `label-${labelName}-${i}` }))
+      // Assign synthetic ids so React keys and downloadQueue work
+      const list = (data.tracks || []).map((t, i) => ({ ...t, id: t.id || `label-${name}-${i}` }))
       setLabelTracks(list)
-      setLabelFilter({ name: labelName, count: list.length })
+      setLabelTrackCount(list.length)
     } catch (e) {
       console.error('Failed to load label', e)
       toast('Error al cargar el sello', 'error')
@@ -5570,9 +5572,18 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }
 
   const clearLabelFilter = () => {
-    setLabelFilter(null)
+    setLabelName('')
     setLabelTracks([])
+    setLabelTrackCount(0)
   }
+
+  // If the page loads with ?label=<name> in the URL, auto-fetch it.
+  useEffect(() => {
+    if (labelName && labelTracks.length === 0 && !labelLoading) {
+      loadLabel(labelName)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Spotify connection state
   const [spotifyConnected, setSpotifyConnected] = useState(false)
