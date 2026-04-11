@@ -4289,15 +4289,24 @@ function App() {
     ? tracks.filter(t => (t.title || '').toLowerCase().includes(dlQ) || (t.artist || '').toLowerCase().includes(dlQ) || (t.genre || '').toLowerCase().includes(dlQ))
     : tracks
 
+  // Status priority: active first, completed, then pending, then failures last
+  const statusOrder = { downloading: 0, searching: 1, completed: 2, skipped: 3, pending: 4, not_found: 5, error: 6 }
+  const sortByStatus = (arr) => [...arr].sort((a, b) => {
+    const ap = statusOrder[a.status] ?? 99
+    const bp = statusOrder[b.status] ?? 99
+    if (ap !== bp) return ap - bp
+    return (a.id ?? 0) - (b.id ?? 0)
+  })
+
   const filteredTracks = dlQ
-    ? searchedTracks
+    ? sortByStatus(searchedTracks)
     : activeTab === 'all'
-    ? searchedTracks
+    ? sortByStatus(searchedTracks)
     : activeTab === 'by_genre'
     ? searchedTracks
     : activeTab.startsWith('genre:')
-    ? searchedTracks.filter(t => t.genre === activeTab.slice(6))
-    : searchedTracks.filter(t => t.status === activeTab)
+    ? sortByStatus(searchedTracks.filter(t => t.genre === activeTab.slice(6)))
+    : sortByStatus(searchedTracks.filter(t => t.status === activeTab))
 
   const tracksByGenre = genres.reduce((acc, g) => {
     acc[g] = (dlQ ? searchedTracks : tracks).filter(t => t.genre === g)
@@ -4788,6 +4797,32 @@ function App() {
               ))}
             </div>
           )}
+
+          {/* Active progress banner */}
+          {isRunning && tracks.length > 0 && (() => {
+            const done = completed + skipped + notFound + errors
+            const pct = tracks.length > 0 ? (done / tracks.length) * 100 : 0
+            const active = tracks.find(t => t.status === 'downloading') || tracks.find(t => t.status === 'searching')
+            return (
+              <div className="flex-shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-panel)] px-3 md:px-4 py-2">
+                <div className="flex items-center gap-3 mb-1.5">
+                  <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <span className="text-xs text-gray-400 flex-shrink-0">{done}/{tracks.length}</span>
+                  {active && (
+                    <span className="text-xs truncate min-w-0 text-[var(--text-primary)]">
+                      <span className={active.status === 'downloading' ? 'text-[var(--color-accent)]' : 'text-yellow-400'}>
+                        {active.status === 'downloading' ? '↓' : '🔍'}
+                      </span>
+                      {' '}{active.artist} - {active.title}
+                    </span>
+                  )}
+                </div>
+                <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Pending tracks banner */}
           {pendingTracks.length > 0 && !searchResults && (
