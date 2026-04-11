@@ -83,9 +83,9 @@ const STATUS_COLORS = {
   error: 'bg-red-500/20 text-red-400',
 }
 
-function TrackRow({ track }) {
+function TrackRow({ track, onCancel }) {
   return (
-    <div className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 border-b border-[var(--border-color)] transition-all duration-200 ${
+    <div className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 border-b border-[var(--border-color)] transition-all duration-200 group ${
       track.status === 'downloading' ? 'bg-[var(--color-accent)]/5' :
       track.status === 'completed' ? 'bg-green-500/5' :
       track.status === 'skipped' ? 'bg-cyan-500/5' : ''
@@ -128,6 +128,15 @@ function TrackRow({ track }) {
         <span className={`text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded-full ${STATUS_COLORS[track.status] || 'bg-gray-700'}`}>
           {STATUS_LABELS[track.status] || track.status}
         </span>
+        {onCancel && track.status !== 'completed' && (
+          <button
+            onClick={() => onCancel(track)}
+            title="Cancelar / quitar de la lista"
+            className="opacity-0 group-hover:opacity-100 p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        )}
       </div>
     </div>
   )
@@ -4096,6 +4105,25 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [page])
 
+  const handleCancelTrack = (track) => {
+    // Remove track from local list (if it's downloading, the server continues but UI hides it)
+    setTracks(prev => prev.filter(t => t.id !== track.id))
+    // Also remove from pending if it's there
+    setPendingTracks(prev => {
+      const artist = (track.artist || '').toLowerCase()
+      const title = (track.title || '').toLowerCase()
+      const updated = prev.filter(p => !((p.artist || '').toLowerCase() === artist && (p.title || '').toLowerCase() === title))
+      if (updated.length !== prev.length) {
+        fetch(`${API_BASE}/api/pending`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: username, tracks: updated }),
+        }).catch(() => {})
+      }
+      return updated
+    })
+  }
+
   const handleStart = () => {
     if (!wsRef.current || !inputText.trim() || !username || !password) return
     setSummary(null)
@@ -5074,7 +5102,7 @@ function App() {
                       <span className="text-xs text-gray-500">{tracksByGenre[g].length} tracks</span>
                       <span className="text-xs text-green-500">{tracksByGenre[g].filter(t => t.status === 'completed').length} completados</span>
                     </div>
-                    {tracksByGenre[g].map(track => <TrackRow key={track.id} track={track} />)}
+                    {tracksByGenre[g].map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} />)}
                   </div>
                 ))}
                 {ungrouped.length > 0 && (
@@ -5083,12 +5111,12 @@ function App() {
                       <span className="text-sm font-semibold text-gray-400">Sin estilo</span>
                       <span className="text-xs text-gray-500 ml-2">{ungrouped.length} tracks</span>
                     </div>
-                    {ungrouped.map(track => <TrackRow key={track.id} track={track} />)}
+                    {ungrouped.map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} />)}
                   </div>
                 )}
               </>
             ) : (
-              filteredTracks.map(track => <TrackRow key={track.id} track={track} />)
+              filteredTracks.map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} />)
             )}
           </div>
 
