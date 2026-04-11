@@ -4841,6 +4841,7 @@ function App() {
                 <div className="px-3 md:px-4 pb-3 space-y-1">
                   <button
                     onClick={() => {
+                      if (isRunning) { toast('Ya hay una descarga en curso. Esperá que termine o tocá Forzar detención', 'warning', 4000); return }
                       if (!wsRef.current || wsRef.current.readyState !== 1 || !username || !password) return
                       // Use batch download flow: send all pending tracks as a single job
                       const tracksText = pendingTracks.map(t => `${t.artist} - ${t.title}`).join('\n')
@@ -4871,7 +4872,7 @@ function App() {
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <button
                             onClick={() => {
-                              // Batch flow with single track: auto-picks best source
+                              if (isRunning) { toast('Esperá que termine la descarga actual o tocá Forzar detención', 'warning', 4000); return }
                               if (!wsRef.current || wsRef.current.readyState !== 1) return
                               setSearchResults(null)
                               setDlSearch('')
@@ -4886,7 +4887,8 @@ function App() {
                               }))
                               setPendingExpanded(false)
                             }}
-                            className="px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-80 transition-opacity"
+                            disabled={isRunning}
+                            className="px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                           >Bajar</button>
                           <button
                             onClick={() => removeFromPending(idx)}
