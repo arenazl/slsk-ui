@@ -3996,18 +3996,26 @@ function App() {
       fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser.name)}&collection=${collection || 'edm'}`).then(r => r.json()).catch(() => ({})),
     ]).then(([pending, metadata]) => {
       if (!Array.isArray(pending)) return
-      // Build a set of existing (artist, title) pairs from the library manifest
-      const existing = new Set()
-      Object.values(metadata || {}).forEach(m => {
+      // Build searchable strings from library manifest (filenames + metadata)
+      const normalize = (s) => (s || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim()
+      const libraryNames = []
+      Object.entries(metadata || {}).forEach(([filename, m]) => {
+        libraryNames.push(normalize(filename))
         if (m && typeof m === 'object') {
-          const a = (m.artist || '').toLowerCase().trim()
-          const t = (m.title || '').toLowerCase().trim()
-          if (a || t) existing.add(`${a}|${t}`)
+          if (m.artist || m.title) libraryNames.push(normalize(`${m.artist || ''} ${m.title || ''}`))
         }
       })
+      // For each pending track, check if its keywords appear in any library name
       const filtered = pending.filter(p => {
-        const key = `${(p.artist || '').toLowerCase().trim()}|${(p.title || '').toLowerCase().trim()}`
-        return !existing.has(key)
+        const query = normalize(`${p.artist || ''} ${p.title || ''}`)
+        // Get meaningful keywords (drop words < 3 chars and common fillers)
+        const keywords = query.split(' ').filter(w => w.length >= 3 && !['mix', 'the', 'and', 'ext', 'original'].includes(w))
+        if (keywords.length < 2) return true // not enough info to match
+        // Track is "already downloaded" if any library filename contains ≥70% of keywords
+        return !libraryNames.some(name => {
+          const matches = keywords.filter(k => name.includes(k)).length
+          return matches >= Math.ceil(keywords.length * 0.7)
+        })
       })
       setPendingTracks(filtered)
       // If we removed any, persist the cleaned list
