@@ -4005,8 +4005,8 @@ function App() {
       fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser.name)}&collection=${collection || 'edm'}`).then(r => r.json()).catch(() => ({})),
     ]).then(([pending, metadata]) => {
       if (!Array.isArray(pending)) return
-      // Build searchable strings from library manifest (filenames + metadata)
       const normalize = (s) => (s || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim()
+      const stopwords = new Set(['mix', 'the', 'and', 'ext', 'original', 'feat', 'featuring', 'remix', 'extended', 'edit', 'club', 'radio', 'vocal'])
       const libraryNames = []
       Object.entries(metadata || {}).forEach(([filename, m]) => {
         libraryNames.push(normalize(filename))
@@ -4014,16 +4014,18 @@ function App() {
           if (m.artist || m.title) libraryNames.push(normalize(`${m.artist || ''} ${m.title || ''}`))
         }
       })
-      // For each pending track, check if its keywords appear in any library name
       const filtered = pending.filter(p => {
-        const query = normalize(`${p.artist || ''} ${p.title || ''}`)
-        // Get meaningful keywords (drop words < 3 chars and common fillers)
-        const keywords = query.split(' ').filter(w => w.length >= 3 && !['mix', 'the', 'and', 'ext', 'original'].includes(w))
-        if (keywords.length < 2) return true // not enough info to match
-        // Track is "already downloaded" if any library filename contains ≥70% of keywords
+        const artistNorm = normalize(p.artist || '')
+        const titleNorm = normalize(p.title || '')
+        const artistWords = artistNorm.split(' ').filter(w => w.length >= 3 && !stopwords.has(w))
+        const titleWords = titleNorm.split(' ').filter(w => w.length >= 3 && !stopwords.has(w))
+        if (titleWords.length < 2 && artistWords.length < 2) return true
+        // Match requires: at least 1 artist word in filename AND ≥70% of title words
         return !libraryNames.some(name => {
-          const matches = keywords.filter(k => name.includes(k)).length
-          return matches >= Math.ceil(keywords.length * 0.7)
+          const artistMatch = artistWords.length === 0 || artistWords.some(w => name.includes(w))
+          if (!artistMatch) return false
+          const titleMatches = titleWords.filter(w => name.includes(w)).length
+          return titleMatches >= Math.max(2, Math.ceil(titleWords.length * 0.7))
         })
       })
       setPendingTracks(filtered)
