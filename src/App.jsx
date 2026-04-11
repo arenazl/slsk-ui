@@ -5250,6 +5250,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const [tracks, setTracks] = useState([])
   const [loading, setLoading] = useState(false)
   const [playingId, setPlayingId] = useState(null)
+  // Label filter: when set, fetches all genre charts in parallel and shows only
+  // tracks from that label. Null = no filter (normal chart view).
+  const [labelFilter, setLabelFilter] = useState(null) // { name, count }
+  const [labelTracks, setLabelTracks] = useState([])
+  const [labelLoading, setLabelLoading] = useState(false)
 
   // Source derived from global collection toggle
   const discoverSource = collection === 'latin' ? 'spotify' : 'beatport'
@@ -5497,6 +5502,61 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   // Load "All" on mount
   useEffect(() => { loadChart(null) }, [])
+
+  // Filter by label: fetch ALL genre charts in parallel, aggregate, dedup by
+  // artist+title, keep only tracks with matching label (case-insensitive).
+  // Heroku caches each chart so 14 parallel fetches are fast.
+  const loadLabel = async (labelName) => {
+    if (!labelName) return
+    setLabelFilter({ name: labelName, count: 0 })
+    setLabelLoading(true)
+    setLabelTracks([])
+    try {
+      // Fetch every genre chart in parallel
+      const all = genres.length > 0 ? genres : []
+      const results = await Promise.all(
+        all.map(g =>
+          fetch(`${API_BASE}/api/discover/chart?genre_id=${g.beatport_id}&slug=${g.slug}`)
+            .then(r => r.json())
+            .then(d => d.tracks || [])
+            .catch(() => [])
+        )
+      )
+      // Also include the main "All" chart
+      try {
+        const mainRes = await fetch(`${API_BASE}/api/discover/chart`)
+        const mainData = await mainRes.json()
+        results.push(mainData.tracks || [])
+      } catch {}
+
+      // Aggregate + dedup by normalized artist|title
+      const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const seen = new Set()
+      const target = labelName.toLowerCase().trim()
+      const filtered = []
+      for (const chart of results) {
+        for (const t of chart) {
+          if (!t.label || t.label.toLowerCase().trim() !== target) continue
+          const key = `${norm(t.artist)}|${norm(t.title)}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          filtered.push(t)
+        }
+      }
+      setLabelTracks(filtered)
+      setLabelFilter({ name: labelName, count: filtered.length })
+    } catch (e) {
+      console.error('Failed to load label', e)
+      toast('Error al cargar el sello', 'error')
+    } finally {
+      setLabelLoading(false)
+    }
+  }
+
+  const clearLabelFilter = () => {
+    setLabelFilter(null)
+    setLabelTracks([])
+  }
 
   // Spotify connection state
   const [spotifyConnected, setSpotifyConnected] = useState(false)
@@ -5903,10 +5963,40 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 Stop
               </button>
             )}
-            <span className="text-xs text-[var(--text-muted)]">{tracks.length} tracks</span>
+            <span className="text-xs text-[var(--text-muted)]">{(labelFilter ? labelTracks : tracks).length} tracks</span>
           </div>
+          {/* Label filter banner */}
+          {labelFilter && (
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-3 md:px-6 py-2 bg-[var(--color-accent)]/10 border-b border-[var(--color-accent)]/30">
+              <div className="flex items-center gap-2 min-w-0">
+                <svg className="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+                <span className="text-sm text-[var(--text-primary)] font-medium truncate">
+                  Sello: <span className="text-[var(--color-accent)]">{labelFilter.name}</span>
+                </span>
+                {labelLoading ? (
+                  <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                    <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    Buscando en todos los géneros...
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">{labelFilter.count} temas encontrados</span>
+                )}
+              </div>
+              <button
+                onClick={clearLabelFilter}
+                className="flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-all duration-200 active:scale-95"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Limpiar
+              </button>
+            </div>
+          )}
           <div className="px-3 md:px-6 py-2 md:py-3">
-            {tracks.map((t, i) => {
+            {(labelFilter ? labelTracks : tracks).map((t, i) => {
               const isPlaying = playingId === t.id
               return (
                 <div key={t.id || i}
@@ -5979,7 +6069,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       <span className="px-2 py-0.5 rounded-full bg-white/5 text-xs text-gray-400">{t.genre}</span>
                     )}
                     {t.label && (
-                      <span className="px-2 py-0.5 rounded-full bg-white/5 text-xs text-gray-500 max-w-28 truncate">{t.label}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); loadLabel(t.label) }}
+                        className="px-2 py-0.5 rounded-full bg-white/5 text-xs text-gray-500 max-w-28 truncate hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-text)] transition-colors duration-200 active:scale-95 cursor-pointer"
+                        title={`Ver temas de ${t.label}`}
+                      >
+                        {t.label}
+                      </button>
                     )}
                   </div>
 
