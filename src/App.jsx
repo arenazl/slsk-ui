@@ -5546,48 +5546,21 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Load "All" on mount
   useEffect(() => { loadChart(null) }, [])
 
-  // Filter by label: fetch ALL genre charts in parallel, aggregate, dedup by
-  // artist+title, keep only tracks with matching label (case-insensitive).
-  // Heroku caches each chart so 14 parallel fetches are fast.
+  // Filter by label: call the server-side Beatport scraper that searches
+  // across the whole Beatport catalog for tracks matching this label.
+  // Returns up to ~100 tracks.
   const loadLabel = async (labelName) => {
     if (!labelName) return
     setLabelFilter({ name: labelName, count: 0 })
     setLabelLoading(true)
     setLabelTracks([])
     try {
-      // Fetch every genre chart in parallel
-      const all = genres.length > 0 ? genres : []
-      const results = await Promise.all(
-        all.map(g =>
-          fetch(`${API_BASE}/api/discover/chart?genre_id=${g.beatport_id}&slug=${g.slug}`)
-            .then(r => r.json())
-            .then(d => d.tracks || [])
-            .catch(() => [])
-        )
-      )
-      // Also include the main "All" chart
-      try {
-        const mainRes = await fetch(`${API_BASE}/api/discover/chart`)
-        const mainData = await mainRes.json()
-        results.push(mainData.tracks || [])
-      } catch {}
-
-      // Aggregate + dedup by normalized artist|title
-      const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-      const seen = new Set()
-      const target = labelName.toLowerCase().trim()
-      const filtered = []
-      for (const chart of results) {
-        for (const t of chart) {
-          if (!t.label || t.label.toLowerCase().trim() !== target) continue
-          const key = `${norm(t.artist)}|${norm(t.title)}`
-          if (seen.has(key)) continue
-          seen.add(key)
-          filtered.push(t)
-        }
-      }
-      setLabelTracks(filtered)
-      setLabelFilter({ name: labelName, count: filtered.length })
+      const res = await fetch(`${API_BASE}/api/discover/label?name=${encodeURIComponent(labelName)}`)
+      const data = await res.json()
+      // Assign synthetic ids to each track so React keys and downloadQueue work
+      const list = (data.tracks || []).map((t, i) => ({ ...t, id: t.id || `label-${labelName}-${i}` }))
+      setLabelTracks(list)
+      setLabelFilter({ name: labelName, count: list.length })
     } catch (e) {
       console.error('Failed to load label', e)
       toast('Error al cargar el sello', 'error')
