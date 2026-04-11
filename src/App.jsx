@@ -5095,6 +5095,7 @@ function App() {
 
 
 function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, authUser, collection }) {
+  const toast = useToast()
   const [genres, setGenres] = useState([])
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
   const [tracks, setTracks] = useState([])
