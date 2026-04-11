@@ -4857,7 +4857,7 @@ function App() {
               {tabs.map(tab => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => { setActiveTab(tab.key); setSearchResults(null); setDlSearch('') }}
                   className={`px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm transition-all duration-200 flex-shrink-0 ${
                     activeTab === tab.key
                       ? 'font-semibold'
