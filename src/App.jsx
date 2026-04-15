@@ -5246,10 +5246,16 @@ function App() {
 function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, authUser, collection }) {
   const toast = useToast()
   const [genres, setGenres] = useState([])
+  // URL-synced selections: share/bookmark any view directly
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
+  const [genreSlug, setGenreSlug] = useQS('genre', '')    // ?genre=tech-house
+  const [spotifyKey, setSpotifyKey] = useQS('playlist', '') // ?playlist=top50_argentina
   const [tracks, setTracks] = useState([])
   const [loading, setLoading] = useState(false)
   const [playingId, setPlayingId] = useState(null)
+  // Last successful chart scrape (ms epoch) + source ("live"/"cache"/"cloudinary")
+  const [chartScrapedAt, setChartScrapedAt] = useState(0)
+  const [chartSource, setChartSource] = useState('')
   // Label filter: URL-synced via ?label=<name>. When set, the server scrapes
   // Beatport's label page and returns up to 150 tracks.
   const [labelName, setLabelName] = useQS('label', '')
@@ -5554,6 +5560,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Load chart when genre changes
   const loadChart = async (genre, force = false) => {
     setSelectedGenre(genre)
+    setGenreSlug(genre ? genre.slug : '')  // sync URL ?genre=<slug>
     setLoading(true)
     setTracks([])
     try {
@@ -5562,6 +5569,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       const res = await fetch(`${API_BASE}/api/discover/chart${params}${forceParam}`)
       const data = await res.json()
       setTracks(data.tracks || [])
+      setChartScrapedAt(data.scraped_at || 0)
+      setChartSource(data.source || '')
     } catch (e) {
       console.error('Failed to load chart', e)
     } finally {
@@ -5569,8 +5578,33 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
   }
 
-  // Load "All" on mount
-  useEffect(() => { loadChart(null) }, [])
+  // Initial load: if URL has ?label=, ?genre=, ?playlist=, auto-load that view.
+  // Otherwise load the default "All" Beatport chart.
+  useEffect(() => {
+    if (labelName) return           // label effect handles it
+    if (genreSlug) return           // handled by genres effect below
+    if (spotifyKey && discoverSource === 'spotify') return
+    loadChart(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Once genres load, if URL has ?genre=<slug>, auto-select it
+  useEffect(() => {
+    if (!genreSlug || genres.length === 0) return
+    if (selectedGenre?.slug === genreSlug) return
+    const match = genres.find(g => g.slug === genreSlug)
+    if (match) loadChart(match)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genres, genreSlug])
+
+  // Once Spotify categories load, if URL has ?playlist=<key>, auto-select it
+  useEffect(() => {
+    if (!spotifyKey || spotifyCategories.length === 0) return
+    if (selectedSpotifyCategory?.key === spotifyKey) return
+    const match = spotifyCategories.find(c => c.key === spotifyKey)
+    if (match) loadSpotifyPlaylist(match)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotifyCategories, spotifyKey])
 
   // Filter by label: call the server-side Beatport scraper that fetches the
   // full label catalog page (up to 150 tracks in one request).
@@ -5622,6 +5656,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   const loadSpotifyPlaylist = async (cat) => {
     setSelectedSpotifyCategory(cat)
+    setSpotifyKey(cat?.key || 'top50_argentina')  // sync URL ?playlist=<key>
     setLoading(true)
     setTracks([])
     try {
@@ -5860,6 +5895,24 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                   }
                 </h1>
                 {tracks.length > 0 && <span className="text-sm text-white/40">{tracks.length} tracks</span>}
+                {tracks.length > 0 && chartScrapedAt > 0 && discoverSource === 'beatport' && (
+                  <span
+                    className="text-xs text-white/40"
+                    title={`Source: ${chartSource}`}
+                  >
+                    {(() => {
+                      const d = new Date(chartScrapedAt)
+                      const dd = String(d.getDate()).padStart(2, '0')
+                      const mm = String(d.getMonth() + 1).padStart(2, '0')
+                      const hh = String(d.getHours()).padStart(2, '0')
+                      const mi = String(d.getMinutes()).padStart(2, '0')
+                      const today = new Date()
+                      const isToday = d.toDateString() === today.toDateString()
+                      const datePart = isToday ? 'hoy' : `${dd}/${mm}`
+                      return `· actualizado ${datePart} ${hh}:${mi}`
+                    })()}
+                  </span>
+                )}
                 {loading && <span className="text-sm text-white/40">Cargando...</span>}
                 {!loading && discoverSource === 'beatport' && (
                   <button
@@ -6107,11 +6160,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
                   {/* Track info */}
                   <div className="flex-1 min-w-0">
-                    <div className={`text-xs md:text-sm font-medium truncate flex items-center gap-1.5 ${isPlaying ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>
+                    <div className={`text-sm md:text-base font-medium truncate flex items-center gap-1.5 ${isPlaying ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>
                       {t.title}
                       {isInLibrary(t) && <span className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500" title="En tu biblioteca" />}
                     </div>
-                    <div className="text-xs text-gray-500 truncate mt-0.5">{t.artist}</div>
+                    <div className="text-xs md:text-sm text-gray-500 truncate mt-0.5">{t.artist}</div>
                   </div>
 
                   {/* Metadata pills */}
@@ -6142,11 +6195,14 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     const dl = downloadQueue[t.id]
                     const alreadyInLibrary = !dl && isInLibrary(t)
                     if (alreadyInLibrary) return (
-                      <span className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-green-400 bg-green-500/10 border border-green-500/20">
+                      <span
+                        title="Ya está en tu biblioteca"
+                        className="flex-shrink-0 flex items-center gap-1 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/20"
+                      >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                         </svg>
-                        <span className="hidden sm:inline">Descargado</span>
+                        <span className="hidden md:inline">Descargado</span>
                       </span>
                     )
                     if (!dl) return (
