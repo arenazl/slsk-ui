@@ -3771,10 +3771,14 @@ function App() {
   const pickStorageFolder = async () => {
     const ok = await fsaBackend.pickFolder()
     if (ok) {
+      const name = await fsaBackend.folderName()
       setFsaReady(true)
-      setFsaFolderName(await fsaBackend.folderName())
+      setFsaFolderName(name)
       setShowFolderModal(false)
-      toast(`Carpeta lista: ${await fsaBackend.folderName()}`, 'success', 3000)
+      toast(`Carpeta lista: ${name} — recargando...`, 'success', 1500)
+      // Hard reload: ensures Library/Discover components re-fetch from the new backend
+      // (their useEffect deps don't include fsaReady so they wouldn't refresh otherwise)
+      setTimeout(() => window.location.reload(), 800)
     } else {
       toast('No se eligió carpeta', 'warning', 3000)
     }
@@ -3785,6 +3789,8 @@ function App() {
     setFsaReady(false)
     setFsaFolderName(null)
     setShowFolderModal(true)
+    // Reload so library reverts to agent/Heroku-only view
+    setTimeout(() => window.location.reload(), 500)
   }
   const [authUser, setAuthUser] = useState(() => {
     const saved = localStorage.getItem('auth_user')
