@@ -651,27 +651,30 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       }
 
       if (localFiles) {
-        const merged = localFiles
-          .filter(f => metadata[f.filename])
-          .map(f => {
-            const meta = metadata[f.filename] || {}
-            return {
-              filename: f.filename,
-              title: meta.title || '',
-              artist: meta.artist || '',
-              genre: meta.genre || f.subfolder || '',
-              key: meta.key || '',
-              bpm: meta.bpm,
-              rating: meta.rating || 0,
-              size_mb: f.size_mb,
-              format: f.format,
-              date: meta.date || meta.date_added || f.mtime || '',
-              date_added: meta.date_added || meta.date || f.mtime || '',
-              in_subfolder: !!f.subfolder,
-              subfolder: f.subfolder || '',
-              manual_genre: meta.manual_genre || false,
-            }
-          })
+        // Show EVERY file in the user's local storage, even if it's not in
+        // Heroku metadata. Metadata enriches title/artist/rating/key when
+        // available; otherwise we fall back to the filename so nothing gets
+        // silently hidden (which caused Discover/Biblioteca inconsistencies).
+        const merged = localFiles.map(f => {
+          const meta = metadata[f.filename] || {}
+          return {
+            filename: f.filename,
+            title: meta.title || '',
+            artist: meta.artist || '',
+            genre: meta.genre || f.subfolder || '',
+            key: meta.key || '',
+            bpm: meta.bpm,
+            rating: meta.rating || 0,
+            size_mb: f.size_mb,
+            format: f.format,
+            date: meta.date || meta.date_added || f.mtime || '',
+            date_added: meta.date_added || meta.date || f.mtime || '',
+            in_subfolder: !!f.subfolder,
+            subfolder: f.subfolder || '',
+            manual_genre: meta.manual_genre || false,
+            has_metadata: !!metadata[f.filename],  // flag for UI (e.g. grey out orphans)
+          }
+        })
         if (id === fetchIdRef.current) setFiles(merged)
       } else {
         // No FSA, no agent: fall back to Heroku metadata (read-only view)
