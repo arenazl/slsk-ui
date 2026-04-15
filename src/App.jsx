@@ -5395,36 +5395,57 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const loadLibraryRef = useRef(null)
 
   useEffect(() => {
-    // Merge Cloudinary metadata with agent's actual filesystem library
+    // Library manifest = files that ACTUALLY EXIST in user's local storage.
+    // Heroku metadata is used only to enrich title/artist for those files;
+    // it never adds entries on its own (otherwise empty folders would still
+    // mark Discover tracks as "Descargado").
     const loadLibrary = async () => {
       const merged = {}
+
+      // 1. Get the list of files from local storage (FSA preferred, agent fallback)
+      let localFiles = []
+      const fsaActive = await fsaBackend.ready()
       try {
-        const meta = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
-        if (meta && typeof meta === 'object') Object.assign(merged, meta)
-      } catch {}
-      try {
-        // Also pull from /api/library (the source-of-truth manifest on Heroku)
-        const lib = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
-        const libTracks = Array.isArray(lib) ? lib : (lib?.tracks || [])
-        for (const t of libTracks) {
-          const fname = t.filename || t.original_name
-          if (fname && !merged[fname]) merged[fname] = { title: t.title || '', artist: t.artist || '', genre: t.genre || '' }
-        }
-      } catch {}
-      // Local filesystem scan: prefer FSA (browser-native), fallback to agent
-      try {
-        let localFiles = []
-        if (await fsaBackend.ready()) {
+        if (fsaActive) {
           localFiles = await fsaBackend.listLibrary()
         } else if (agentConnected) {
           const agentRes = await agentFetch('library')
           const arr = await agentRes.json()
           if (Array.isArray(arr)) localFiles = arr
         }
-        for (const f of localFiles) {
-          if (!merged[f.filename]) merged[f.filename] = { title: '', artist: '', genre: f.subfolder || '' }
+      } catch {}
+
+      // If neither FSA nor agent is available, fall back to Heroku library
+      // (read-only mode: user has no local storage configured)
+      if (!fsaActive && !agentConnected) {
+        try {
+          const lib = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
+          const libTracks = Array.isArray(lib) ? lib : (lib?.tracks || [])
+          for (const t of libTracks) {
+            const fname = t.filename || t.original_name
+            if (fname) merged[fname] = { title: t.title || '', artist: t.artist || '', genre: t.genre || '' }
+          }
+          setLibraryManifest(merged)
+          return
+        } catch {}
+      }
+
+      // Build manifest from local files only
+      for (const f of localFiles) {
+        merged[f.filename] = { title: '', artist: '', genre: f.subfolder || '' }
+      }
+
+      // 2. Enrich with Heroku/Cloudinary metadata (title, artist, key, etc.)
+      //    — only for filenames that exist in local storage
+      try {
+        const meta = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
+        if (meta && typeof meta === 'object') {
+          for (const fname of Object.keys(merged)) {
+            if (meta[fname]) merged[fname] = { ...merged[fname], ...meta[fname] }
+          }
         }
       } catch {}
+
       setLibraryManifest(merged)
     }
     loadLibraryRef.current = loadLibrary
