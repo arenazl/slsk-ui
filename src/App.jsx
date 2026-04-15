@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react'
+import { fsaBackend, makeStorage } from './storage'
 
 // Toast notification system
 const ToastContext = createContext()
@@ -635,37 +636,45 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
       const metadata = await metaRes.json()
 
-      if (agentConnected) {
-        // Fetch file list from agent (file info only)
+      // Local file scan: prefer FSA, fallback to agent, fallback to Heroku metadata
+      let localFiles = null
+      if (await fsaBackend.ready()) {
+        const fsaList = await fsaBackend.listLibrary()
+        localFiles = fsaList.map(f => ({
+          ...f,
+          format: (f.filename.match(/\.(\w{3,4})$/) || [])[1]?.toUpperCase() || '',
+          mtime: f.modified ? new Date(f.modified).toISOString() : '',
+        }))
+      } else if (agentConnected) {
         const agentRes = await agentFetch('library')
-        const agentFiles = await agentRes.json()
+        localFiles = await agentRes.json()
+      }
 
-        // Merge: agent file info + Cloudinary metadata by filename
-        // Only include files that exist in the filtered metadata (current collection)
-        const merged = agentFiles
+      if (localFiles) {
+        const merged = localFiles
           .filter(f => metadata[f.filename])
           .map(f => {
-          const meta = metadata[f.filename] || {}
-          return {
-            filename: f.filename,
-            title: meta.title || '',
-            artist: meta.artist || '',
-            genre: meta.genre || f.subfolder || '',
-            key: meta.key || '',
-            bpm: meta.bpm,
-            rating: meta.rating || 0,
-            size_mb: f.size_mb,
-            format: f.format,
-            date: meta.date || meta.date_added || f.mtime || '',
-            date_added: meta.date_added || meta.date || f.mtime || '',
-            in_subfolder: !!f.subfolder,
-            subfolder: f.subfolder || '',
-            manual_genre: meta.manual_genre || false,
-          }
-        })
+            const meta = metadata[f.filename] || {}
+            return {
+              filename: f.filename,
+              title: meta.title || '',
+              artist: meta.artist || '',
+              genre: meta.genre || f.subfolder || '',
+              key: meta.key || '',
+              bpm: meta.bpm,
+              rating: meta.rating || 0,
+              size_mb: f.size_mb,
+              format: f.format,
+              date: meta.date || meta.date_added || f.mtime || '',
+              date_added: meta.date_added || meta.date || f.mtime || '',
+              in_subfolder: !!f.subfolder,
+              subfolder: f.subfolder || '',
+              manual_genre: meta.manual_genre || false,
+            }
+          })
         if (id === fetchIdRef.current) setFiles(merged)
       } else {
-        // No agent: use Heroku library endpoint (metadata-only view)
+        // No FSA, no agent: fall back to Heroku metadata (read-only view)
         const libRes = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
         const data = await libRes.json()
         if (id === fetchIdRef.current) setFiles(data)
@@ -3737,6 +3746,46 @@ function App() {
     window.addEventListener('agent-error', handler)
     return () => window.removeEventListener('agent-error', handler)
   }, [toast])
+
+  // Storage backend (FSA in browser OR agent fallback)
+  const [fsaReady, setFsaReady] = useState(false)
+  const [fsaFolderName, setFsaFolderName] = useState(null)
+  const [showFolderModal, setShowFolderModal] = useState(false)
+
+  // Check FSA on mount; if browser supports + folder previously picked → use it.
+  // Otherwise show modal to pick (Chrome/Edge/Opera). Safari/Firefox skip the modal.
+  useEffect(() => {
+    if (!fsaBackend.supported) return
+    ;(async () => {
+      const ok = await fsaBackend.ready()
+      if (ok) {
+        setFsaReady(true)
+        setFsaFolderName(await fsaBackend.folderName())
+      } else {
+        // First time, or permission lost → ask once
+        setShowFolderModal(true)
+      }
+    })()
+  }, [])
+
+  const pickStorageFolder = async () => {
+    const ok = await fsaBackend.pickFolder()
+    if (ok) {
+      setFsaReady(true)
+      setFsaFolderName(await fsaBackend.folderName())
+      setShowFolderModal(false)
+      toast(`Carpeta lista: ${await fsaBackend.folderName()}`, 'success', 3000)
+    } else {
+      toast('No se eligió carpeta', 'warning', 3000)
+    }
+  }
+
+  const forgetStorageFolder = async () => {
+    await fsaBackend.forget()
+    setFsaReady(false)
+    setFsaFolderName(null)
+    setShowFolderModal(true)
+  }
   const [authUser, setAuthUser] = useState(() => {
     const saved = localStorage.getItem('auth_user')
     return saved ? JSON.parse(saved) : null
@@ -3921,27 +3970,28 @@ function App() {
           })
         }
         if (data.track.status === 'completed' && data.track.filename) {
-          // Transfer file from Heroku to local agent
-          if (agentConnectedRef.current) {
-            console.log('Transferring file to agent:', data.track.filename)
-            fetch(`${API_BASE}/audio/${encodeURIComponent(data.track.filename)}`)
-              .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
-              .then(blob => {
-                console.log('Got blob from Heroku:', blob.size, 'bytes')
+          // Transfer file from Heroku to local disk: prefer FSA (browser-native),
+          // fallback to agent if FSA not available/ready.
+          fetch(`${API_BASE}/audio/${encodeURIComponent(data.track.filename)}`)
+            .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
+            .then(async (blob) => {
+              if (await fsaBackend.ready()) {
+                await fsaBackend.saveFile(data.track.filename, blob, data.track.genre || '')
+                libraryRef.current?.refresh()
+              } else if (agentConnectedRef.current) {
                 const form = new FormData()
                 form.append('file', blob, data.track.filename)
                 form.append('filename', data.track.filename)
                 form.append('genre', data.track.genre || '')
                 form.append('metadata', JSON.stringify({ title: data.track.title || '', artist: data.track.artist || '', genre: data.track.genre || '', key: data.track.key || '', rating: data.track.rating }))
-                return agentFetch('save-file', { method: 'POST', body: form })
-              })
-              .then(r => { console.log('Agent save-file response:', r.status); return r.json() })
-              .then(d => { console.log('Agent saved:', d); libraryRef.current?.refresh() })
-              .catch(e => console.error('Failed to transfer file to agent:', e))
-          } else {
-            console.log('No agent connected, skipping transfer')
-            libraryRef.current?.refresh()
-          }
+                const r = await agentFetch('save-file', { method: 'POST', body: form })
+                await r.json()
+                libraryRef.current?.refresh()
+              } else {
+                console.log('Sin FSA ni agent — archivo queda solo en Heroku')
+              }
+            })
+            .catch(e => console.error('Failed to save file locally:', e))
         }
       }
 
@@ -3997,22 +4047,26 @@ function App() {
             return updated
           })
         }
-        if (data.status === 'completed' && data.filename && agentConnectedRef.current) {
-          console.log('Transferring search file to agent:', data.filename)
+        if (data.status === 'completed' && data.filename) {
+          // Save the downloaded file locally: prefer FSA, fallback to agent
           fetch(`${API_BASE}/audio/${encodeURIComponent(data.filename)}`)
             .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
-            .then(blob => {
-              console.log('Got blob from Heroku:', blob.size, 'bytes')
-              const form = new FormData()
-              form.append('file', blob, data.filename)
-              form.append('filename', data.filename)
-              return agentFetch('save-file', { method: 'POST', body: form })
+            .then(async (blob) => {
+              if (await fsaBackend.ready()) {
+                await fsaBackend.saveFile(data.filename, blob, '')
+                libraryRef.current?.refresh()
+              } else if (agentConnectedRef.current) {
+                const form = new FormData()
+                form.append('file', blob, data.filename)
+                form.append('filename', data.filename)
+                const r = await agentFetch('save-file', { method: 'POST', body: form })
+                await r.json()
+                libraryRef.current?.refresh()
+              } else {
+                libraryRef.current?.refresh()
+              }
             })
-            .then(r => { console.log('Agent save-file response:', r.status); return r.json() })
-            .then(d => { console.log('Agent saved:', d); libraryRef.current?.refresh() })
-            .catch(e => console.error('Failed to transfer file to agent:', e))
-        } else if (data.status === 'completed') {
-          libraryRef.current?.refresh()
+            .catch(e => console.error('Failed to save file locally:', e))
         }
       }
     }
@@ -4429,6 +4483,46 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
+      {/* Folder picker modal: shown on first login when FSA is supported but no folder picked yet */}
+      {showFolderModal && fsaBackend.supported && (
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-[var(--color-accent)]/15 flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-[var(--text-primary)]">Elegí tu carpeta de música</h2>
+                <p className="text-xs text-gray-400">Es donde se van a guardar tus descargas</p>
+              </div>
+            </div>
+            <p className="text-sm text-[var(--text-secondary)] mb-5 leading-relaxed">
+              La app necesita una carpeta en tu disco para guardar los temas. La elegís una sola vez y queda recordada.
+              Cada género se va a guardar en su propia subcarpeta automáticamente (Tech House/, Melodic House/, etc).
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={pickStorageFolder}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95"
+                style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+              >
+                Elegir carpeta
+              </button>
+              <button
+                onClick={() => setShowFolderModal(false)}
+                className="px-4 py-3 rounded-xl text-sm text-gray-400 hover:bg-[var(--bg-hover)] transition-colors"
+              >
+                Después
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-4 leading-relaxed">
+              Si tu browser no soporta esta función (Safari/Firefox) seguís necesitando el agent local instalado.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="flex-shrink-0 h-14 flex items-center justify-between px-3 md:px-6 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
@@ -4566,6 +4660,26 @@ function App() {
                   {AGENT_MODE === 'local' ? 'Local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'Remoto'}
                 </span>
               </div>
+            )}
+            {fsaReady && (
+              <button
+                onClick={forgetStorageFolder}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                title={`Carpeta: ${fsaFolderName} (click para cambiar)`}
+              >
+                <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                <span className="text-xs text-blue-400 hidden sm:inline truncate max-w-24">{fsaFolderName}</span>
+              </button>
+            )}
+            {fsaBackend.supported && !fsaReady && !agentConnected && (
+              <button
+                onClick={() => setShowFolderModal(true)}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors"
+                title="Elegir carpeta de descargas"
+              >
+                <svg className="w-3 h-3 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                <span className="text-xs text-yellow-400 hidden sm:inline">Elegir carpeta</span>
+              </button>
             )}
           </div>
           {authUser && (
@@ -5291,18 +5405,20 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           if (fname && !merged[fname]) merged[fname] = { title: t.title || '', artist: t.artist || '', genre: t.genre || '' }
         }
       } catch {}
-      if (agentConnected) {
-        try {
+      // Local filesystem scan: prefer FSA (browser-native), fallback to agent
+      try {
+        let localFiles = []
+        if (await fsaBackend.ready()) {
+          localFiles = await fsaBackend.listLibrary()
+        } else if (agentConnected) {
           const agentRes = await agentFetch('library')
-          const agentFiles = await agentRes.json()
-          if (Array.isArray(agentFiles)) {
-            for (const f of agentFiles) {
-              // Use filename as key; merge with existing metadata if present
-              if (!merged[f.filename]) merged[f.filename] = { title: '', artist: '', genre: f.subfolder || '' }
-            }
-          }
-        } catch {}
-      }
+          const arr = await agentRes.json()
+          if (Array.isArray(arr)) localFiles = arr
+        }
+        for (const f of localFiles) {
+          if (!merged[f.filename]) merged[f.filename] = { title: '', artist: '', genre: f.subfolder || '' }
+        }
+      } catch {}
       setLibraryManifest(merged)
     }
     loadLibraryRef.current = loadLibrary
