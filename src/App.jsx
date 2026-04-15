@@ -3750,21 +3750,25 @@ function App() {
   // Storage backend (FSA in browser OR agent fallback)
   const [fsaReady, setFsaReady] = useState(false)
   const [fsaFolderName, setFsaFolderName] = useState(null)
+  const [fsaStatus, setFsaStatus] = useState('no-folder') // 'no-folder' | 'needs-activation' | 'granted'
   const [showFolderModal, setShowFolderModal] = useState(false)
 
-  // Check FSA on mount; if browser supports + folder previously picked → use it.
-  // Otherwise show modal to pick (Chrome/Edge/Opera). Safari/Firefox skip the modal.
+  // Check FSA on mount. Three cases:
+  // - 'granted'  → fully ready, no UI prompt
+  // - 'needs-activation' → folder picked previously but Chrome requires
+  //                        a user click each session to re-grant access.
+  //                        Show small banner with "Activar carpeta X" button.
+  // - 'no-folder'→ never picked → show full picker modal
   useEffect(() => {
     if (!fsaBackend.supported) return
     ;(async () => {
-      const ok = await fsaBackend.ready()
-      if (ok) {
-        setFsaReady(true)
-        setFsaFolderName(await fsaBackend.folderName())
-      } else {
-        // First time, or permission lost → ask once
-        setShowFolderModal(true)
-      }
+      const status = await fsaBackend.status()
+      setFsaStatus(status)
+      const name = await fsaBackend.folderName()
+      setFsaFolderName(name)
+      if (status === 'granted') setFsaReady(true)
+      else if (status === 'no-folder') setShowFolderModal(true)
+      // 'needs-activation' → show banner via fsaStatus, don't auto-prompt
     })()
   }, [])
 
@@ -3773,23 +3777,36 @@ function App() {
     if (ok) {
       const name = await fsaBackend.folderName()
       setFsaReady(true)
+      setFsaStatus('granted')
       setFsaFolderName(name)
       setShowFolderModal(false)
       toast(`Carpeta lista: ${name} — recargando...`, 'success', 1500)
-      // Hard reload: ensures Library/Discover components re-fetch from the new backend
-      // (their useEffect deps don't include fsaReady so they wouldn't refresh otherwise)
       setTimeout(() => window.location.reload(), 800)
     } else {
       toast('No se eligió carpeta', 'warning', 3000)
     }
   }
 
+  // Activate the previously-picked folder (handles Chrome's per-session re-grant).
+  // Must be triggered by a user click — we just call it from the banner button.
+  const activateStorageFolder = async () => {
+    const ok = await fsaBackend.activate()
+    if (ok) {
+      setFsaReady(true)
+      setFsaStatus('granted')
+      toast(`Carpeta activada: ${fsaFolderName}`, 'success', 2000)
+    } else {
+      toast('No se pudo activar — elegí la carpeta de nuevo', 'warning', 3000)
+      setShowFolderModal(true)
+    }
+  }
+
   const forgetStorageFolder = async () => {
     await fsaBackend.forget()
     setFsaReady(false)
+    setFsaStatus('no-folder')
     setFsaFolderName(null)
     setShowFolderModal(true)
-    // Reload so library reverts to agent/Heroku-only view
     setTimeout(() => window.location.reload(), 500)
   }
   const [authUser, setAuthUser] = useState(() => {
@@ -4489,7 +4506,27 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
-      {/* Folder picker modal: shown on first login when FSA is supported but no folder picked yet */}
+      {/* Activation banner: folder picked previously but needs user click to re-grant permission this session */}
+      {fsaBackend.supported && fsaStatus === 'needs-activation' && !showFolderModal && (
+        <div className="flex-shrink-0 bg-blue-500/15 border-b border-blue-500/30 px-3 md:px-6 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            <span className="text-sm text-blue-300 truncate">
+              Carpeta <strong>{fsaFolderName}</strong> requiere reactivación (Chrome lo pide cada sesión)
+            </span>
+          </div>
+          <button
+            onClick={activateStorageFolder}
+            className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white hover:bg-blue-400 transition-colors active:scale-95"
+          >
+            Activar
+          </button>
+        </div>
+      )}
+
+      {/* Folder picker modal: only shown when no folder was ever picked */}
       {showFolderModal && fsaBackend.supported && (
         <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full p-6 md:p-8">
@@ -4653,6 +4690,15 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
               </svg>
             )}
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90 flex-shrink-0"
+            title="Recargar versión nueva"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
           </button>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />

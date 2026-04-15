@@ -56,17 +56,23 @@ async function idbDelete(key) {
 // ─── File System Access API backend ──────────────────────────────────────────
 const AUDIO_EXT_RE = /\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i
 
+// Quiet check (queryPermission only — never triggers prompt)
 async function ensurePermission(handle) {
   if (!handle) return false
   try {
-    const opts = { mode: 'readwrite' }
-    let p = await handle.queryPermission(opts)
-    if (p === 'granted') return true
-    if (p === 'prompt') {
-      p = await handle.requestPermission(opts)
-      return p === 'granted'
-    }
+    const p = await handle.queryPermission({ mode: 'readwrite' })
+    return p === 'granted'
+  } catch {
     return false
+  }
+}
+
+// User-gesture variant — call this from a click handler to actually prompt
+async function requestPermissionInteractive(handle) {
+  if (!handle) return false
+  try {
+    const p = await handle.requestPermission({ mode: 'readwrite' })
+    return p === 'granted'
   } catch {
     return false
   }
@@ -103,6 +109,24 @@ export const fsaBackend = {
     const handle = await loadHandle()
     if (!handle) return false
     return await ensurePermission(handle)
+  },
+
+  // Returns 'granted' | 'needs-activation' | 'no-folder'. Used by UI to decide
+  // whether to show full picker modal (no folder), a tiny activate button
+  // (folder exists but needs click), or nothing (granted).
+  async status() {
+    const handle = await loadHandle()
+    if (!handle) return 'no-folder'
+    const ok = await ensurePermission(handle)
+    return ok ? 'granted' : 'needs-activation'
+  },
+
+  // Call from a user-gesture handler (click/tap) — prompts to re-grant
+  // permission to a previously-picked folder. Returns true on success.
+  async activate() {
+    const handle = await loadHandle()
+    if (!handle) return false
+    return await requestPermissionInteractive(handle)
   },
 
   // Returns the human-readable name of the picked folder (or null).
