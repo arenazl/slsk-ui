@@ -636,8 +636,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
       const metadata = await metaRes.json()
 
-      // Local file scan: prefer FSA, fallback to agent, fallback to Heroku metadata
+      // Local file scan: prefer FSA, fallback to agent. Mobile (no FSA, no agent)
+      // reads the list the desktop last synced to Cloudinary (/api/user-files).
       let localFiles = null
+      let didLocalScan = false
       if (await fsaBackend.ready()) {
         const fsaList = await fsaBackend.listLibrary()
         localFiles = fsaList.map(f => ({
@@ -645,9 +647,29 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           format: (f.filename.match(/\.(\w{3,4})$/) || [])[1]?.toUpperCase() || '',
           mtime: f.modified ? new Date(f.modified).toISOString() : '',
         }))
+        didLocalScan = true
       } else if (agentConnected) {
         const agentRes = await agentFetch('library')
         localFiles = await agentRes.json()
+        didLocalScan = true
+      } else {
+        // No local storage — try Cloudinary-synced list (written by desktop)
+        try {
+          const syncRes = await fetch(`${API_BASE}/api/user-files?user=${encodeURIComponent(authUser?.name || '')}`)
+          const synced = await syncRes.json()
+          if (Array.isArray(synced) && synced.length > 0) {
+            localFiles = synced
+          }
+        } catch {}
+      }
+
+      // Desktop only: push the scanned list up so mobile can see it
+      if (didLocalScan && localFiles && authUser?.name) {
+        fetch(`${API_BASE}/api/user-files`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: authUser.name, files: localFiles }),
+        }).catch(() => {})
       }
 
       if (localFiles) {
@@ -5603,7 +5625,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     const loadLibrary = async () => {
       const merged = {}
 
-      // 1. Get the list of files from local storage (FSA preferred, agent fallback)
+      // 1. Get local file list (FSA → agent → Cloudinary-synced from another device)
       let localFiles = []
       const fsaActive = await fsaBackend.ready()
       try {
@@ -5613,23 +5635,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           const agentRes = await agentFetch('library')
           const arr = await agentRes.json()
           if (Array.isArray(arr)) localFiles = arr
+        } else {
+          // Mobile or browsers without FSA: read the list the desktop last synced
+          const syncRes = await fetch(`${API_BASE}/api/user-files?user=${encodeURIComponent(authUser?.name || '')}`)
+          const synced = await syncRes.json()
+          if (Array.isArray(synced)) localFiles = synced
         }
       } catch {}
-
-      // If neither FSA nor agent is available, fall back to Heroku library
-      // (read-only mode: user has no local storage configured)
-      if (!fsaActive && !agentConnected) {
-        try {
-          const lib = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
-          const libTracks = Array.isArray(lib) ? lib : (lib?.tracks || [])
-          for (const t of libTracks) {
-            const fname = t.filename || t.original_name
-            if (fname) merged[fname] = { title: t.title || '', artist: t.artist || '', genre: t.genre || '' }
-          }
-          setLibraryManifest(merged)
-          return
-        } catch {}
-      }
 
       // Build manifest from local files only
       for (const f of localFiles) {
