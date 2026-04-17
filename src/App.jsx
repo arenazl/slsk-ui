@@ -5863,6 +5863,32 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // badge so the user can re-trigger a download. Reset on page reload.
   const [clearedTrackIds, setClearedTrackIds] = useState(() => new Set())
 
+  const handleShareTrack = async (track) => {
+    if (!track) return
+    const params = new URLSearchParams({ share: '1' })
+    if (track.artist) params.set('artist', track.artist)
+    if (track.title) params.set('title', track.title)
+    if (track.artwork_url) params.set('artwork', track.artwork_url)
+    const preview = track.sample_url || track.preview_url
+    if (preview) params.set('preview', preview)
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`
+    const shareText = `🎵 ${track.artist || ''} - ${track.title || ''}`.trim()
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: shareText, text: shareText, url })
+        setDiscoverCtx(null)
+        return
+      } catch { /* user cancelled or share unsupported — fall through to clipboard */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      toast('Link copiado', 'success', 2000)
+    } catch {
+      window.prompt('Copiá el link para compartir:', url)
+    }
+    setDiscoverCtx(null)
+  }
+
   const cleanTrackState = (t) => {
     setDownloadQueue(prev => {
       if (!(t.id in prev)) return prev
@@ -6939,6 +6965,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
             Radio
           </button>
+          <button onClick={() => handleShareTrack(discoverCtx.track)}
+            className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
+            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+            Compartir link
+          </button>
           {discoverCtx.track?.album_id && (
             <button onClick={async () => {
                 const albumId = discoverCtx.track.album_id; const albumName = discoverCtx.track.album || 'Album'
@@ -7010,6 +7041,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
               </div>
               Radio - tracks similares
+            </button>
+            <button onClick={() => handleShareTrack(discoverCtx.track)}
+              className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
+              <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+              </div>
+              Compartir link
             </button>
             {discoverCtx.track?.album_id && (
               <button onClick={async () => {
@@ -7089,7 +7127,117 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   )
 }
 
+function ShareView() {
+  const params = new URLSearchParams(window.location.search)
+  const artist = params.get('artist') || ''
+  const title = params.get('title') || ''
+  const artwork = params.get('artwork') || ''
+  const previewFromUrl = params.get('preview') || ''
+  const [previewUrl, setPreviewUrl] = useState(previewFromUrl)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [loadingPreview, setLoadingPreview] = useState(!previewFromUrl)
+  const audioRef = useRef(null)
+
+  useEffect(() => {
+    document.title = artist && title ? `${artist} – ${title}` : 'GrooveSync DJ'
+  }, [artist, title])
+
+  useEffect(() => {
+    if (previewFromUrl) return
+    const q = `${artist} ${title}`.trim()
+    if (!q) { setLoadingPreview(false); return }
+    let cancelled = false
+    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=1`)
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return
+        if (d.results?.[0]?.previewUrl) setPreviewUrl(d.results[0].previewUrl)
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingPreview(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  const togglePlay = () => {
+    const a = audioRef.current
+    if (!a || !previewUrl) return
+    if (a.paused) { a.play().then(() => setIsPlaying(true)).catch(() => {}) }
+    else { a.pause(); setIsPlaying(false) }
+  }
+
+  const appUrl = `${window.location.origin}${window.location.pathname}`
+  const bigArt = artwork ? artwork.replace('1400x1400', '600x600') : ''
+
+  return (
+    <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
+      <header className="flex-shrink-0 h-14 px-4 md:px-6 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-topbar)]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center">
+            <svg className="w-4 h-4 text-[var(--color-accent-text,white)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          </div>
+          <span className="font-bold text-sm md:text-base">GrooveSync DJ</span>
+        </div>
+        <span className="text-xs text-gray-500">Preview compartida</span>
+      </header>
+
+      <main className="flex-1 min-h-0 overflow-y-auto">
+        <div className="min-h-full flex flex-col items-center justify-center p-6 gap-6">
+          <div className="relative">
+            <div className="w-64 h-64 md:w-80 md:h-80 rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-2xl bg-gradient-to-br from-gray-800 to-gray-900">
+              {bigArt ? (
+                <img src={bigArt} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <svg className="w-20 h-20 text-gray-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={togglePlay}
+              disabled={!previewUrl}
+              className="absolute bottom-3 right-3 w-16 h-16 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-text,white)] shadow-2xl flex items-center justify-center transition-all duration-200 active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
+            >
+              {isPlaying ? (
+                <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              ) : (
+                <svg className="w-7 h-7 translate-x-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              )}
+            </button>
+          </div>
+
+          <div className="text-center max-w-md">
+            <div className="text-xl md:text-2xl font-bold">{title || 'Tema compartido'}</div>
+            {artist && <div className="text-base md:text-lg text-gray-400 mt-1">{artist}</div>}
+            {loadingPreview && <div className="text-xs text-gray-500 mt-3 animate-pulse">Buscando preview…</div>}
+            {!loadingPreview && !previewUrl && <div className="text-xs text-gray-500 mt-3">Preview no disponible</div>}
+          </div>
+
+          <audio ref={audioRef} src={previewUrl || undefined} onEnded={() => setIsPlaying(false)} preload="auto" />
+
+          <a
+            href={appUrl}
+            className="mt-2 px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-sm flex items-center gap-2 transition-colors duration-200 active:scale-95"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            Abrí GrooveSync DJ
+          </a>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+
 function AppWithToast() {
+  // Public shared-track view — no auth, no websocket, no library. Just the preview.
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('share') === '1') {
+    return (
+      <ToastProvider>
+        <ShareView />
+      </ToastProvider>
+    )
+  }
   return (
     <ToastProvider>
       <App />
