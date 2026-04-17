@@ -5859,6 +5859,31 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }, [libraryManifest])
   // Download queue state
   const [downloadQueue, setDownloadQueue] = useState({}) // trackId -> {status, message}
+  // IDs the user explicitly "limpió" this session — suppresses the "Descargado"
+  // badge so the user can re-trigger a download. Reset on page reload.
+  const [clearedTrackIds, setClearedTrackIds] = useState(() => new Set())
+
+  const cleanTrackState = (t) => {
+    setDownloadQueue(prev => {
+      if (!(t.id in prev)) return prev
+      const n = { ...prev }
+      delete n[t.id]
+      return n
+    })
+    setClearedTrackIds(prev => {
+      const next = new Set(prev)
+      next.add(t.id)
+      return next
+    })
+    if (t.artist && t.title && username) {
+      fetch(`${API_BASE}/api/pending/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: username, tracks: [{ artist: t.artist, title: t.title }] }),
+      }).catch(() => {})
+    }
+    toast?.('Limpiado', 'success', 1200)
+  }
   // Radio state
   const [radioTracks, setRadioTracks] = useState(null) // null = not in radio view
   const [radioSeed, setRadioSeed] = useState('')
@@ -6666,17 +6691,31 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                   {/* Action button */}
                   {(() => {
                     const dl = downloadQueue[t.id]
-                    const alreadyInLibrary = !dl && isInLibrary(t)
-                    if (alreadyInLibrary) return (
-                      <span
-                        title="Ya está en tu biblioteca"
-                        className="flex-shrink-0 flex items-center gap-1 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/20"
+                    const alreadyInLibrary = !dl && !clearedTrackIds.has(t.id) && isInLibrary(t)
+                    const clearBtn = (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); cleanTrackState(t) }}
+                        title="Limpiar: quita de pendientes y permite re-descargar"
+                        className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors duration-150 active:scale-90"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
-                        <span className="hidden md:inline">Descargado</span>
-                      </span>
+                      </button>
+                    )
+                    if (alreadyInLibrary) return (
+                      <div className="flex-shrink-0 flex items-center gap-1">
+                        <span
+                          title="Ya está en tu biblioteca"
+                          className="flex items-center gap-1 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/20"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="hidden md:inline">Descargado</span>
+                        </span>
+                        {clearBtn}
+                      </div>
                     )
                     if (!dl) return (
                       <button
@@ -6696,24 +6735,33 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       </button>
                     )
                     if (dl.status === 'searching') return (
-                      <span className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-yellow-400 animate-pulse">
-                        <div className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                        <span className="hidden sm:inline">Buscando...</span>
-                      </span>
+                      <div className="flex-shrink-0 flex items-center gap-1">
+                        <span className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-yellow-400 animate-pulse">
+                          <div className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                          <span className="hidden sm:inline">Buscando...</span>
+                        </span>
+                        {clearBtn}
+                      </div>
                     )
                     if (dl.status === 'downloading') return (
-                      <span className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-[var(--color-accent)] animate-pulse">
-                        <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                        <span className="hidden sm:inline">Descargando</span>
-                      </span>
+                      <div className="flex-shrink-0 flex items-center gap-1">
+                        <span className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-[var(--color-accent)] animate-pulse">
+                          <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                          <span className="hidden sm:inline">Descargando</span>
+                        </span>
+                        {clearBtn}
+                      </div>
                     )
                     if (dl.status === 'done') return (
-                      <span className={`flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs ${dl.message === 'Agregado a pendientes' ? 'text-yellow-400 bg-yellow-500/10' : 'text-green-400 bg-green-500/10'}`}>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={dl.message === 'Agregado a pendientes' ? 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' : 'M5 13l4 4L19 7'} />
-                        </svg>
-                        <span className="hidden sm:inline">{dl.message === 'Agregado a pendientes' ? 'Pendiente' : 'Listo'}</span>
-                      </span>
+                      <div className="flex-shrink-0 flex items-center gap-1">
+                        <span className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs ${dl.message === 'Agregado a pendientes' ? 'text-yellow-400 bg-yellow-500/10' : 'text-green-400 bg-green-500/10'}`}>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={dl.message === 'Agregado a pendientes' ? 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' : 'M5 13l4 4L19 7'} />
+                          </svg>
+                          <span className="hidden sm:inline">{dl.message === 'Agregado a pendientes' ? 'Pendiente' : 'Listo'}</span>
+                        </span>
+                        {clearBtn}
+                      </div>
                     )
                     if (dl.status === 'not_found') return (
                       <button
