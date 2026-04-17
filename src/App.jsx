@@ -5593,6 +5593,79 @@ function App() {
 }
 
 
+function SwipeableRow({ children, onReveal }) {
+  const [dx, setDx] = useState(0)
+  const [sliding, setSliding] = useState(false)
+  const startX = useRef(0)
+  const startY = useRef(0)
+  const locked = useRef(null)
+  const THRESHOLD = 70
+  const MAX = 140
+
+  const handleStart = (e) => {
+    const t = e.touches[0]
+    startX.current = t.clientX
+    startY.current = t.clientY
+    locked.current = null
+    setSliding(true)
+  }
+  const handleMove = (e) => {
+    const t = e.touches[0]
+    const rx = t.clientX - startX.current
+    const ry = t.clientY - startY.current
+    if (locked.current == null && (Math.abs(rx) > 10 || Math.abs(ry) > 10)) {
+      locked.current = Math.abs(rx) > Math.abs(ry) ? 'x' : 'y'
+    }
+    if (locked.current === 'x') {
+      setDx(Math.max(-MAX, Math.min(MAX, rx)))
+    }
+  }
+  const handleEnd = () => {
+    const past = Math.abs(dx) > THRESHOLD
+    const wasX = locked.current === 'x'
+    setSliding(false)
+    setDx(0)
+    locked.current = null
+    if (wasX && past) setTimeout(() => onReveal?.(), 0)
+  }
+
+  const absDx = Math.abs(dx)
+  const revealed = absDx > THRESHOLD
+  const rightAligned = dx < 0
+
+  return (
+    <div className="relative mb-1">
+      <div
+        className={`absolute inset-0 rounded-xl flex items-center ${rightAligned ? 'justify-end pr-5' : 'justify-start pl-5'} transition-colors duration-150 ${revealed ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-accent)]/30'}`}
+      >
+        <div
+          className={`flex items-center gap-2 text-sm font-medium select-none ${revealed ? 'text-[var(--color-accent-text,white)]' : 'text-[var(--color-accent)]'}`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          Opciones
+        </div>
+      </div>
+      <div
+        onTouchStart={handleStart}
+        onTouchMove={handleMove}
+        onTouchEnd={handleEnd}
+        onTouchCancel={handleEnd}
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: sliding ? 'none' : 'transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1)',
+          background: 'var(--bg-app)',
+        }}
+        className="relative rounded-xl"
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+
 function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, authUser, collection }) {
   const toast = useToast()
   const [genres, setGenres] = useState([])
@@ -6505,9 +6578,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             {(labelFilter ? labelTracks : tracks).map((t, i) => {
               const isPlaying = playingId === t.id
               return (
-                <div key={t.id || i}
+                <SwipeableRow key={t.id || i} onReveal={() => setDiscoverCtx({ x: window.innerWidth / 2, y: window.innerHeight - 100, track: t })}>
+                <div
                   onContextMenu={(e) => { e.preventDefault(); setDiscoverCtx({ x: e.clientX, y: e.clientY, track: t }) }}
-                  className={`group flex items-center gap-2 md:gap-4 px-2 md:px-4 py-2 md:py-3 rounded-xl mb-1 transition-all duration-200 ${
+                  className={`group flex items-center gap-2 md:gap-4 px-2 md:px-4 py-2 md:py-3 rounded-xl transition-all duration-200 ${
                   isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-[var(--bg-hover)]'
                 }`}>
                   {/* Position number - shows play on hover */}
@@ -6518,24 +6592,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     <PlayPauseBtn isPlaying={isPlaying} onClick={() => playPreview(t)} className={`hidden group-hover:flex ${isPlaying ? '!text-green-400' : ''}`} />
                   </div>
 
-                  {/* Artwork - long press opens context menu on mobile */}
+                  {/* Artwork - tap to play. Swipe row sideways to open options. */}
                   <button
                     onClick={() => playPreview(t)}
                     onContextMenu={(e) => e.preventDefault()}
-                    onTouchStart={(e) => {
-                      const el = e.currentTarget
-                      el._longPressTriggered = false
-                      el._longPressTimer = setTimeout(() => {
-                        el._longPressTriggered = true
-                        const touch = e.touches[0]
-                        setDiscoverCtx({ x: touch.clientX, y: touch.clientY, track: t })
-                      }, 400)
-                    }}
-                    onTouchEnd={(e) => {
-                      clearTimeout(e.currentTarget._longPressTimer)
-                      if (e.currentTarget._longPressTriggered) e.preventDefault()
-                    }}
-                    onTouchMove={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
                     className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative group/art transition-all duration-200 select-none ${
                       isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                     }`}
@@ -6662,6 +6722,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     )
                   })()}
                 </div>
+                </SwipeableRow>
               )
             })}
           </div>
@@ -6703,9 +6764,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 {radioTracks.map((t, i) => {
                   const isPlaying = playingId === t.id
                   return (
-                    <div key={t.id || i}
+                    <SwipeableRow key={t.id || i} onReveal={() => setDiscoverCtx({ x: window.innerWidth / 2, y: window.innerHeight - 100, track: t })}>
+                    <div
                       onContextMenu={(e) => { e.preventDefault(); setDiscoverCtx({ x: e.clientX, y: e.clientY, track: t }) }}
-                      className={`group flex items-center gap-2 md:gap-4 px-2 md:px-4 py-2 md:py-3 rounded-xl mb-1 transition-all duration-200 ${
+                      className={`group flex items-center gap-2 md:gap-4 px-2 md:px-4 py-2 md:py-3 rounded-xl transition-all duration-200 ${
                       isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-[var(--bg-hover)]'
                     }`}>
                       <div className="w-6 md:w-8 flex-shrink-0 text-center">
@@ -6717,20 +6779,6 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       <button
                         onClick={() => playPreview(t)}
                         onContextMenu={(e) => e.preventDefault()}
-                        onTouchStart={(e) => {
-                          const el = e.currentTarget
-                          el._longPressTriggered = false
-                          el._longPressTimer = setTimeout(() => {
-                            el._longPressTriggered = true
-                            const touch = e.touches[0]
-                            setDiscoverCtx({ x: touch.clientX, y: touch.clientY, track: t })
-                          }, 400)
-                        }}
-                        onTouchEnd={(e) => {
-                          clearTimeout(e.currentTarget._longPressTimer)
-                          if (e.currentTarget._longPressTriggered) e.preventDefault()
-                        }}
-                        onTouchMove={(e) => { clearTimeout(e.currentTarget._longPressTimer) }}
                         className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 select-none ${
                           isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                         }`}
@@ -6791,6 +6839,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                         return <span className="flex-shrink-0 text-xs text-red-400">Error</span>
                       })()}
                     </div>
+                    </SwipeableRow>
                   )
                 })}
               </div>
