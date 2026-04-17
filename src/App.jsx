@@ -4076,23 +4076,27 @@ function App() {
         setTracks(data.tracks)
       }
 
+      // Server-authoritative pending list. Filtered by user so multi-user server
+      // broadcasts don't cross-contaminate.
+      if (data.type === 'pending_updated' && data.user === username && Array.isArray(data.pending)) {
+        setPendingTracks(data.pending)
+        setQueueCount(data.pending.length)
+      }
+
       if (data.type === 'track_update') {
         setTracks(prev => prev.map(t => t.id === data.track.id ? data.track : t))
         // Remove from pending list if successfully downloaded or already in library
         if (data.track.status === 'completed' || data.track.status === 'skipped') {
-          setPendingTracks(prev => {
-            const artist = (data.track.artist || '').toLowerCase()
-            const title = (data.track.title || '').toLowerCase()
-            const updated = prev.filter(p => !((p.artist || '').toLowerCase() === artist && (p.title || '').toLowerCase() === title))
-            if (updated.length !== prev.length) {
-              fetch(`${API_BASE}/api/pending`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: username, tracks: updated }),
-              }).catch(() => {})
-            }
-            return updated
-          })
+          const artist = (data.track.artist || '').toLowerCase()
+          const title = (data.track.title || '').toLowerCase()
+          setPendingTracks(prev => prev.filter(p => !((p.artist || '').toLowerCase() === artist && (p.title || '').toLowerCase() === title)))
+          if (data.track.artist && data.track.title) {
+            fetch(`${API_BASE}/api/pending/remove`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user: username, tracks: [{ artist: data.track.artist, title: data.track.title }] }),
+            }).catch(() => {})
+          }
         }
         if (data.track.status === 'completed' && data.track.filename) {
           // Transfer file from Heroku to local disk: prefer FSA (browser-native),
@@ -4154,23 +4158,25 @@ function App() {
         // When a single download finishes, drop the matching pending entry (logged on click in Discover)
         if (data.status === 'completed' && data.filename) {
           const fnameLower = data.filename.toLowerCase()
+          const toRemove = []
           setPendingTracks(prev => {
             const updated = prev.filter(p => {
               const artist = (p.artist || '').toLowerCase()
               const title = (p.title || '').toLowerCase()
-              // Match if filename contains both artist and title (loose match — filenames vary)
               if (!artist || !title) return true
-              return !(fnameLower.includes(artist.slice(0, 10)) && fnameLower.includes(title.slice(0, 10)))
+              const matches = fnameLower.includes(artist.slice(0, 10)) && fnameLower.includes(title.slice(0, 10))
+              if (matches) toRemove.push({ artist: p.artist, title: p.title, filename: data.filename })
+              return !matches
             })
-            if (updated.length !== prev.length) {
-              fetch(`${API_BASE}/api/pending`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: username, tracks: updated }),
-              }).catch(() => {})
-            }
             return updated
           })
+          if (toRemove.length) {
+            fetch(`${API_BASE}/api/pending/remove`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user: username, tracks: toRemove }),
+            }).catch(() => {})
+          }
         }
         if (data.status === 'completed' && data.filename) {
           // Save the downloaded file locally: prefer FSA, fallback to agent
@@ -4229,12 +4235,15 @@ function App() {
         })
       })
       setPendingTracks(filtered)
-      // If we removed any, persist the cleaned list
+      // If we dropped items because they matched the local library, tell the
+      // server to remove just those — never full-replace (would clobber adds
+      // made from another device between our GET and POST).
       if (filtered.length !== pending.length) {
-        fetch(`${API_BASE}/api/pending`, {
+        const dropped = pending.filter(p => !filtered.includes(p)).map(p => ({ artist: p.artist, title: p.title }))
+        fetch(`${API_BASE}/api/pending/remove`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user: username, tracks: filtered }),
+          body: JSON.stringify({ user: username, tracks: dropped }),
         }).catch(() => {})
       }
     })
@@ -4250,29 +4259,34 @@ function App() {
   }
 
   const addToPending = (track) => {
+    const entry = {
+      artist: track.artist || '',
+      title: track.title || '',
+      query: track.query || `${track.artist} - ${track.title}`,
+      source: track.source || 'manual',
+      addedAt: new Date().toISOString(),
+    }
     setPendingTracks(prev => {
-      const exists = prev.some(t => t.artist === track.artist && t.title === track.title)
-      if (exists) return prev
-      const updated = [...prev, { artist: track.artist || '', title: track.title || '', query: track.query || `${track.artist} - ${track.title}`, source: track.source || 'manual', addedAt: new Date().toISOString() }]
-      fetch(`${API_BASE}/api/pending`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: username, tracks: updated }),
-      }).catch(() => {})
-      return updated
+      if (prev.some(t => t.artist === entry.artist && t.title === entry.title)) return prev
+      return [...prev, entry]
     })
+    fetch(`${API_BASE}/api/pending/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: username, track: entry }),
+    }).catch(() => {})
   }
 
   const removeFromPending = (idx) => {
-    setPendingTracks(prev => {
-      const updated = prev.filter((_, i) => i !== idx)
-      fetch(`${API_BASE}/api/pending`, {
+    const target = pendingTracks[idx]
+    setPendingTracks(prev => prev.filter((_, i) => i !== idx))
+    if (target) {
+      fetch(`${API_BASE}/api/pending/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: username, tracks: updated }),
+        body: JSON.stringify({ user: username, tracks: [{ artist: target.artist, title: target.title }] }),
       }).catch(() => {})
-      return updated
-    })
+    }
   }
 
   useEffect(() => {
@@ -4311,19 +4325,16 @@ function App() {
     // Remove track from local list (if it's downloading, the server continues but UI hides it)
     setTracks(prev => prev.filter(t => t.id !== track.id))
     // Also remove from pending if it's there
-    setPendingTracks(prev => {
-      const artist = (track.artist || '').toLowerCase()
-      const title = (track.title || '').toLowerCase()
-      const updated = prev.filter(p => !((p.artist || '').toLowerCase() === artist && (p.title || '').toLowerCase() === title))
-      if (updated.length !== prev.length) {
-        fetch(`${API_BASE}/api/pending`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user: username, tracks: updated }),
-        }).catch(() => {})
-      }
-      return updated
-    })
+    const artist = (track.artist || '').toLowerCase()
+    const title = (track.title || '').toLowerCase()
+    setPendingTracks(prev => prev.filter(p => !((p.artist || '').toLowerCase() === artist && (p.title || '').toLowerCase() === title)))
+    if (track.artist && track.title) {
+      fetch(`${API_BASE}/api/pending/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: username, tracks: [{ artist: track.artist, title: track.title }] }),
+      }).catch(() => {})
+    }
   }
 
   const handleStart = () => {
