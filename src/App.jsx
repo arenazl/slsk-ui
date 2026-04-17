@@ -3780,24 +3780,9 @@ function App() {
   const [isStandalone, setIsStandalone] = useState(false)
   const [showIosInstall, setShowIosInstall] = useState(false)
 
-  // Cross-device queue: count pending tracks the user added from other devices (iPhone, etc.)
-  // When this PC has local-save capability (FSA or agent), nudge them to process the queue.
+  // Cross-device queue count — the useEffect that fetches is below, after authUser is declared
   const [queueCount, setQueueCount] = useState(0)
   const [queueBannerDismissed, setQueueBannerDismissed] = useState(false)
-  useEffect(() => {
-    if (!authUser?.name) return
-    const fetchQueue = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(authUser.name)}`)
-        const arr = await res.json()
-        setQueueCount(Array.isArray(arr) ? arr.length : 0)
-      } catch {}
-    }
-    fetchQueue()
-    // Re-check every 30s so iPhone adds appear on desktop without reload
-    const t = setInterval(fetchQueue, 30000)
-    return () => clearInterval(t)
-  }, [authUser])
 
   useEffect(() => {
     // Detect already-installed (standalone mode)
@@ -3877,6 +3862,22 @@ function App() {
     const saved = localStorage.getItem('auth_user')
     return saved ? JSON.parse(saved) : null
   })
+
+  // Cross-device queue: poll pending count for this user (added from iPhone or any device)
+  useEffect(() => {
+    if (!authUser?.name) { setQueueCount(0); return }
+    const fetchQueue = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(authUser.name)}`)
+        const arr = await res.json()
+        setQueueCount(Array.isArray(arr) ? arr.length : 0)
+      } catch {}
+    }
+    fetchQueue()
+    const t = setInterval(fetchQueue, 30000)
+    return () => clearInterval(t)
+  }, [authUser])
+
   const [page, setPage] = useQS('page', 'discover')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [dlPanelOpen, setDlPanelOpen] = useState(false)
