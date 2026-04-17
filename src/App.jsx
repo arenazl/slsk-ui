@@ -3963,12 +3963,19 @@ function App() {
       }
       return false
     }
-    // Skip agent polling on mobile — there's no local agent and it just floods
-    // the console with ERR_CONNECTION_REFUSED.
+    // Skip agent polling when:
+    // - on mobile (no localhost to reach)
+    // - FSA is ready (user has local storage via browser, agent not needed)
+    // Avoids spamming console with ERR_CONNECTION_REFUSED.
     const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
 
     const checkAgent = async () => {
       if (IS_MOBILE) {
+        setAgentConnected(false); agentConnectedRef.current = false
+        return
+      }
+      // If FSA is ready, don't bother with the agent
+      if (await fsaBackend.ready()) {
         setAgentConnected(false); agentConnectedRef.current = false
         return
       }
