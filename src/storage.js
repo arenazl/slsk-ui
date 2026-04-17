@@ -4,7 +4,15 @@
 // The rest of the app calls `storage.X()` without knowing which backend runs.
 // Pick happens on app boot: if browser supports FSA → use that. Else → agent.
 
-const FSA_SUPPORTED = typeof window !== 'undefined' && 'showDirectoryPicker' in window
+// Detect iOS/Safari explicitly — even if showDirectoryPicker exists in some
+// future iOS version, the UX is unreliable (Safari often throws NotAllowedError
+// silently). Better to fall back to streaming-only mode.
+const IS_IOS = typeof navigator !== 'undefined' &&
+  (/iPhone|iPad|iPod/i.test(navigator.userAgent || '') ||
+   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+const FSA_SUPPORTED = typeof window !== 'undefined' &&
+  'showDirectoryPicker' in window &&
+  !IS_IOS
 const DB_NAME = 'groovesync'
 const HANDLE_STORE = 'handles'
 const HANDLE_KEY = 'music_root'
@@ -83,13 +91,26 @@ async function loadHandle() {
   try {
     return await idbGet(HANDLE_KEY)
   } catch {
+    // IndexedDB can be unavailable (private browsing, iOS quirks, etc.)
     return null
+  }
+}
+
+// Paranoid wrapper — never throws, returns fallback on any error
+function safe(asyncFn, fallback) {
+  return async (...args) => {
+    try {
+      return await asyncFn(...args)
+    } catch {
+      return fallback
+    }
   }
 }
 
 export const fsaBackend = {
   type: 'fsa',
   supported: FSA_SUPPORTED,
+  isIOS: IS_IOS,
 
   // Opens native folder picker. Returns true on success, false if user cancelled.
   async pickFolder() {
@@ -99,73 +120,93 @@ export const fsaBackend = {
       await idbSet(HANDLE_KEY, handle)
       return true
     } catch (e) {
-      // User cancelled or denied
       return false
     }
   },
 
   // Returns true if a previously-picked folder is still usable (permission granted).
   async ready() {
-    const handle = await loadHandle()
-    if (!handle) return false
-    return await ensurePermission(handle)
+    if (!FSA_SUPPORTED) return false
+    try {
+      const handle = await loadHandle()
+      if (!handle) return false
+      return await ensurePermission(handle)
+    } catch {
+      return false
+    }
   },
 
-  // Returns 'granted' | 'needs-activation' | 'no-folder'. Used by UI to decide
-  // whether to show full picker modal (no folder), a tiny activate button
-  // (folder exists but needs click), or nothing (granted).
   async status() {
-    const handle = await loadHandle()
-    if (!handle) return 'no-folder'
-    const ok = await ensurePermission(handle)
-    return ok ? 'granted' : 'needs-activation'
+    if (!FSA_SUPPORTED) return 'no-folder'
+    try {
+      const handle = await loadHandle()
+      if (!handle) return 'no-folder'
+      const ok = await ensurePermission(handle)
+      return ok ? 'granted' : 'needs-activation'
+    } catch {
+      return 'no-folder'
+    }
   },
 
-  // Call from a user-gesture handler (click/tap) — prompts to re-grant
-  // permission to a previously-picked folder. Returns true on success.
   async activate() {
-    const handle = await loadHandle()
-    if (!handle) return false
-    return await requestPermissionInteractive(handle)
+    if (!FSA_SUPPORTED) return false
+    try {
+      const handle = await loadHandle()
+      if (!handle) return false
+      return await requestPermissionInteractive(handle)
+    } catch {
+      return false
+    }
   },
 
-  // Returns the human-readable name of the picked folder (or null).
   async folderName() {
-    const handle = await loadHandle()
-    return handle?.name || null
+    if (!FSA_SUPPORTED) return null
+    try {
+      const handle = await loadHandle()
+      return handle?.name || null
+    } catch {
+      return null
+    }
   },
 
   async forget() {
-    await idbDelete(HANDLE_KEY)
+    if (!FSA_SUPPORTED) return
+    try {
+      await idbDelete(HANDLE_KEY)
+    } catch { /* ignore */ }
   },
 
-  // Recursively scan the picked folder. Returns [{filename, subfolder, size_mb, modified}].
   async listLibrary() {
-    const root = await loadHandle()
-    if (!root) return []
-    const ok = await ensurePermission(root)
-    if (!ok) return []
+    if (!FSA_SUPPORTED) return []
+    try {
+      const root = await loadHandle()
+      if (!root) return []
+      const ok = await ensurePermission(root)
+      if (!ok) return []
 
-    const out = []
-    async function scan(dir, sub) {
-      for await (const [name, h] of dir.entries()) {
-        if (h.kind === 'directory') {
-          await scan(h, sub ? `${sub}/${name}` : name)
-        } else if (h.kind === 'file' && AUDIO_EXT_RE.test(name)) {
-          try {
-            const f = await h.getFile()
-            out.push({
-              filename: name,
-              subfolder: sub,
-              size_mb: +(f.size / (1024 * 1024)).toFixed(1),
-              modified: f.lastModified,
-            })
-          } catch { /* skip unreadable */ }
+      const out = []
+      async function scan(dir, sub) {
+        for await (const [name, h] of dir.entries()) {
+          if (h.kind === 'directory') {
+            await scan(h, sub ? `${sub}/${name}` : name)
+          } else if (h.kind === 'file' && AUDIO_EXT_RE.test(name)) {
+            try {
+              const f = await h.getFile()
+              out.push({
+                filename: name,
+                subfolder: sub,
+                size_mb: +(f.size / (1024 * 1024)).toFixed(1),
+                modified: f.lastModified,
+              })
+            } catch { /* skip unreadable */ }
+          }
         }
       }
+      await scan(root, '')
+      return out
+    } catch {
+      return []
     }
-    await scan(root, '')
-    return out
   },
 
   // Save a Blob to the picked folder, optionally inside a subfolder (genre).
