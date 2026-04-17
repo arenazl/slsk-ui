@@ -3941,7 +3941,15 @@ function App() {
       }
       return false
     }
+    // Skip agent polling on mobile — there's no local agent and it just floods
+    // the console with ERR_CONNECTION_REFUSED.
+    const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
+
     const checkAgent = async () => {
+      if (IS_MOBILE) {
+        setAgentConnected(false); agentConnectedRef.current = false
+        return
+      }
       const configBody = JSON.stringify({ username: authUser.name })
       const configHeaders = { 'Content-Type': 'application/json' }
       try {
