@@ -3775,6 +3775,48 @@ function App() {
     })()
   }, [])
 
+  // PWA install prompt handling
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [isStandalone, setIsStandalone] = useState(false)
+  const [showIosInstall, setShowIosInstall] = useState(false)
+
+  useEffect(() => {
+    // Detect already-installed (standalone mode)
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+    setIsStandalone(standalone)
+
+    // Chrome/Edge/Android: capture the prompt event
+    const handleBeforeInstall = (e) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+    }
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall)
+    window.addEventListener('appinstalled', () => {
+      setInstallPrompt(null)
+      setIsStandalone(true)
+      toast('App instalada', 'success', 3000)
+    })
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
+  }, [toast])
+
+  const handleInstall = async () => {
+    // iOS Safari: no prompt event — show instructions modal instead
+    const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    if (isIos && !installPrompt) {
+      setShowIosInstall(true)
+      return
+    }
+    if (!installPrompt) {
+      toast('Este browser no soporta instalación automática', 'warning', 3000)
+      return
+    }
+    installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') toast('Instalando...', 'success', 2000)
+    setInstallPrompt(null)
+  }
+
   const pickStorageFolder = async () => {
     const ok = await fsaBackend.pickFolder()
     if (ok) {
@@ -4509,6 +4551,44 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
+      {/* iOS install instructions modal (Safari doesn't expose beforeinstallprompt) */}
+      {showIosInstall && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowIosInstall(false)}
+        >
+          <div
+            className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-[var(--text-primary)] mb-3">Instalá en tu iPhone</h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              Safari no tiene botón directo. Tres pasos:
+            </p>
+            <ol className="space-y-3 mb-5 text-sm text-[var(--text-primary)]">
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] flex items-center justify-center text-xs font-bold">1</span>
+                <span>Tocá el botón <strong>Compartir</strong> <svg className="inline w-4 h-4 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.032 4.026a3 3 0 10-5.368-2.684m5.368 2.684a3 3 0 11-5.368-2.684M12 9v6m-6.316-9.026a3 3 0 10-5.368 2.684M19 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> (abajo, medio).</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] flex items-center justify-center text-xs font-bold">2</span>
+                <span>Bajá y tocá <strong>"Añadir a pantalla de inicio"</strong>.</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] flex items-center justify-center text-xs font-bold">3</span>
+                <span>Tocá <strong>Añadir</strong> arriba a la derecha. Listo — icono en home.</span>
+              </li>
+            </ol>
+            <button
+              onClick={() => setShowIosInstall(false)}
+              className="w-full py-3 rounded-xl text-sm font-semibold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-90 transition-all active:scale-95"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Activation banner: folder picked previously but needs user click to re-grant permission this session */}
       {fsaBackend.supported && fsaStatus === 'needs-activation' && !showFolderModal && (
         <div className="flex-shrink-0 bg-blue-500/15 border-b border-blue-500/30 px-3 md:px-6 py-2 flex items-center justify-between gap-3">
@@ -4694,6 +4774,18 @@ function App() {
               </svg>
             )}
           </button>
+          {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
+            <button
+              onClick={handleInstall}
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-90 transition-all active:scale-95 flex-shrink-0"
+              title="Instalar como app"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+              </svg>
+              <span className="hidden sm:inline">Instalar app</span>
+            </button>
+          )}
           <button
             onClick={() => window.location.reload()}
             className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90 flex-shrink-0"
