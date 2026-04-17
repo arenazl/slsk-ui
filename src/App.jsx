@@ -5794,10 +5794,25 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   // Close context menu on outside click
   const previewIntervalRef = useRef(null)
+  // Auto-preview duration per track (30 / 60 / 90 s). Default 30.
+  const [previewDuration, setPreviewDuration] = useState(() => {
+    const saved = parseInt(localStorage.getItem('preview_duration') || '30', 10)
+    return [30, 60, 90].includes(saved) ? saved : 30
+  })
+  useEffect(() => { localStorage.setItem('preview_duration', String(previewDuration)) }, [previewDuration])
+  // Use a ref so the currently-running preview picks up changes mid-session too
+  const previewDurationRef = useRef(previewDuration)
+  useEffect(() => { previewDurationRef.current = previewDuration }, [previewDuration])
+
   const handlePreviewFromCtx = (startTrack) => {
-    const startIdx = tracks.findIndex(t => t.title === startTrack.title && t.artist === startTrack.artist)
+    // Use the list currently visible to the user (label filter switches it)
+    const activeList = labelFilter ? labelTracks : tracks
+    const startIdx = activeList.findIndex(t =>
+      (t.id && startTrack.id && t.id === startTrack.id) ||
+      (t.title === startTrack.title && t.artist === startTrack.artist)
+    )
     if (startIdx === -1) return
-    const playlist = tracks.slice(startIdx)
+    const playlist = activeList.slice(startIdx)
     let current = 0
 
     const playNext = async () => {
@@ -5812,13 +5827,14 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         a.volume = vol
         audioRef.current = a
         setPlayingFile(`discover-preview-${current}`)
+        setPlayingId(t.id)
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
         a.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
         a.onerror = () => { current++; playNext() }
         a.play().then(() => {
-          // Only set timeout after play actually starts
-          previewIntervalRef.current = setTimeout(() => { a.pause(); current++; playNext() }, 30000)
+          // Duration comes from the ref so mid-session changes apply to next tick.
+          previewIntervalRef.current = setTimeout(() => { a.pause(); current++; playNext() }, previewDurationRef.current * 1000)
         }).catch(() => { current++; playNext() })
       }
 
@@ -6408,7 +6424,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           {/* Preview continuo sub-bar */}
           <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-6 py-2 border-b border-[var(--border-color)] bg-[var(--bg-panel)]/50">
             <button
-              onClick={() => tracks.length > 0 && handlePreviewFromCtx(tracks[0])}
+              onClick={() => {
+                const list = labelFilter ? labelTracks : tracks
+                if (list.length === 0) return
+                // If a track is currently highlighted/playing, start from it; else from the first
+                const startTrack = playingId ? list.find(t => t.id === playingId) || list[0] : list[0]
+                handlePreviewFromCtx(startTrack)
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-all active:scale-95"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -6418,6 +6440,23 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               <span className="hidden sm:inline">Preview continuo</span>
               <span className="sm:hidden">Preview</span>
             </button>
+            {/* Duration selector (30/60/90 s per track) */}
+            <div className="flex items-center rounded-full bg-[var(--bg-input)] p-0.5">
+              {[30, 60, 90].map(secs => (
+                <button
+                  key={secs}
+                  onClick={() => setPreviewDuration(secs)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                    previewDuration === secs
+                      ? 'bg-purple-500/30 text-purple-300'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  title={`${secs}s por tema`}
+                >
+                  {secs}s
+                </button>
+              ))}
+            </div>
             {playingId && (
               <button
                 onClick={() => { if (audioRef?.current) audioRef.current.pause(); clearDiscoverAudio(); if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current) }}
