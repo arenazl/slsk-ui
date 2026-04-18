@@ -1358,9 +1358,9 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             </svg>
           </button>
           <button
-            onClick={fetchLibrary}
+            onClick={() => { fetchLibrary(); window.dispatchEvent(new Event('library-changed')); toast('Re-indexando biblioteca…', 'success', 1500) }}
             className="p-1.5 md:p-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-[var(--text-primary,white)] transition-all duration-200 active:scale-95"
-            title="Refrescar"
+            title="Re-indexar (escanear carpeta + refrescar Discover)"
           >
             <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -5858,6 +5858,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
     loadLibraryRef.current = loadLibrary
     loadLibrary()
+    // Re-scan cuando la Library dispare "library-changed" (después de mover
+    // archivos a la carpeta nueva, por ejemplo). Permite que los badges
+    // "Descargado" en Discover se actualicen sin tener que recargar la app.
+    const handler = () => loadLibrary()
+    window.addEventListener('library-changed', handler)
+    return () => window.removeEventListener('library-changed', handler)
   }, [authUser, collection, agentConnected])
 
   // Refresh library manifest whenever any download completes (global WS listener).
