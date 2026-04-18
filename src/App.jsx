@@ -5396,6 +5396,12 @@ function App() {
                     })
                     return Object.entries(grouped).map(([filename, sources]) => {
                       const best = sources[0]
+                      // Server-side dedup groups multiple peers under best.sources.
+                      // Prefer that list (has queue/slots/speed per peer) over the
+                      // UI-level filename grouping, which would lose fallback peers.
+                      const serverSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : null
+                      const effectiveSources = serverSources || sources
+                      const sourceCount = best.source_count || serverSources?.length || sources.length
                       const dlInfo = searchDlStatus[filename]
                       const dlSt = dlInfo?.status || dlInfo
                       const dlPct = dlInfo?.pct
@@ -5415,7 +5421,7 @@ function App() {
                               <span>{best.size_mb} MB</span>
                               <span className="hidden sm:inline">{best.bitrate > 0 ? `${best.bitrate} kbps` : ''}</span>
                               <span className="hidden sm:inline">{best.duration > 0 ? `${Math.floor(best.duration / 60)}:${String(best.duration % 60).padStart(2, '0')}` : ''}</span>
-                              <span className="text-gray-600">{sources.length} fuente{sources.length > 1 ? 's' : ''}</span>
+                              <span className="text-gray-600">{sourceCount} fuente{sourceCount > 1 ? 's' : ''}</span>
                             </div>
                           </div>
                           {dlSt === 'completed' ? (
@@ -5451,12 +5457,12 @@ function App() {
                             </div>
                           ) : dlSt === 'error' ? (
                             <button
-                              onClick={() => { setSearchDlStatus(prev => { const n = {...prev}; delete n[filename]; return n }); handleDownloadSingle({ ...best, sources }) }}
+                              onClick={() => { setSearchDlStatus(prev => { const n = {...prev}; delete n[filename]; return n }); handleDownloadSingle({ ...best, sources: effectiveSources }) }}
                               className="text-red-400 hover:text-red-300 text-xs flex-shrink-0 hover:underline transition-colors"
                             >Reintentar</button>
                           ) : (
                             <button
-                              onClick={() => handleDownloadSingle({ ...best, sources })}
+                              onClick={() => handleDownloadSingle({ ...best, sources: effectiveSources })}
                               className="flex-shrink-0 px-2 md:px-3 py-1 rounded text-xs transition-all duration-200 active:scale-95"
                               style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                             >
