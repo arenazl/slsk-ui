@@ -144,6 +144,27 @@ function TrackRow({ track, onCancel }) {
 }
 
 const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://slsk-backend-7da97b8a965d.herokuapp.com'
+
+// Stable per-browser device id + human label. Used para que el banner de
+// "temas en cola desde otros dispositivos" solo cuente los que realmente
+// vienen de OTRO device, no los que vos mismo agregaste acá.
+function getDeviceInfo() {
+  let id = localStorage.getItem('device_id')
+  if (!id) {
+    id = (crypto.randomUUID?.() || `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
+    localStorage.setItem('device_id', id)
+  }
+  const ua = navigator.userAgent || ''
+  let name = 'Desktop'
+  if (/iPhone/i.test(ua)) name = 'iPhone'
+  else if (/iPad/i.test(ua)) name = 'iPad'
+  else if (/Android/i.test(ua)) name = 'Android'
+  else if (/Mac/i.test(ua)) name = 'Mac'
+  else if (/Windows/i.test(ua)) name = 'Windows'
+  else if (/Linux/i.test(ua)) name = 'Linux'
+  return { id, name }
+}
+const DEVICE = typeof window !== 'undefined' ? getDeviceInfo() : { id: 'server', name: 'Server' }
 let AGENT_BASE = 'http://localhost:9900'
 let AGENT_MODE = 'local' // 'local' = direct, 'proxy' = through server
 let AGENT_USER = ''
@@ -3804,6 +3825,7 @@ function App() {
 
   // Cross-device queue count — the useEffect that fetches is below, after authUser is declared
   const [queueCount, setQueueCount] = useState(0)
+  const [queueDevices, setQueueDevices] = useState([])  // ['iPhone', 'Desktop', ...]
   const [queueBannerDismissed, setQueueBannerDismissed] = useState(false)
 
   useEffect(() => {
@@ -3892,7 +3914,13 @@ function App() {
       try {
         const res = await fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(authUser.name)}`)
         const arr = await res.json()
-        setQueueCount(Array.isArray(arr) ? arr.length : 0)
+        // Contar solo los que vienen de OTRO device. Items sin device_id son
+        // legacy (pre-device-tracking) — los mostramos para no perder datos.
+        const others = Array.isArray(arr) ? arr.filter(t => !t.device_id || t.device_id !== DEVICE.id) : []
+        setQueueCount(others.length)
+        // Lista única de devices que aportaron
+        const devs = Array.from(new Set(others.map(t => t.device_name || 'Otro dispositivo')))
+        setQueueDevices(devs)
       } catch {}
     }
     fetchQueue()
@@ -4274,6 +4302,8 @@ function App() {
       query: track.query || `${track.artist} - ${track.title}`,
       source: track.source || 'manual',
       addedAt: new Date().toISOString(),
+      device_id: DEVICE.id,
+      device_name: DEVICE.name,
     }
     setPendingTracks(prev => {
       if (prev.some(t => t.artist === entry.artist && t.title === entry.title)) return prev
@@ -4696,7 +4726,8 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
             <span className="text-sm text-[var(--text-primary)] truncate">
-              Tenés <strong>{queueCount}</strong> {queueCount === 1 ? 'tema' : 'temas'} en cola desde otros dispositivos
+              Tenés <strong>{queueCount}</strong> {queueCount === 1 ? 'tema' : 'temas'} en cola
+              {queueDevices.length > 0 && <> desde <strong>{queueDevices.join(' + ')}</strong></>}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
