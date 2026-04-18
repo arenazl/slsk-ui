@@ -3948,6 +3948,7 @@ function App() {
   const [agentConnected, setAgentConnected] = useState(false)
   const agentConnectedRef = useRef(false)
   const [agentVersion, setAgentVersion] = useState('')
+  const [agentHasSlsk, setAgentHasSlsk] = useState(false)
   useEffect(() => {
     if (!authUser) return
     AGENT_USER = authUser.name
@@ -3958,6 +3959,7 @@ function App() {
         const status = await res.json()
         setAgentConnected(true); agentConnectedRef.current = true
         setAgentVersion(status.version || '')
+        setAgentHasSlsk(!!status.slsk)
         await configFn()
         return true
       }
@@ -4544,8 +4546,29 @@ function App() {
   }
 
   const handleDownloadSingle = (result) => {
-    if (!wsRef.current || !username || !password) return
+    if (!username || !password) return
     setSearchDlStatus(prev => ({ ...prev, [result.filename]: { status: 'downloading' } }))
+    // Si el agente está conectado y tiene aioslsk, delegar el download a él:
+    // corre en tu home network, sin los bugs de NAT de Heroku, peers-ghost
+    // dejan de ghostear. El agent postea progress a Heroku que lo rebota por WS.
+    if (agentConnected && agentHasSlsk) {
+      agentFetch('slsk-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          password,
+          filename: result.filename,
+          sources: result.sources && result.sources.length ? result.sources : [result],
+          callback_url: `${API_BASE}/api/agent-dl-callback`,
+        }),
+      }).catch(e => {
+        console.error('agent slsk-download failed, fallback to heroku:', e)
+        wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result, app_user: authUser?.name || '' }))
+      })
+      return
+    }
+    if (!wsRef.current) return
     wsRef.current.send(JSON.stringify({
       type: 'download_single',
       username,
