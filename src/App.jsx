@@ -5604,6 +5604,7 @@ function App() {
           pendingRadioTrack={pendingRadioTrack}
           onRadioConsumed={() => setPendingRadioTrack(null)}
           agentConnected={agentConnected}
+          agentHasSlsk={agentHasSlsk}
           authUser={authUser}
           collection={collection}
         />
@@ -5713,7 +5714,7 @@ function SwipeableRow({ children, onReveal }) {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, authUser, collection }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection }) {
   const toast = useToast()
   const [genres, setGenres] = useState([])
   // URL-synced selections: share/bookmark any view directly
@@ -6334,14 +6335,58 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         if (data.type === 'search_results' && downloadQueue[track.id]?.status !== 'downloading') {
           const results = data.results || []
           if (results.length > 0) {
-            // Auto-pick best result and download
-            setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: `Descargando de ${results[0].sources?.[0]?.username || 'peer'}...` } }))
-            wsRef.current.send(JSON.stringify({
-              type: 'download_single',
-              username, password,
-              result: results[0],
-              app_user: authUser?.name || '',
-            }))
+            // Auto-pick: criterio calidad + fuentes. Filtrar primero los que
+            // SOLO tienen peers con q>2000 (hopeless). Después sort por
+            // quality bucket → source_count → availability-tier de Heroku.
+            const qScore = (r) => {
+              const ext = (r.ext || '').toLowerCase()
+              const br = r.bitrate || 0
+              if (ext === 'flac' || ext === 'wav') return 1000
+              if (ext === 'aiff' || ext === 'aif') return 900
+              if (ext === 'mp3') return 300 + Math.min(br, 320)
+              return 100
+            }
+            const hasDecentPeer = (r) => {
+              const srcs = Array.isArray(r.sources) && r.sources.length ? r.sources : [r]
+              return srcs.some(s => (s.queue || 0) <= 2000)
+            }
+            const viable = results.filter(hasDecentPeer)
+            const pool = viable.length ? viable : results
+            const ranked = [...pool].sort((a, b) => {
+              const dq = qScore(b) - qScore(a)
+              if (dq) return dq
+              const ds = (b.source_count || 1) - (a.source_count || 1)
+              if (ds) return ds
+              return 0
+            })
+            const best = ranked[0]
+            const bestSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : [best]
+            setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: `Descargando de ${bestSources[0]?.username || 'peer'}...` } }))
+            // Delegar al agente si está, para que baje desde la home network
+            // (sin el NAT de Heroku). Idéntico a lo que hace handleDownloadSingle
+            // en la página Descargar.
+            if (agentConnected && agentHasSlsk) {
+              agentFetch('slsk-download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  username, password,
+                  filename: best.filename,
+                  sources: bestSources,
+                  callback_url: `${API_BASE}/api/agent-dl-callback`,
+                }),
+              }).catch(() => {
+                // Fallback a Heroku si el agente falla
+                wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '' }))
+              })
+            } else {
+              wsRef.current.send(JSON.stringify({
+                type: 'download_single',
+                username, password,
+                result: best,
+                app_user: authUser?.name || '',
+              }))
+            }
           } else {
             setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
             addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
