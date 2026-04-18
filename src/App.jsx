@@ -6328,85 +6328,90 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     const query = `${track.artist} - ${track.title}`.replace(/[()[\]{}]/g, '')
     setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'searching', message: `Buscando...` } }))
 
-    // Listen for search results
+    // Ranked list of variants to try in order (calidad → fuentes). Filled
+    // when search_results arrives. If a variant fails all its sources,
+    // pasamos al siguiente de la lista antes de rendirnos.
+    let ranked = []
+    let rankIdx = -1
+    let currentFilename = ''
+
+    const qScore = (r) => {
+      const ext = (r.ext || '').toLowerCase()
+      const br = r.bitrate || 0
+      if (ext === 'flac' || ext === 'wav') return 1000
+      if (ext === 'aiff' || ext === 'aif') return 900
+      if (ext === 'mp3') return 300 + Math.min(br, 320)
+      return 100
+    }
+
+    const dispatchPick = (idx) => {
+      if (idx >= ranked.length) {
+        setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: `Sin éxito en ${ranked.length} variantes` } }))
+        addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
+        wsRef.current?.removeEventListener('message', handler)
+        return
+      }
+      rankIdx = idx
+      const best = ranked[idx]
+      currentFilename = best.filename
+      const bestSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : [best]
+      setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: `Variante ${idx + 1}/${ranked.length}: ${bestSources[0]?.username || 'peer'}` } }))
+      if (agentConnected && agentHasSlsk) {
+        agentFetch('slsk-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username, password,
+            filename: best.filename,
+            sources: bestSources,
+            callback_url: `${API_BASE}/api/agent-dl-callback`,
+          }),
+        }).catch(() => {
+          wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '' }))
+        })
+      } else {
+        wsRef.current.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '' }))
+      }
+    }
+
+    // Listen for search results + download progress
     const handler = (e) => {
       try {
         const data = JSON.parse(e.data)
-        if (data.type === 'search_results' && downloadQueue[track.id]?.status !== 'downloading') {
+        if (data.type === 'search_results' && rankIdx < 0) {
           const results = data.results || []
-          if (results.length > 0) {
-            // Auto-pick: criterio calidad + fuentes. Filtrar primero los que
-            // SOLO tienen peers con q>2000 (hopeless). Después sort por
-            // quality bucket → source_count → availability-tier de Heroku.
-            const qScore = (r) => {
-              const ext = (r.ext || '').toLowerCase()
-              const br = r.bitrate || 0
-              if (ext === 'flac' || ext === 'wav') return 1000
-              if (ext === 'aiff' || ext === 'aif') return 900
-              if (ext === 'mp3') return 300 + Math.min(br, 320)
-              return 100
-            }
-            const hasDecentPeer = (r) => {
-              const srcs = Array.isArray(r.sources) && r.sources.length ? r.sources : [r]
-              return srcs.some(s => (s.queue || 0) <= 2000)
-            }
-            const viable = results.filter(hasDecentPeer)
-            const pool = viable.length ? viable : results
-            const ranked = [...pool].sort((a, b) => {
-              const dq = qScore(b) - qScore(a)
-              if (dq) return dq
-              const ds = (b.source_count || 1) - (a.source_count || 1)
-              if (ds) return ds
-              return 0
-            })
-            const best = ranked[0]
-            const bestSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : [best]
-            setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: `Descargando de ${bestSources[0]?.username || 'peer'}...` } }))
-            // Delegar al agente si está, para que baje desde la home network
-            // (sin el NAT de Heroku). Idéntico a lo que hace handleDownloadSingle
-            // en la página Descargar.
-            if (agentConnected && agentHasSlsk) {
-              agentFetch('slsk-download', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  username, password,
-                  filename: best.filename,
-                  sources: bestSources,
-                  callback_url: `${API_BASE}/api/agent-dl-callback`,
-                }),
-              }).catch(() => {
-                // Fallback a Heroku si el agente falla
-                wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '' }))
-              })
-            } else {
-              wsRef.current.send(JSON.stringify({
-                type: 'download_single',
-                username, password,
-                result: best,
-                app_user: authUser?.name || '',
-              }))
-            }
-          } else {
+          const hasDecentPeer = (r) => {
+            const srcs = Array.isArray(r.sources) && r.sources.length ? r.sources : [r]
+            return srcs.some(s => (s.queue || 0) <= 2000)
+          }
+          const viable = results.filter(hasDecentPeer)
+          const pool = viable.length ? viable : results
+          ranked = [...pool].sort((a, b) => {
+            const dq = qScore(b) - qScore(a)
+            if (dq) return dq
+            const ds = (b.source_count || 1) - (a.source_count || 1)
+            if (ds) return ds
+            return 0
+          })
+          if (ranked.length === 0) {
             setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
             addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
+            wsRef.current.removeEventListener('message', handler)
+            return
           }
-          wsRef.current.removeEventListener('message', handler)
+          dispatchPick(0)
         }
         if (data.type === 'search_dl_status') {
           const fname = data.filename || ''
-          // Match by partial track name
-          const trackName = `${track.artist} ${track.title}`.toLowerCase()
-          if (fname.toLowerCase().includes(track.title?.toLowerCase()?.slice(0, 20) || '---')) {
+          // Match against current pick's filename to avoid reacting to other downloads
+          if (currentFilename && fname === currentFilename) {
             if (data.status === 'completed') {
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Descargado' } }))
-              // Refresh manifest to update "in library" marks
               fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
               wsRef.current.removeEventListener('message', handler)
             } else if (data.status === 'error') {
-              setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: 'Error al descargar' } }))
-              addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
-              wsRef.current.removeEventListener('message', handler)
+              // Esta variante se agotó — probar la siguiente
+              dispatchPick(rankIdx + 1)
             }
           }
         }
