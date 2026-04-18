@@ -4144,6 +4144,13 @@ function App() {
         setSearchStatus(data.status)
       }
 
+      // Streaming: cada peer que contesta llega como partial result. Acumulamos
+      // in-place para que la UI se llene en vivo (slskd-style). El final
+      // `search_results` reemplaza con la versión deduplicada cuando cierra.
+      if (data.type === 'search_result_partial' && data.result) {
+        setSearchResults(prev => Array.isArray(prev) ? [...prev, data.result] : [data.result])
+      }
+
       if (data.type === 'search_results') {
         setSearchResults(data.results)
         setSearchStatus('idle')
