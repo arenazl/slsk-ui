@@ -4217,25 +4217,31 @@ function App() {
           }
         }
         if (data.status === 'completed' && data.filename) {
-          // Save the downloaded file locally: prefer FSA, fallback to agent
-          fetch(`${API_BASE}/audio/${encodeURIComponent(data.filename)}`)
-            .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
-            .then(async (blob) => {
-              if (await fsaBackend.ready()) {
-                await fsaBackend.saveFile(data.filename, blob, '')
-                libraryRef.current?.refresh()
-              } else if (agentConnectedRef.current) {
-                const form = new FormData()
-                form.append('file', blob, data.filename)
-                form.append('filename', data.filename)
-                const r = await agentFetch('save-file', { method: 'POST', body: form })
-                await r.json()
-                libraryRef.current?.refresh()
-              } else {
-                libraryRef.current?.refresh()
-              }
-            })
-            .catch(e => console.error('Failed to save file locally:', e))
+          // Si el download lo hizo el agente local, el archivo ya está en tu
+          // disco — no hay que hacer fetch a Heroku (que daría 404). Solo
+          // refresh para que la library se entere.
+          if (data.via === 'agent') {
+            libraryRef.current?.refresh()
+          } else {
+            fetch(`${API_BASE}/audio/${encodeURIComponent(data.filename)}`)
+              .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
+              .then(async (blob) => {
+                if (await fsaBackend.ready()) {
+                  await fsaBackend.saveFile(data.filename, blob, '')
+                  libraryRef.current?.refresh()
+                } else if (agentConnectedRef.current) {
+                  const form = new FormData()
+                  form.append('file', blob, data.filename)
+                  form.append('filename', data.filename)
+                  const r = await agentFetch('save-file', { method: 'POST', body: form })
+                  await r.json()
+                  libraryRef.current?.refresh()
+                } else {
+                  libraryRef.current?.refresh()
+                }
+              })
+              .catch(e => console.error('Failed to save file locally:', e))
+          }
         }
       }
     }
@@ -6027,36 +6033,43 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   useEffect(() => { previewDurationRef.current = previewDuration }, [previewDuration])
 
   const handlePreviewFromCtx = (startTrack) => {
+    console.log('[PreviewContinuo] click on', startTrack?.artist, '-', startTrack?.title)
     // Use the list currently visible to the user (label filter switches it)
     const activeList = labelFilter ? labelTracks : tracks
     const startIdx = activeList.findIndex(t =>
       (t.id && startTrack.id && t.id === startTrack.id) ||
       (t.title === startTrack.title && t.artist === startTrack.artist)
     )
+    console.log('[PreviewContinuo] startIdx=', startIdx, 'listLen=', activeList.length)
     if (startIdx === -1) return
     const playlist = activeList.slice(startIdx)
     let current = 0
 
+    // Reusar el mismo Audio element durante toda la sesión para que el autoplay
+    // policy de Chrome no bloquee los tracks después del primero. new Audio()
+    // en cada iteración requiere user-gesture; cambiar src sobre un elemento
+    // ya unlocked funciona sin restricción.
+    const initialVol = audioRef?.current?.volume ?? 0.8
+    const sessionAudio = new Audio()
+    sessionAudio.volume = initialVol
+    if (audioRef?.current && audioRef.current !== sessionAudio) { audioRef.current.pause() }
+    audioRef.current = sessionAudio
+    sessionAudio.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
+    sessionAudio.onerror = () => { current++; playNext() }
+
     const playNext = async () => {
       if (current >= playlist.length) return
       const t = playlist[current]
-      const vol = audioRef?.current?.volume ?? 0.8
 
       const startAudio = (url) => {
-        if (audioRef?.current) { audioRef.current.pause() }
         if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
-        const a = new Audio(url)
-        a.volume = vol
-        audioRef.current = a
+        sessionAudio.src = url
         setPlayingFile(`discover-preview-${current}`)
         setPlayingId(t.id)
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
-        a.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
-        a.onerror = () => { current++; playNext() }
-        a.play().then(() => {
-          // Duration comes from the ref so mid-session changes apply to next tick.
-          previewIntervalRef.current = setTimeout(() => { a.pause(); current++; playNext() }, previewDurationRef.current * 1000)
+        sessionAudio.play().then(() => {
+          previewIntervalRef.current = setTimeout(() => { sessionAudio.pause(); current++; playNext() }, previewDurationRef.current * 1000)
         }).catch(() => { current++; playNext() })
       }
 
