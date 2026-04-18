@@ -6340,8 +6340,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       query,
     }))
 
-    // Timeout after 120s. Must exceed server worst-case: up to 3 queries × 20s SEARCH_WAIT
-    // plus semaphore wait time when multiple searches are queued. Shorter timeouts would
+    // Timeout after 160s. Must exceed server worst-case: up to 3 queries ×
+    // (MANUAL_SEARCH_WAIT 35s + MANUAL_GRACE_WAIT 10s) = 135s, plus semaphore
+    // wait time when multiple searches are queued. Shorter timeouts would
     // unregister the handler before results arrive, breaking auto-download.
     setTimeout(() => {
       setDownloadQueue(prev => {
@@ -6353,7 +6354,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         }
         return prev
       })
-    }, 120000)
+    }, 160000)
   }
 
   const formatDuration = (ms) => {
