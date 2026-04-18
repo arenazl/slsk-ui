@@ -3931,6 +3931,7 @@ function App() {
   const [page, setPage] = useQS('page', 'discover')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [dlPanelOpen, setDlPanelOpen] = useState(false)
+  const [logsExpanded, setLogsExpanded] = useState(false)
   const [pendingRadioTrack, setPendingRadioTrack] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [collection, setCollection] = useState(() => localStorage.getItem('collection') || 'edm')
@@ -5571,20 +5572,38 @@ function App() {
             )}
           </div>
 
-          {/* Logs */}
+          {/* Logs técnicos — collapsados por default, toggle en el header */}
           {logs.length > 0 && (
-            <div className="flex-shrink-0 max-h-28 md:max-h-40 overflow-y-auto border-t border-[var(--border-color)] bg-[var(--bg-surface)] px-3 md:px-4 py-2 font-mono text-xs">
-              {logs.map((log, i) => (
-                <div key={i} className={`py-0.5 ${
-                  log.includes('✓') ? 'text-green-400' :
-                  log.includes('✗') ? 'text-red-400' :
-                  log.includes('→') ? 'text-gray-500' :
-                  'text-gray-400'
-                }`}>
-                  {log}
+            <div className="flex-shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-surface)]">
+              <button
+                onClick={() => setLogsExpanded(v => !v)}
+                className="w-full flex items-center justify-between px-3 md:px-4 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <svg className={`w-3 h-3 transition-transform ${logsExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  Logs técnicos ({logs.length})
+                </span>
+                {!logsExpanded && logs.length > 0 && (
+                  <span className="truncate ml-2 text-gray-600 max-w-md">{logs[logs.length - 1]}</span>
+                )}
+              </button>
+              {logsExpanded && (
+                <div className="max-h-40 md:max-h-56 overflow-y-auto px-3 md:px-4 py-2 font-mono text-xs border-t border-[var(--border-color)]">
+                  {logs.map((log, i) => (
+                    <div key={i} className={`py-0.5 ${
+                      log.includes('✓') ? 'text-green-400' :
+                      log.includes('✗') ? 'text-red-400' :
+                      log.includes('→') ? 'text-gray-500' :
+                      'text-gray-400'
+                    }`}>
+                      {log}
+                    </div>
+                  ))}
+                  <div ref={logsEndRef} />
                 </div>
-              ))}
-              <div ref={logsEndRef} />
+              )}
             </div>
           )}
 
@@ -6386,7 +6405,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       const best = ranked[idx]
       currentFilename = best.filename
       const bestSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : [best]
-      setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: `Variante ${idx + 1}/${ranked.length}: ${bestSources[0]?.username || 'peer'}` } }))
+      // Status UI limpio: "Descargando" solo — la mecánica de variantes queda
+      // en el log técnico para debug.
+      setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: 'Descargando' } }))
       if (agentConnected && agentHasSlsk) {
         agentFetch('slsk-download', {
           method: 'POST',
