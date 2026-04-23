@@ -6240,6 +6240,42 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     sessionAudio.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
     sessionAudio.onerror = () => { current++; playNext() }
 
+    // MediaSession — exposes play/pause/next/prev to OS-level controls.
+    // iOS routes AirPods gestures here: double-tap → nexttrack, triple-tap → previoustrack.
+    // Lock-screen + Control Center + CarPlay + Bluetooth remotes all use the same hooks.
+    const setupMediaSession = (track) => {
+      if (!('mediaSession' in navigator)) return
+      try {
+        navigator.mediaSession.metadata = new window.MediaMetadata({
+          title: track.title || '',
+          artist: track.artist || '',
+          album: track.label || track.genre || '',
+          artwork: track.artwork_url ? [
+            { src: track.artwork_url.replace('1400x1400', '256x256'), sizes: '256x256', type: 'image/jpeg' },
+            { src: track.artwork_url.replace('1400x1400', '512x512'), sizes: '512x512', type: 'image/jpeg' },
+          ] : [],
+        })
+        navigator.mediaSession.setActionHandler('play', () => {
+          sessionAudio.play().catch(() => {})
+          setIsAudioPlaying(true)
+        })
+        navigator.mediaSession.setActionHandler('pause', () => {
+          sessionAudio.pause()
+          setIsAudioPlaying(false)
+        })
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current)
+          current++
+          playNext()
+        })
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current)
+          if (current > 0) current--
+          playNext()
+        })
+      } catch {}
+    }
+
     const playNext = async () => {
       if (current >= playlist.length) return
       const t = playlist[current]
@@ -6260,6 +6296,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         lastPlayedTrackRef.current = t
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
+        setupMediaSession(t)  // update OS-level metadata + hook AirPods gestures
 
         let launched = false
         const launch = () => {
