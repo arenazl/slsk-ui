@@ -4916,7 +4916,17 @@ function App() {
         </div>
       )}
       {/* Header */}
-      <header className="flex-shrink-0 h-14 flex items-center justify-between px-3 md:px-6 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
+      <header
+        className="flex-shrink-0 flex items-center justify-between px-3 md:px-6 bg-[var(--bg-panel)] border-b border-[var(--border-color)]"
+        style={{
+          // Push header down past the notch/Dynamic Island in PWA standalone mode on iOS.
+          // env() returns 0 on non-iOS browsers so it's a no-op there.
+          paddingTop: 'max(env(safe-area-inset-top), 0px)',
+          paddingLeft: 'max(env(safe-area-inset-left), 0.75rem)',
+          paddingRight: 'max(env(safe-area-inset-right), 0.75rem)',
+          height: 'calc(3.5rem + env(safe-area-inset-top, 0px))',
+        }}
+      >
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
           {/* Mobile hamburger */}
           <button
