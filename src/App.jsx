@@ -6049,6 +6049,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const previewDurationRef = useRef(previewDuration)
   useEffect(() => { previewDurationRef.current = previewDuration }, [previewDuration])
 
+  // Track the track object the user last started — used by the top "Preview continuo"
+  // button to resume autoplay from THAT track instead of falling back to track 1
+  // when state lookups race.
+  const lastPlayedTrackRef = useRef(null)
+
   const handlePreviewFromCtx = (startTrack) => {
     console.log('[PreviewContinuo] click on', startTrack?.artist, '-', startTrack?.title)
     // Use the list currently visible to the user (label filter switches it)
@@ -6083,6 +6088,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         sessionAudio.src = url
         setPlayingFile(`discover-preview-${current}`)
         setPlayingId(t.id)
+        lastPlayedTrackRef.current = t
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
         sessionAudio.play().then(() => {
@@ -6334,6 +6340,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const setDiscoverAudio = (audio, track) => {
     audioRef.current = audio
     setPlayingId(track.id)
+    lastPlayedTrackRef.current = track   // remember which track for top-bar Preview button
     setPlayingFile(`discover-${track.id}`)
     setNowPlaying({ filename: `discover-${track.id}`, title: track.title, artist: track.artist, isPreview: true })
     setIsAudioPlaying(true)
@@ -6731,8 +6738,18 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               onClick={() => {
                 const list = labelFilter ? labelTracks : tracks
                 if (list.length === 0) return
-                // If a track is currently highlighted/playing, start from it; else from the first
-                const startTrack = playingId ? list.find(t => t.id === playingId) || list[0] : list[0]
+                // Priority: last-played track (ref survives state races) → track with
+                // matching playingId → first track in the list.
+                const lastPlayed = lastPlayedTrackRef.current
+                let startTrack = null
+                if (lastPlayed) {
+                  startTrack = list.find(t => t.id === lastPlayed.id) ||
+                               list.find(t => t.title === lastPlayed.title && t.artist === lastPlayed.artist)
+                }
+                if (!startTrack && playingId) {
+                  startTrack = list.find(t => t.id === playingId)
+                }
+                if (!startTrack) startTrack = list[0]
                 handlePreviewFromCtx(startTrack)
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-all active:scale-95"
