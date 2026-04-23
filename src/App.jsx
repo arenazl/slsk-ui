@@ -4067,6 +4067,22 @@ function App() {
   const [nowPlaying, setNowPlaying] = useState(null)
   const [isAudioPlaying, setIsAudioPlaying] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
+
+  // Playback mode for Library/Set tracks:
+  // - 'local':   stream the actual file (via agent or Heroku /audio/) — needs the file to exist where we can reach it
+  // - 'preview': search iTunes by artist+title and play its 30s preview — works on any device, even mobile without local file
+  // Mobile: forced to 'preview' (they can't reach the PC's files).
+  // Desktop: default 'local', can toggle to 'preview'.
+  const IS_MOBILE_DEVICE = typeof navigator !== 'undefined' &&
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
+  const [playbackMode, setPlaybackModeState] = useState(() => {
+    if (IS_MOBILE_DEVICE) return 'preview'
+    return localStorage.getItem('playback_mode') || 'local'
+  })
+  const setPlaybackMode = (mode) => {
+    setPlaybackModeState(mode)
+    if (!IS_MOBILE_DEVICE) localStorage.setItem('playback_mode', mode)
+  }
   const [mixTracks, setMixTracks] = useState(null) // tracks array for MixEditor
   const previewTimerRef = useRef(null)
   const audioRef = useRef(null)
@@ -4422,6 +4438,32 @@ function App() {
   }
 
   // === Unified audio handlers ===
+  // Play a track via iTunes 30s preview (works without local file access).
+  // Used on mobile and when user toggles "preview mode" on desktop.
+  const playLibraryPreview = async (file) => {
+    const query = `${file.artist || ''} ${file.title || ''}`.trim() ||
+                  // Fall back to filename-based guess (strip ext + track numbers)
+                  (file.filename || '').replace(/\.(flac|mp3|wav|m4a)$/i, '').replace(/^\d+[\s.\-]+/, '')
+    if (!query) return
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=1`)
+      const data = await res.json()
+      const url = data.results?.[0]?.previewUrl
+      if (!url) { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false); return }
+      if (audioRef.current) audioRef.current.pause()
+      const audio = new Audio(url)
+      audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+      audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+      audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
+      audioRef.current = audio
+      setPlayingFile(file.filename)
+      setNowPlaying({ ...file, isPreview: true })
+      setIsAudioPlaying(true)
+    } catch {
+      setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
+    }
+  }
+
   const handleAppPlay = async (file) => {
     stopPreviewModeApp()
     if (playingFile === file.filename) {
@@ -4437,6 +4479,14 @@ function App() {
     }
     if (audioRef.current) {
       audioRef.current.pause()
+    }
+    // Preview mode: 30s iTunes preview instead of the actual file
+    if (playbackMode === 'preview') {
+      setPlayingFile(file.filename)
+      setNowPlaying({ ...file, isPreview: true })
+      setIsAudioPlaying(true)
+      await playLibraryPreview(file)
+      return
     }
     setPlayingFile(file.filename)
     setNowPlaying(file)
@@ -4953,6 +5003,29 @@ function App() {
               </svg>
             )}
           </button>
+          {!IS_MOBILE_DEVICE && (
+            <div
+              className="hidden md:flex items-center rounded-full bg-[var(--bg-input)] p-0.5 flex-shrink-0"
+              title="Modo de reproducción: Local (archivos reales) / Preview (30s desde iTunes)"
+            >
+              {[
+                { id: 'local', label: 'Local' },
+                { id: 'preview', label: 'Preview' },
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setPlaybackMode(m.id)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                    playbackMode === m.id
+                      ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)]'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
           {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
             <button
               onClick={handleInstall}
