@@ -4061,6 +4061,9 @@ function App() {
   const [searchStatus, setSearchStatus] = useState('idle') // idle, connecting, searching
   const [searchDlStatus, setSearchDlStatus] = useState({}) // { filename: 'downloading'|'completed'|'error' }
   const [pendingTracks, setPendingTracks] = useState([]) // tracks that failed to download
+  // Favorite tracks (hearts) — marked for filtering, never downloaded automatically.
+  // Persisted in Cloudinary per user. Each entry: { artist, title, addedAt, source }.
+  const [favoriteTracks, setFavoriteTracks] = useState([])
   const [pendingExpanded, setPendingExpanded] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(null)
   const [playingFile, setPlayingFile] = useState(null)
@@ -4263,6 +4266,15 @@ function App() {
     }
   }, [])
 
+  // Load favorites from Cloudinary on mount
+  useEffect(() => {
+    if (!username) return
+    fetch(`${API_BASE}/api/favorites?user=${encodeURIComponent(username)}`)
+      .then(r => r.json())
+      .then(arr => { if (Array.isArray(arr)) setFavoriteTracks(arr) })
+      .catch(() => {})
+  }, [username])
+
   // Load pending tracks from Cloudinary on mount, filter out ones already in library
   useEffect(() => {
     if (!username || !authUser?.name) return
@@ -4349,6 +4361,42 @@ function App() {
         body: JSON.stringify({ user: username, tracks: [{ artist: target.artist, title: target.title }] }),
       }).catch(() => {})
     }
+  }
+
+  // Favorites: heart toggle on Discover rows. Used for filtering in Biblioteca —
+  // never triggers a download. Persisted in Cloudinary per user.
+  const persistFavorites = (tracks) => {
+    if (!username) return
+    fetch(`${API_BASE}/api/favorites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: username, tracks }),
+    }).catch(() => {})
+  }
+
+  const isFavorite = (track) => {
+    if (!track) return false
+    const a = (track.artist || '').toLowerCase()
+    const t = (track.title || '').toLowerCase()
+    return favoriteTracks.some(f => (f.artist || '').toLowerCase() === a && (f.title || '').toLowerCase() === t)
+  }
+
+  const toggleFavorite = (track) => {
+    const a = (track.artist || '').toLowerCase()
+    const t = (track.title || '').toLowerCase()
+    setFavoriteTracks(prev => {
+      const already = prev.some(f => (f.artist || '').toLowerCase() === a && (f.title || '').toLowerCase() === t)
+      const next = already
+        ? prev.filter(f => !((f.artist || '').toLowerCase() === a && (f.title || '').toLowerCase() === t))
+        : [...prev, {
+            artist: track.artist || '',
+            title: track.title || '',
+            source: track.source || 'discover',
+            addedAt: new Date().toISOString(),
+          }]
+      persistFavorites(next)
+      return next
+    })
   }
 
   useEffect(() => {
@@ -5741,6 +5789,8 @@ function App() {
           setNowPlaying={setNowPlaying}
           setIsAudioPlaying={setIsAudioPlaying}
           addToPending={addToPending}
+          isFavorite={isFavorite}
+          toggleFavorite={toggleFavorite}
           pendingRadioTrack={pendingRadioTrack}
           onRadioConsumed={() => setPendingRadioTrack(null)}
           agentConnected={agentConnected}
@@ -5854,7 +5904,7 @@ function SwipeableRow({ children, onReveal }) {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection }) {
   const toast = useToast()
   const [genres, setGenres] = useState([])
   // URL-synced selections: share/bookmark any view directly
@@ -6969,6 +7019,23 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     <span className={`text-xs font-mono px-2 py-0.5 rounded ${t.key ? 'bg-amber-500/10 text-amber-400' : 'text-gray-700'}`}>{t.key || '-'}</span>
                     <span className="text-xs text-gray-600 w-10 text-center">{formatDuration(t.duration_ms)}</span>
                   </div>
+
+                  {/* Heart button — marks favorite for later filtering (never downloads) */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleFavorite?.(t) }}
+                    className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-full transition-all duration-200 active:scale-90"
+                    title={isFavorite?.(t) ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                  >
+                    <svg
+                      className={`w-4 h-4 md:w-4.5 md:h-4.5 transition-colors duration-200 ${isFavorite?.(t) ? 'text-pink-500' : 'text-gray-500 hover:text-pink-400'}`}
+                      fill={isFavorite?.(t) ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      strokeWidth={isFavorite?.(t) ? 0 : 2}
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </button>
 
                   {/* Action button */}
                   {(() => {
