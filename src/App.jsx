@@ -6273,6 +6273,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           if (current > 0) current--
           playNext()
         })
+        // Disable seek-backward/forward (the ±15s buttons iOS shows by default
+        // for short audio). Passing null reveals the real prev/next track
+        // icons on lockscreen + CarPlay + Apple Watch.
+        try { navigator.mediaSession.setActionHandler('seekbackward', null) } catch {}
+        try { navigator.mediaSession.setActionHandler('seekforward', null) } catch {}
+        try { navigator.mediaSession.setActionHandler('seekto', null) } catch {}
       } catch {}
     }
 
