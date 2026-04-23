@@ -6039,10 +6039,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   // Close context menu on outside click
   const previewIntervalRef = useRef(null)
-  // Auto-preview duration per track (30 / 60 / 90 s). Default 30.
+  // Auto-preview duration per track (30 / 60 / 90 / 120 s). Default 30.
   const [previewDuration, setPreviewDuration] = useState(() => {
     const saved = parseInt(localStorage.getItem('preview_duration') || '30', 10)
-    return [30, 60, 90].includes(saved) ? saved : 30
+    return [30, 60, 90, 120].includes(saved) ? saved : 30
   })
   useEffect(() => { localStorage.setItem('preview_duration', String(previewDuration)) }, [previewDuration])
   // Use a ref so the currently-running preview picks up changes mid-session too
@@ -6744,9 +6744,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               <span className="hidden sm:inline">Preview continuo</span>
               <span className="sm:hidden">Preview</span>
             </button>
-            {/* Duration selector (30/60/90 s per track) */}
+            {/* Duration selector (30/60/90/120 s per track) */}
             <div className="flex items-center rounded-full bg-[var(--bg-input)] p-0.5">
-              {[30, 60, 90].map(secs => (
+              {[30, 60, 90, 120].map(secs => (
                 <button
                   key={secs}
                   onClick={() => setPreviewDuration(secs)}
@@ -7037,6 +7037,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                           isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                         }`}
                         style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+                        title={isPlaying ? 'Pausar' : 'Reproducir preview'}
                       >
                         {t.artwork_url ? (
                           <img src={t.artwork_url} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -7045,14 +7046,21 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                             <svg className="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
                           </div>
                         )}
-                        {isPlaying && (
-                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                        {isPlaying ? (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                             <div className="flex items-end gap-0.5 h-4">
                               <div className="w-1 bg-green-400 rounded-full animate-pulse" style={{height: '60%', animationDelay: '0ms'}} />
                               <div className="w-1 bg-green-400 rounded-full animate-pulse" style={{height: '100%', animationDelay: '150ms'}} />
                               <div className="w-1 bg-green-400 rounded-full animate-pulse" style={{height: '40%', animationDelay: '300ms'}} />
                               <div className="w-1 bg-green-400 rounded-full animate-pulse" style={{height: '80%', animationDelay: '450ms'}} />
                             </div>
+                          </div>
+                        ) : (
+                          // Play overlay — indica que el artwork es clickeable para preview
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-70 hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none">
+                            <svg className="w-5 h-5 md:w-6 md:h-6 text-white drop-shadow" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
                           </div>
                         )}
                       </button>
@@ -7121,14 +7129,21 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             Descargar
           </button>
-          <button onClick={() => { handlePreviewFromCtx(discoverCtx.track); setDiscoverCtx(null) }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
-            <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Preview continuo (30s c/u)
-          </button>
+          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-t border-[var(--border-color)]">Preview continuo desde este tema</div>
+          {[30, 60, 90, 120].map(secs => (
+            <button
+              key={secs}
+              onClick={() => { setPreviewDuration(secs); handlePreviewFromCtx(discoverCtx.track); setDiscoverCtx(null) }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Autoplay {secs}s por tema
+            </button>
+          ))}
+          <div className="border-t border-[var(--border-color)]" />
           <button onClick={() => loadRadio(discoverCtx.track)}
             className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
             <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
@@ -7194,16 +7209,18 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               </div>
               Preview
             </button>
-            <button onClick={() => { handlePreviewFromCtx(discoverCtx.track); setDiscoverCtx(null) }}
-              className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
-              <div className="w-8 h-8 rounded-full bg-purple-500/15 flex items-center justify-center">
-                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              Preview continuo (30s c/u)
-            </button>
+            <div className="px-4 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500">Autoplay desde este tema</div>
+            <div className="grid grid-cols-4 gap-2 px-4 pb-2">
+              {[30, 60, 90, 120].map(secs => (
+                <button
+                  key={secs}
+                  onClick={() => { setPreviewDuration(secs); handlePreviewFromCtx(discoverCtx.track); setDiscoverCtx(null) }}
+                  className="py-2.5 rounded-xl text-sm font-semibold bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 transition-all active:scale-95"
+                >
+                  {secs}s
+                </button>
+              ))}
+            </div>
             <button onClick={() => loadRadio(discoverCtx.track)}
               className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
               <div className="w-8 h-8 rounded-full bg-purple-500/15 flex items-center justify-center">
