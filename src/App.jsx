@@ -1185,8 +1185,9 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Toolbar - row 1: count, view toggle, search, actions */}
-      <div className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 md:px-5 py-2 md:py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
+      {/* Toolbar - on mobile this wraps to 2 rows so the search stays usable;
+          on desktop everything fits in one row. */}
+      <div className="flex-shrink-0 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 px-3 md:px-5 py-2 md:py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <span className="text-base md:text-lg font-bold text-[var(--text-primary)]">{filtered.length}</span>
           <span className="text-xs md:text-sm text-gray-500">{q || selectedStars.length > 0 || genreFilter.length > 0 ? `/ ${files.length}` : 'tracks'}</span>
@@ -1334,8 +1335,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </div>
         )}
 
-        {/* Search */}
-        <div className="relative flex-1 min-w-20 md:min-w-24 ml-auto">
+        {/* Search - full width on mobile (wraps to new row), inline on desktop */}
+        <div className="relative w-full order-last md:order-none md:w-auto md:flex-1 md:min-w-24 md:ml-auto">
           <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -1343,7 +1344,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar..."
-            className="w-full pl-7 pr-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+            className="w-full pl-7 pr-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm md:text-xs text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
           />
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
@@ -4488,28 +4489,54 @@ function App() {
   // === Unified audio handlers ===
   // Play a track via iTunes 30s preview (works without local file access).
   // Used on mobile and when user toggles "preview mode" on desktop.
-  const playLibraryPreview = async (file) => {
-    const query = `${file.artist || ''} ${file.title || ''}`.trim() ||
-                  // Fall back to filename-based guess (strip ext + track numbers)
-                  (file.filename || '').replace(/\.(flac|mp3|wav|m4a)$/i, '').replace(/^\d+[\s.\-]+/, '')
+  //
+  // iOS autoplay policy: Audio().play() must be called within the SAME
+  // synchronous call frame as the user gesture. Awaiting fetch BEFORE creating
+  // the Audio element breaks this — iOS blocks. Solution: create the Audio
+  // element synchronously (empty src) in the click handler, then set src +
+  // play() once the fetch resolves. The element is already "unlocked" from
+  // the original gesture.
+  const playLibraryPreview = (file) => {
+    if (audioRef.current) audioRef.current.pause()
+    const audio = new Audio()
+    audio.preload = 'auto'
+    audioRef.current = audio
+    audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+    audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+
+    // Fire the search then swap src. Do NOT await — we must return from the
+    // original click handler synchronously so the gesture stays valid.
+    const fallbackQuery = (file.filename || '').replace(/\.(flac|mp3|wav|m4a|wav|aif|aiff|ogg)$/i, '').replace(/^\d+[\s.\-]+/, '').replace(/_/g, ' ')
+    const query = `${file.artist || ''} ${file.title || ''}`.trim() || fallbackQuery
     if (!query) return
-    try {
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=1`)
-      const data = await res.json()
-      const url = data.results?.[0]?.previewUrl
-      if (!url) { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false); return }
-      if (audioRef.current) audioRef.current.pause()
-      const audio = new Audio(url)
-      audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-      audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-      audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
-      audioRef.current = audio
-      setPlayingFile(file.filename)
-      setNowPlaying({ ...file, isPreview: true })
-      setIsAudioPlaying(true)
-    } catch {
-      setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
-    }
+
+    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=1`)
+      .then(r => r.json())
+      .then(data => {
+        const url = data.results?.[0]?.previewUrl
+        if (!url) {
+          // No iTunes match — try with just filename (strip Extended Mix noise)
+          const cleanQuery = fallbackQuery.replace(/\b(extended|original|radio|club)\s*mix\b/gi, '').replace(/\s+/g, ' ').trim()
+          if (cleanQuery && cleanQuery !== query) {
+            return fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQuery)}&media=music&limit=1`)
+              .then(r => r.json())
+          }
+          return { results: [] }
+        }
+        audio.src = url
+        audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
+      })
+      .then(fallbackData => {
+        if (!fallbackData) return
+        const url = fallbackData.results?.[0]?.previewUrl
+        if (url) {
+          audio.src = url
+          audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
+        } else {
+          setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
+        }
+      })
+      .catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
   }
 
   const handleAppPlay = async (file) => {
@@ -4528,12 +4555,13 @@ function App() {
     if (audioRef.current) {
       audioRef.current.pause()
     }
-    // Preview mode: 30s iTunes preview instead of the actual file
+    // Preview mode: 30s iTunes preview instead of the actual file.
+    // Call synchronously to keep iOS autoplay gesture valid.
     if (playbackMode === 'preview') {
       setPlayingFile(file.filename)
       setNowPlaying({ ...file, isPreview: true })
       setIsAudioPlaying(true)
-      await playLibraryPreview(file)
+      playLibraryPreview(file)
       return
     }
     setPlayingFile(file.filename)
@@ -6218,15 +6246,38 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
       const startAudio = (url) => {
         if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
+
+        // iOS PWA quirk: changing src on a playing element and calling play()
+        // immediately resolves before the new buffer is decoded → silent audio.
+        // Workaround: pause, reset, load, wait for 'canplay' then play.
+        sessionAudio.pause()
         sessionAudio.src = url
+        sessionAudio.currentTime = 0
+        try { sessionAudio.load() } catch {}
+
         setPlayingFile(`discover-preview-${current}`)
         setPlayingId(t.id)
         lastPlayedTrackRef.current = t
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
-        sessionAudio.play().then(() => {
-          previewIntervalRef.current = setTimeout(() => { sessionAudio.pause(); current++; playNext() }, previewDurationRef.current * 1000)
-        }).catch(() => { current++; playNext() })
+
+        let launched = false
+        const launch = () => {
+          if (launched) return
+          launched = true
+          sessionAudio.removeEventListener('canplay', launch)
+          sessionAudio.play().then(() => {
+            previewIntervalRef.current = setTimeout(() => { sessionAudio.pause(); current++; playNext() }, previewDurationRef.current * 1000)
+          }).catch(() => { current++; playNext() })
+        }
+        sessionAudio.addEventListener('canplay', launch, { once: true })
+        // Safety net: if canplay never fires (bad URL or stalled network), advance after 5s
+        setTimeout(() => {
+          if (!launched) {
+            sessionAudio.removeEventListener('canplay', launch)
+            current++; playNext()
+          }
+        }, 5000)
       }
 
       // 1) Use track's own preview URL (Beatport sample_url or Spotify preview_url)
