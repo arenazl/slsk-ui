@@ -6828,26 +6828,23 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               return (
                 <SwipeableRow key={t.id || i} onReveal={() => setDiscoverCtx({ x: window.innerWidth / 2, y: window.innerHeight - 100, track: t })}>
                 <div
+                  onClick={() => playPreview(t)}
                   onContextMenu={(e) => { e.preventDefault(); setDiscoverCtx({ x: e.clientX, y: e.clientY, track: t }) }}
-                  className={`group flex items-center gap-2 md:gap-4 px-2 md:px-4 py-2 md:py-3 rounded-xl transition-all duration-200 ${
+                  className={`group flex items-center gap-2 md:gap-4 px-2 md:px-4 py-2 md:py-3 rounded-xl transition-all duration-200 cursor-pointer select-none ${
                   isPlaying ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'hover:bg-[var(--bg-hover)]'
                 }`}>
-                  {/* Position number - shows play on hover */}
+                  {/* Position number */}
                   <div className="w-6 md:w-8 flex-shrink-0 text-center">
-                    <span className={`text-xs md:text-sm font-mono group-hover:hidden ${isPlaying ? 'text-green-400 font-bold' : 'text-gray-600'}`}>
+                    <span className={`text-xs md:text-sm font-mono ${isPlaying ? 'text-green-400 font-bold' : 'text-gray-600'}`}>
                       {t.position || i + 1}
                     </span>
-                    <PlayPauseBtn isPlaying={isPlaying} onClick={() => playPreview(t)} className={`hidden group-hover:flex ${isPlaying ? '!text-green-400' : ''}`} />
                   </div>
 
-                  {/* Artwork - tap to play. Swipe row sideways to open options. */}
-                  <button
-                    onClick={() => playPreview(t)}
-                    onContextMenu={(e) => e.preventDefault()}
-                    className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative group/art transition-all duration-200 select-none ${
+                  {/* Artwork (purely visual — click handler is on the whole row) */}
+                  <div
+                    className={`w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 ${
                       isPlaying ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/20' : 'ring-1 ring-white/10'
                     }`}
-                    style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
                   >
                     {t.artwork_url ? (
                       <img src={t.artwork_url.replace('1400x1400', '250x250')} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -6857,7 +6854,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       </div>
                     )}
                     {isPlaying && (
-                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                         <div className="flex items-end gap-0.5 h-4">
                           <div className="w-1 bg-green-400 rounded-full animate-pulse" style={{height: '60%', animationDelay: '0ms'}} />
                           <div className="w-1 bg-green-400 rounded-full animate-pulse" style={{height: '100%', animationDelay: '150ms'}} />
@@ -6866,7 +6863,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                         </div>
                       </div>
                     )}
-                  </button>
+                  </div>
 
                   {/* Track info */}
                   <div className="flex-1 min-w-0">
@@ -6931,7 +6928,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     )
                     if (!dl) return (
                       <button
-                        onClick={() => searchAndDownload(t)}
+                        onClick={(e) => { e.stopPropagation(); searchAndDownload(t) }}
                         className="flex-shrink-0 flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 opacity-60 group-hover:opacity-100"
                         style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                       >
@@ -6977,7 +6974,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     )
                     if (dl.status === 'not_found') return (
                       <button
-                        onClick={() => { setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }); searchAndDownload(t) }}
+                        onClick={(e) => { e.stopPropagation(); setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }); searchAndDownload(t) }}
                         className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-gray-500 bg-gray-800 hover:bg-gray-700 transition-all"
                       >
                         <span className="hidden sm:inline">No encontrado -</span> Reintentar
@@ -6985,7 +6982,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     )
                     return (
                       <button
-                        onClick={() => { setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }) }}
+                        onClick={(e) => { e.stopPropagation(); setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }) }}
                         className="flex-shrink-0 flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-all"
                       >
                         Error
