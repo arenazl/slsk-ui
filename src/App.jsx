@@ -6618,12 +6618,25 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }
 
   const playPreview = (track) => {
+    // Always kill any pending autoplay timeout — otherwise when the user
+    // taps a single track mid-autoplay, the old timeout still fires and
+    // starts the "next" autoplay track on sessionAudio, overlapping audio.
+    if (previewIntervalRef.current) {
+      clearTimeout(previewIntervalRef.current)
+      previewIntervalRef.current = null
+    }
+
     if (playingId === track.id) {
       if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
       clearDiscoverAudio()
       return
     }
-    if (audioRef.current) audioRef.current.pause()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      // Clear src so the element stops buffering/decoding — avoids stray
+      // 'canplay' firing later and triggering delayed play() on a stale element.
+      try { audioRef.current.src = '' } catch {}
+    }
 
     // Try Beatport sample_url first, then iTunes
     const tryPlay = (url) => {
