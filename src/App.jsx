@@ -4808,7 +4808,16 @@ function App() {
     { key: 'error', label: 'Errores', count: errors },
   ].filter(t => t.key === 'all' || t.key === 'by_genre' || t.count > 0)
 
-  if (!authUser) return <LoginScreen onLogin={setAuthUser} />
+  // Guest mode: when someone opens a shared track link (?share=1 in URL),
+  // they can browse Discover and play previews without logging in. No favorites,
+  // no downloads, no library — pure discovery. They can click "Login" to upgrade.
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
+  const isGuest = !authUser && urlParams.get('share') === '1'
+
+  // Guests land on Discover and can't navigate elsewhere
+  useEffect(() => { if (isGuest && page !== 'discover') setPage('discover') }, [isGuest, page, setPage])
+
+  if (!authUser && !isGuest) return <LoginScreen onLogin={setAuthUser} />
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
@@ -4846,6 +4855,20 @@ function App() {
             >
               Entendido
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Guest mode banner: prompt login so users can save favs + download */}
+      {isGuest && (
+        <div className="flex-shrink-0 bg-[var(--color-accent)]/10 border-b border-[var(--color-accent)]/30 px-3 md:px-6 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <svg className="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs md:text-sm text-[var(--text-primary)] truncate">
+              Modo invitado — explorá y escuchá previews. Para bajar música y guardar favoritos, logueate.
+            </span>
           </div>
         </div>
       )}
@@ -4970,13 +4993,13 @@ function App() {
             <span className="font-semibold text-base text-[var(--text-primary)] hidden sm:inline">Groove Sync</span>
           </div>
           <div className="hidden md:flex gap-1">
-            {[
+            {(isGuest ? [{ id: 'discover', label: 'Discover' }] : [
               { id: 'discover', label: 'Discover' },
               { id: 'download', label: 'Descargar' },
               { id: 'library', label: 'Biblioteca' },
               { id: 'set', label: 'Set' },
               ...(mixTracks ? [{ id: 'mix', label: 'Mix Editor' }] : []),
-            ].map(tab => (
+            ]).map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setPage(tab.id)}
@@ -5177,6 +5200,24 @@ function App() {
               <span className="hidden sm:inline">{authUser.name}</span>
             </button>
           )}
+          {isGuest && (
+            <button
+              onClick={() => {
+                // Drop the share= param so the login screen appears on next mount
+                const p = new URLSearchParams(window.location.search)
+                p.delete('share')
+                window.history.replaceState(null, '', p.toString() ? '?' + p.toString() : window.location.pathname)
+                window.location.reload()
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all active:scale-95"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+              </svg>
+              Login
+            </button>
+          )}
         </div>
       </header>
 
@@ -5196,13 +5237,15 @@ function App() {
               </button>
             </div>
             <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-              {[
+              {(isGuest ? [
+                { id: 'discover', label: 'Discover', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+              ] : [
                 { id: 'discover', label: 'Discover', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
                 { id: 'download', label: 'Descargar', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' },
                 { id: 'library', label: 'Biblioteca', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
                 { id: 'set', label: 'Set Builder', icon: 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3' },
                 ...(mixTracks ? [{ id: 'mix', label: 'Mix Editor', icon: 'M9 19V6l12-3v13' }] : []),
-              ].map(tab => (
+              ]).map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => { setPage(tab.id); setMobileMenuOpen(false) }}
@@ -5829,6 +5872,7 @@ function App() {
           addToPending={addToPending}
           isFavorite={isFavorite}
           toggleFavorite={toggleFavorite}
+          isGuest={isGuest}
           pendingRadioTrack={pendingRadioTrack}
           onRadioConsumed={() => setPendingRadioTrack(null)}
           agentConnected={agentConnected}
@@ -5942,7 +5986,7 @@ function SwipeableRow({ children, onReveal }) {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection }) {
   const toast = useToast()
   const [genres, setGenres] = useState([])
   // URL-synced selections: share/bookmark any view directly
@@ -7124,25 +7168,27 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     <span className="text-xs text-gray-600 w-10 text-center">{formatDuration(t.duration_ms)}</span>
                   </div>
 
-                  {/* Heart button — marks favorite for later filtering (never downloads) */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleFavorite?.(t) }}
-                    className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-full transition-all duration-200 active:scale-90"
-                    title={isFavorite?.(t) ? 'Quitar de favoritos' : 'Marcar como favorito'}
-                  >
-                    <svg
-                      className={`w-4 h-4 md:w-4.5 md:h-4.5 transition-colors duration-200 ${isFavorite?.(t) ? 'text-pink-500' : 'text-gray-500 hover:text-pink-400'}`}
-                      fill={isFavorite?.(t) ? 'currentColor' : 'none'}
-                      stroke="currentColor"
-                      strokeWidth={isFavorite?.(t) ? 0 : 2}
-                      viewBox="0 0 24 24"
+                  {/* Heart button — hidden in guest mode (needs login to save favorites) */}
+                  {!isGuest && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleFavorite?.(t) }}
+                      className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-full transition-all duration-200 active:scale-90"
+                      title={isFavorite?.(t) ? 'Quitar de favoritos' : 'Marcar como favorito'}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                  </button>
+                      <svg
+                        className={`w-4 h-4 md:w-4.5 md:h-4.5 transition-colors duration-200 ${isFavorite?.(t) ? 'text-pink-500' : 'text-gray-500 hover:text-pink-400'}`}
+                        fill={isFavorite?.(t) ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        strokeWidth={isFavorite?.(t) ? 0 : 2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                    </button>
+                  )}
 
-                  {/* Action button */}
-                  {(() => {
+                  {/* Action button — hidden in guest mode (can't download without login) */}
+                  {!isGuest && (() => {
                     const dl = downloadQueue[t.id]
                     const alreadyInLibrary = !dl && !clearedTrackIds.has(t.id) && isInLibrary(t)
                     const clearBtn = (
