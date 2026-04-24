@@ -6333,38 +6333,32 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       const startAudio = (url) => {
         if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
 
-        // iOS PWA quirk: changing src on a playing element and calling play()
-        // immediately resolves before the new buffer is decoded → silent audio.
-        // Workaround: pause, reset, load, wait for 'canplay' then play.
-        sessionAudio.pause()
+        // Simple approach: set src, call play() immediately. This is the only
+        // path that works reliably in iOS BACKGROUND (locked screen) because
+        // iOS defers most media events (canplay/loadeddata/etc.) when the app
+        // isn't in foreground. Waiting for them stalls autoplay forever.
         sessionAudio.src = url
-        sessionAudio.currentTime = 0
-        try { sessionAudio.load() } catch {}
 
         setPlayingFile(`discover-preview-${current}`)
         setPlayingId(t.id)
         lastPlayedTrackRef.current = t
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
-        setupMediaSession(t)  // update OS-level metadata + hook AirPods gestures
+        setupMediaSession(t)
 
-        let launched = false
-        const launch = () => {
-          if (launched) return
-          launched = true
-          sessionAudio.removeEventListener('canplay', launch)
-          sessionAudio.play().then(() => {
-            previewIntervalRef.current = setTimeout(() => { sessionAudio.pause(); current++; playNext() }, previewDurationRef.current * 1000)
-          }).catch(() => { current++; playNext() })
+        // Schedule advancement using the 'playing' event — fires when actual
+        // audio starts (not just when buffer is ready). Fallback to setTimeout
+        // from play() promise resolution in case 'playing' doesn't fire.
+        let advanced = false
+        const scheduleAdvance = () => {
+          if (advanced) return
+          advanced = true
+          previewIntervalRef.current = setTimeout(() => {
+            sessionAudio.pause(); current++; playNext()
+          }, previewDurationRef.current * 1000)
         }
-        sessionAudio.addEventListener('canplay', launch, { once: true })
-        // Safety net: if canplay never fires (bad URL or stalled network), advance after 5s
-        setTimeout(() => {
-          if (!launched) {
-            sessionAudio.removeEventListener('canplay', launch)
-            current++; playNext()
-          }
-        }, 5000)
+        sessionAudio.addEventListener('playing', scheduleAdvance, { once: true })
+        sessionAudio.play().then(scheduleAdvance).catch(() => { current++; playNext() })
       }
 
       // 1) Use track's own preview URL (Beatport sample_url or Spotify preview_url)
