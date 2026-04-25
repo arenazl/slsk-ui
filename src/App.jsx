@@ -694,6 +694,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const fetchIdRef = useRef(0)
   const fetchLibrary = useCallback(async () => {
     const id = ++fetchIdRef.current
+    // Backfill `collection` field on manifest entries derived from genre.
+    // Cheap pure-function call on the server, idempotent. Runs in parallel
+    // with metadata fetch so it doesn't block. After a few seconds the
+    // metadata reflects the derived universe — no manual classify needed.
+    if (authUser?.name) {
+      fetch(`${API_BASE}/api/manifest/backfill-collection?user=${encodeURIComponent(authUser.name)}`,
+            { method: 'POST' }).catch(() => {})
+    }
     try {
       // Fetch metadata from Heroku (Cloudinary = source of truth)
       const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
@@ -747,6 +755,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             title: meta.title || '',
             artist: meta.artist || '',
             genre: meta.genre || f.subfolder || '',
+            collection: meta.collection || '',  // edm/pop/latin — used by toggle filter
             key: meta.key || '',
             bpm: meta.bpm,
             rating: meta.rating || 0,
