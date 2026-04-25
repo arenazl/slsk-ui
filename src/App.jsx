@@ -6279,6 +6279,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     const initialVol = audioRef?.current?.volume ?? 0.8
     const sessionAudio = new Audio()
     sessionAudio.volume = initialVol
+    sessionAudio.preload = 'auto'  // iOS background: load ahead so src swap is instant
     if (audioRef?.current && audioRef.current !== sessionAudio) { audioRef.current.pause() }
     audioRef.current = sessionAudio
     sessionAudio.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
@@ -6327,6 +6328,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       const t = playlist[current]
 
       const startAudio = (url) => {
+        // Cancel any pending advance — we're starting fresh with this src.
         if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
         sessionAudio.src = url
         setPlayingFile(`discover-preview-${current}`)
@@ -6335,8 +6337,16 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
         setupMediaSession(t)
+        // Tell iOS the playback is active — without this, MediaSession may
+        // think we're paused and let the audio session expire in background.
+        try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing' } catch {}
         sessionAudio.play().then(() => {
-          previewIntervalRef.current = setTimeout(() => { sessionAudio.pause(); current++; playNext() }, previewDurationRef.current * 1000)
+          // CRITICAL for iOS background continuity: do NOT call pause() before
+          // advancing. Just call playNext() which sets the new src on the same
+          // element — iOS keeps the audio session alive across src swaps as
+          // long as we never stop. If we pause(), iOS releases the session and
+          // the next play() rejects silently in background.
+          previewIntervalRef.current = setTimeout(() => { current++; playNext() }, previewDurationRef.current * 1000)
         }).catch(() => { current++; playNext() })
       }
 
