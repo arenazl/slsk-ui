@@ -1089,8 +1089,13 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([g, c]) => ({ genre: g, count: c }))
   }, [files])
 
+  // Filter by current collection (EDM / POP / LATIN). Files without a
+  // collection field default to 'edm' for backwards compatibility (most of
+  // the historical library is EDM downloads).
+  const collectionFiltered = files.filter(f => (f.collection || 'edm') === collection)
+
   // Filter by genre (multi-select)
-  const genreFiltered = genreFilter.length === 0 ? files : files.filter(f => genreFilter.includes(f.genre))
+  const genreFiltered = genreFilter.length === 0 ? collectionFiltered : collectionFiltered.filter(f => genreFilter.includes(f.genre))
 
   // Filter by search
   const q = search.toLowerCase().trim()
