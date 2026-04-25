@@ -5079,8 +5079,9 @@ function App() {
           </div>
           <div className="flex items-center bg-white/10 rounded-full p-0.5">
             {[
-              { id: 'edm', label: 'EDM' },
-              { id: 'latin', label: 'LATIN', icon: true },
+              { id: 'edm',   label: 'EDM' },
+              { id: 'pop',   label: 'POP' },
+              { id: 'latin', label: 'LATIN' },
             ].map(c => (
               <button key={c.id}
                 onClick={() => setCollection(c.id)}
@@ -5088,7 +5089,6 @@ function App() {
                   collection === c.id ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/60'
                 }`}
               >
-                {c.icon && <svg className="w-3 h-3 inline mr-1" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>}
                 {c.label}
               </button>
             ))}
@@ -6104,7 +6104,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const labelFilter = labelName ? { name: labelName, count: labelTrackCount } : null
 
   // Source derived from global collection toggle
-  const discoverSource = collection === 'latin' ? 'spotify' : 'beatport'
+  // EDM → Beatport. POP and LATIN → Spotify (filtered by playlist's category).
+  const discoverSource = collection === 'edm' ? 'beatport' : 'spotify'
   const [spotifyCategories, setSpotifyCategories] = useState([])
   const [selectedSpotifyCategory, setSelectedSpotifyCategory] = useState(null)
   const [spotifyPlaylistName, setSpotifyPlaylistName] = useState('')
@@ -6677,11 +6678,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
   }
 
-  // React to collection/source changes
-  const prevSourceRef = useRef(discoverSource)
+  // React to collection/source changes. Reacts to BOTH `discoverSource`
+  // (beatport vs spotify) AND `collection` (pop vs latin within spotify) so
+  // the playlist list refreshes when toggling between POP and LATIN.
+  const prevCollectionRef = useRef(collection)
   useEffect(() => {
-    if (prevSourceRef.current === discoverSource) return
-    prevSourceRef.current = discoverSource
+    if (prevCollectionRef.current === collection) return
+    prevCollectionRef.current = collection
     setTracks([])
     setLoading(true)
     if (discoverSource === 'beatport') {
@@ -6694,9 +6697,14 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           return
         }
       }).catch(() => {})
-      loadSpotifyPlaylist(selectedSpotifyCategory || spotifyCategories[0] || null)
+      // Pick first playlist whose category matches the current collection
+      const firstInCategory = spotifyCategories.find(c => (c.category || 'pop') === collection)
+      // If currently-selected category doesn't belong to this collection anymore, reset
+      const stillValid = selectedSpotifyCategory &&
+        (selectedSpotifyCategory.category || 'pop') === collection
+      loadSpotifyPlaylist(stillValid ? selectedSpotifyCategory : (firstInCategory || null))
     }
-  }, [discoverSource])
+  }, [collection])
 
   const clearDiscoverAudio = () => {
     setPlayingId(null)
@@ -7071,29 +7079,51 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               >
                 All
               </button>
-              {genres.map((g, gi) => {
-                const isActive = selectedGenre?.name === g.name
-                const c = GENRE_COLORS[gi % GENRE_COLORS.length]
-                return (
-                  <button
-                    key={g.name}
-                    onClick={() => loadChart(g)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
-                      isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
-                    }`}
-                    style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
-                  >
-                    {g.name}
-                  </button>
-                )
-              })}
+              {(() => {
+                // Sort Beatport genres by user's click count (localStorage).
+                // Most-clicked first, ties keep original order. Same pattern
+                // as Spotify categories below.
+                let clicks = {}
+                try { clicks = JSON.parse(localStorage.getItem('beatport_genre_clicks') || '{}') } catch {}
+                const sorted = genres
+                  .map((g, i) => ({ g, i, n: clicks[g.name] || 0 }))
+                  .sort((a, b) => b.n - a.n || a.i - b.i)
+                return sorted.map(({ g, i: gi }) => {
+                  const isActive = selectedGenre?.name === g.name
+                  const c = GENRE_COLORS[gi % GENRE_COLORS.length]
+                  return (
+                    <button
+                      key={g.name}
+                      onClick={() => {
+                        try {
+                          const c = JSON.parse(localStorage.getItem('beatport_genre_clicks') || '{}')
+                          c[g.name] = (c[g.name] || 0) + 1
+                          localStorage.setItem('beatport_genre_clicks', JSON.stringify(c))
+                        } catch {}
+                        loadChart(g)
+                      }}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                        isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
+                      }`}
+                      style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
+                    >
+                      {g.name}
+                    </button>
+                  )
+                })
+              })()}
             </>) : (<>
               {(() => {
-                // Sort Spotify categories by user's click count (tracked in
-                // localStorage). Most-opened first; ties keep backend order.
+                // Filter playlists by collection (POP = English/global, LATIN = Spanish-speaking)
+                // then sort by click count, most-opened first.
                 let clicks = {}
                 try { clicks = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}') } catch {}
-                const sorted = [...spotifyCategories]
+                const wantedCategory = collection // 'pop' or 'latin'
+                const filtered = spotifyCategories.filter(c =>
+                  // Default to 'pop' if no category set (backwards compat with older API responses)
+                  (c.category || 'pop') === wantedCategory
+                )
+                const sorted = filtered
                   .map((c, i) => ({ c, i, n: clicks[c.key] || 0 }))
                   .sort((a, b) => b.n - a.n || a.i - b.i)
                   .map(x => x.c)
