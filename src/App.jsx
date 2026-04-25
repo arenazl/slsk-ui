@@ -364,7 +364,7 @@ const GENRE_COLORS = [
   { bg: 'bg-slate-400', rgb: '148,163,184' },
 ]
 
-function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPause, onStop, agentConnected }) {
+function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPause, onStop, onRadio, agentConnected }) {
   // Helper: always read fresh audio from ref
   const getAudio = () => audioRef?.current || audioProp
   const audio = getAudio()
@@ -560,18 +560,44 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
             collapses back to the text. Wave mode uses the entire remaining
             width so seeking is precise. */}
         {!waveMode ? (
-          <button
-            onClick={() => setWaveMode(true)}
-            className="flex-1 min-w-0 text-left rounded px-2 py-1 hover:bg-white/5 active:bg-white/10 transition-colors"
-            title="Tocar para ver la onda"
-          >
-            <div className="text-sm text-[var(--text-primary)] truncate font-medium">
-              {file.title || file.filename}
-            </div>
-            {file.artist && (
-              <div className="text-xs text-gray-500 truncate">{file.artist}</div>
+          <>
+            <button
+              onClick={() => setWaveMode(true)}
+              className="flex-1 min-w-0 text-left rounded px-2 py-1 hover:bg-white/5 active:bg-white/10 transition-colors"
+              title="Tocar para ver la onda"
+            >
+              <div className="text-sm text-[var(--text-primary)] truncate font-medium">
+                {file.title || file.filename}
+              </div>
+              {file.artist && (
+                <div className="text-xs text-gray-500 truncate">{file.artist}</div>
+              )}
+            </button>
+            {/* Right-side action icons. Show only the wave-toggle by default;
+                radio button only when there's something useful to seed with
+                (artist or title). Both intentionally small so they don't
+                compete with the main play/stop button. */}
+            <button
+              onClick={() => setWaveMode(true)}
+              className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--text-primary)] hover:bg-white/10 transition-all flex-shrink-0"
+              title="Ver waveform"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" d="M4 12h2M8 8v8M12 5v14M16 8v8M20 12h-2" />
+              </svg>
+            </button>
+            {onRadio && (file.artist || file.title) && (
+              <button
+                onClick={() => onRadio(file)}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--color-accent)] hover:bg-white/10 transition-all flex-shrink-0"
+                title="Radio desde este tema"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M5.288 13.58a9.5 9.5 0 0113.424 0M2.464 10.757a13.5 13.5 0 0119.072 0M12 20h.01" />
+                </svg>
+              </button>
             )}
-          </button>
+          </>
         ) : (
           <div className="flex-1 min-w-0 h-12 relative cursor-pointer group" onClick={handleSeek}>
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full rounded" width={1600} height={48} />
@@ -5953,6 +5979,10 @@ function App() {
         audioRef={audioRef}
         onPlayPause={handleAppPlayPause}
         onStop={handleAppStop}
+        onRadio={(f) => {
+          setPendingRadioTrack({ artist: f.artist || '', title: f.title || f.filename })
+          setPage('discover')
+        }}
         agentConnected={agentConnected}
       />
     </div>
