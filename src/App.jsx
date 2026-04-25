@@ -216,6 +216,18 @@ async function createAudioElement(file, useAgent) {
   return new Audio(url)
 }
 
+// Detach handlers + pause + clear src so a stale audio element can't fire
+// onended/onerror later and trigger setNowPlaying(null) or autoplay advance
+// after the user moved on to another track.
+function killAudio(a) {
+  if (!a) return
+  try { a.onended = null } catch {}
+  try { a.onerror = null } catch {}
+  try { a.oncanplaythrough = null } catch {}
+  try { a.pause() } catch {}
+  try { a.src = '' } catch {}
+}
+
 function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
   const [dragOver, setDragOver] = useState(false)
 
@@ -531,18 +543,25 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
           </svg>
         </button>
 
-        {/* Track info */}
-        <div className="flex-shrink-0 min-w-0 w-48">
-          <div className="text-sm text-[var(--text-primary)] truncate font-medium">{file.title || file.filename}</div>
-          <div className="text-xs text-gray-500 truncate">{file.artist}</div>
-        </div>
-
-        {/* Time */}
+        {/* Time current */}
         <span className="text-xs text-gray-500 flex-shrink-0 w-10 text-right">{formatTime(currentTime)}</span>
 
-        {/* Waveform / Seek bar */}
+        {/* Wave + track info overlaid — entire area is seekable so the user can
+            tap anywhere across the bar (including over the title/artist text)
+            to jump in the track. Canvas sits underneath, text sits on top with
+            pointer-events:none so clicks pass through to the seek handler. */}
         <div className="flex-1 min-w-0 h-12 relative cursor-pointer" onClick={handleSeek}>
-          <canvas ref={canvasRef} className="w-full h-full rounded" width={800} height={48} />
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full rounded" width={800} height={48} />
+          <div className="absolute inset-0 flex flex-col justify-center px-3 pointer-events-none select-none">
+            <div className="text-sm text-[var(--text-primary)] truncate font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
+              {file.title || file.filename}
+            </div>
+            {file.artist && (
+              <div className="text-xs text-gray-300 truncate drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
+                {file.artist}
+              </div>
+            )}
+          </div>
         </div>
 
         <span className="text-xs text-gray-500 flex-shrink-0 w-10">{formatTime(duration)}</span>
@@ -1238,24 +1257,18 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         {/* Action buttons - hidden on mobile, shown on md+ */}
         {view === 'tracks' && dupeGroups.length > 0 && (
           <button
-            onClick={async () => {
-              if (!showDupes) {
-                setShowDupes(true)
-              } else {
-                const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                await agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
-                fetchLibrary()
-                setShowDupes(false)
-              }
-            }}
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 ${
-              showDupes ? 'bg-red-600 text-[var(--text-primary)] font-semibold' : 'bg-red-900/50 hover:bg-red-800 text-red-300'
-            }`}
+            onClick={deleteDupes}
+            disabled={deletingDupes}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 disabled:opacity-50 bg-red-900/50 hover:bg-red-800 text-red-300"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            {showDupes ? `Limpiar duplicados (${dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})` : `Duplicados (${dupeGroups.length})`}
+            {deletingDupes ? (
+              <div className="w-4 h-4 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
+            {deletingDupes ? 'Borrando...' : `Duplicados (${dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})`}
           </button>
         )}
 
@@ -1424,12 +1437,17 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                     </button>
                   )}
                   {dupeKeys.size > 0 && (
-                    <button onClick={() => { setShowDupes(d => !d); setToolsOpen(false) }}
-                      className="w-full text-left px-4 py-3 rounded-xl text-sm text-red-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
+                    <button onClick={() => { deleteDupes(); setToolsOpen(false) }}
+                      disabled={deletingDupes}
+                      className="w-full text-left px-4 py-3 rounded-xl text-sm text-red-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
                       <div className="w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center">
-                        <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        {deletingDupes ? (
+                          <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        )}
                       </div>
-                      Duplicados ({dupeKeys.size})
+                      {deletingDupes ? 'Borrando...' : `Borrar duplicados (${dupeKeys.size})`}
                     </button>
                   )}
                   <button onClick={() => { openFolder(''); setToolsOpen(false) }}
@@ -4090,6 +4108,11 @@ function App() {
   const [mixTracks, setMixTracks] = useState(null) // tracks array for MixEditor
   const previewTimerRef = useRef(null)
   const audioRef = useRef(null)
+  // DiscoverPage registers its autoplay-cancel here so the global Stop button
+  // (and any new playback) can kill the pending "advance to next track" timer.
+  // Without this, pause()ing audioRef left the timer alive — it fired playNext()
+  // 30s later and resumed playback over whatever track the user had selected.
+  const autoplayCancelRef = useRef(null)
   const wsRef = useRef(null)
   const libraryRef = useRef(null)
   const logsEndRef = useRef(null)
@@ -4497,7 +4520,9 @@ function App() {
   // play() once the fetch resolves. The element is already "unlocked" from
   // the original gesture.
   const playLibraryPreview = (file) => {
-    if (audioRef.current) audioRef.current.pause()
+    autoplayCancelRef.current?.()
+    autoplayCancelRef.current = null
+    killAudio(audioRef.current)
     const audio = new Audio()
     audio.preload = 'auto'
     audioRef.current = audio
@@ -4552,9 +4577,9 @@ function App() {
       }
       return
     }
-    if (audioRef.current) {
-      audioRef.current.pause()
-    }
+    autoplayCancelRef.current?.()
+    autoplayCancelRef.current = null
+    killAudio(audioRef.current)
     // Preview mode: 30s iTunes preview instead of the actual file.
     // Call synchronously to keep iOS autoplay gesture valid.
     if (playbackMode === 'preview') {
@@ -4592,10 +4617,10 @@ function App() {
   }
 
   const handleAppStop = () => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.currentTime = 0
-    }
+    autoplayCancelRef.current?.()
+    autoplayCancelRef.current = null
+    killAudio(audioRef.current)
+    audioRef.current = null
     setPlayingFile(null)
     setNowPlaying(null)
     setIsAudioPlaying(false)
@@ -5865,6 +5890,7 @@ function App() {
           connected={connected}
           onGoToDownloads={() => setPage('download')}
           audioRef={audioRef}
+          autoplayCancelRef={autoplayCancelRef}
           playingFile={playingFile}
           setPlayingFile={setPlayingFile}
           setNowPlaying={setNowPlaying}
@@ -5986,7 +6012,7 @@ function SwipeableRow({ children, onReveal }) {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection }) {
   const toast = useToast()
   const [genres, setGenres] = useState([])
   // URL-synced selections: share/bookmark any view directly
@@ -6280,10 +6306,28 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     const sessionAudio = new Audio()
     sessionAudio.volume = initialVol
     sessionAudio.preload = 'auto'  // iOS background: load ahead so src swap is instant
-    if (audioRef?.current && audioRef.current !== sessionAudio) { audioRef.current.pause() }
+    // Kill any previous audio (handlers + timer) before swapping in this session,
+    // otherwise stale onended/onerror or a pending advance-timer can fire later
+    // and cause "doble tema" (two audios overlapping).
+    autoplayCancelRef?.current?.()
+    if (audioRef?.current && audioRef.current !== sessionAudio) {
+      try { audioRef.current.onended = null } catch {}
+      try { audioRef.current.onerror = null } catch {}
+      try { audioRef.current.pause() } catch {}
+    }
     audioRef.current = sessionAudio
     sessionAudio.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
     sessionAudio.onerror = () => { current++; playNext() }
+    // Register cancel so global Stop / new playback can kill this autoplay session
+    if (autoplayCancelRef) {
+      autoplayCancelRef.current = () => {
+        if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
+        try { sessionAudio.onended = null } catch {}
+        try { sessionAudio.onerror = null } catch {}
+        try { sessionAudio.pause() } catch {}
+        try { sessionAudio.src = '' } catch {}
+      }
+    }
 
     // MediaSession — exposes track metadata + AirPods/lockscreen actions.
     // CRITICAL: do NOT register a 'pause' handler. iOS sometimes invokes it
@@ -6592,6 +6636,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }
 
   const setDiscoverAudio = (audio, track) => {
+    if (audioRef.current && audioRef.current !== audio) {
+      try { audioRef.current.onended = null } catch {}
+      try { audioRef.current.onerror = null } catch {}
+      try { audioRef.current.pause() } catch {}
+    }
     audioRef.current = audio
     setPlayingId(track.id)
     lastPlayedTrackRef.current = track   // remember which track for top-bar Preview button
@@ -6601,23 +6650,30 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }
 
   const playPreview = (track) => {
-    // Always kill any pending autoplay timeout — otherwise when the user
-    // taps a single track mid-autoplay, the old timeout still fires and
-    // starts the "next" autoplay track on sessionAudio, overlapping audio.
+    // Kill the autoplay session entirely (timer + handlers + sessionAudio).
+    // Without removing onended/onerror, setting src='' below could fire
+    // sessionAudio.onerror → playNext() → resumes autoplay over the user's pick.
+    autoplayCancelRef?.current?.()
+    autoplayCancelRef && (autoplayCancelRef.current = null)
     if (previewIntervalRef.current) {
       clearTimeout(previewIntervalRef.current)
       previewIntervalRef.current = null
     }
 
     if (playingId === track.id) {
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+      if (audioRef.current) {
+        try { audioRef.current.onended = null } catch {}
+        try { audioRef.current.onerror = null } catch {}
+        try { audioRef.current.pause() } catch {}
+        audioRef.current = null
+      }
       clearDiscoverAudio()
       return
     }
     if (audioRef.current) {
-      audioRef.current.pause()
-      // Clear src so the element stops buffering/decoding — avoids stray
-      // 'canplay' firing later and triggering delayed play() on a stale element.
+      try { audioRef.current.onended = null } catch {}
+      try { audioRef.current.onerror = null } catch {}
+      try { audioRef.current.pause() } catch {}
       try { audioRef.current.src = '' } catch {}
     }
 
