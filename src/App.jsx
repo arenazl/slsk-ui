@@ -6284,9 +6284,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     sessionAudio.onended = () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() }
     sessionAudio.onerror = () => { current++; playNext() }
 
-    // MediaSession — exposes play/pause/next/prev to OS-level controls.
-    // iOS routes AirPods gestures here: double-tap → nexttrack, triple-tap → previoustrack.
-    // Lock-screen + Control Center + CarPlay + Bluetooth remotes all use the same hooks.
+    // MediaSession — exposes track metadata + AirPods/lockscreen actions.
+    // CRITICAL: do NOT register a 'pause' handler. iOS sometimes invokes it
+    // when the screen locks or app goes background, which kills our audio
+    // element and breaks the autoplay chain. Let iOS use its default pause
+    // (just suspends the element without telling us). For 'play', we DO
+    // handle it because users expect the lockscreen play button to resume.
     const setupMediaSession = (track) => {
       if (!('mediaSession' in navigator)) return
       try {
@@ -6303,10 +6306,6 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           sessionAudio.play().catch(() => {})
           setIsAudioPlaying(true)
         })
-        navigator.mediaSession.setActionHandler('pause', () => {
-          sessionAudio.pause()
-          setIsAudioPlaying(false)
-        })
         navigator.mediaSession.setActionHandler('nexttrack', () => {
           if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current)
           current++
@@ -6317,9 +6316,6 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           if (current > 0) current--
           playNext()
         })
-        // Disable seek-backward/forward (the ±15s buttons iOS shows by default
-        // for short audio). Passing null reveals the real prev/next track
-        // icons on lockscreen + CarPlay + Apple Watch.
         try { navigator.mediaSession.setActionHandler('seekbackward', null) } catch {}
         try { navigator.mediaSession.setActionHandler('seekforward', null) } catch {}
         try { navigator.mediaSession.setActionHandler('seekto', null) } catch {}
@@ -6332,33 +6328,16 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
       const startAudio = (url) => {
         if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
-
-        // Simple approach: set src, call play() immediately. This is the only
-        // path that works reliably in iOS BACKGROUND (locked screen) because
-        // iOS defers most media events (canplay/loadeddata/etc.) when the app
-        // isn't in foreground. Waiting for them stalls autoplay forever.
         sessionAudio.src = url
-
         setPlayingFile(`discover-preview-${current}`)
         setPlayingId(t.id)
         lastPlayedTrackRef.current = t
         setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
         setIsAudioPlaying(true)
         setupMediaSession(t)
-
-        // Schedule advancement using the 'playing' event — fires when actual
-        // audio starts (not just when buffer is ready). Fallback to setTimeout
-        // from play() promise resolution in case 'playing' doesn't fire.
-        let advanced = false
-        const scheduleAdvance = () => {
-          if (advanced) return
-          advanced = true
-          previewIntervalRef.current = setTimeout(() => {
-            sessionAudio.pause(); current++; playNext()
-          }, previewDurationRef.current * 1000)
-        }
-        sessionAudio.addEventListener('playing', scheduleAdvance, { once: true })
-        sessionAudio.play().then(scheduleAdvance).catch(() => { current++; playNext() })
+        sessionAudio.play().then(() => {
+          previewIntervalRef.current = setTimeout(() => { sessionAudio.pause(); current++; playNext() }, previewDurationRef.current * 1000)
+        }).catch(() => { current++; playNext() })
       }
 
       // 1) Use track's own preview URL (Beatport sample_url or Spotify preview_url)
