@@ -372,16 +372,15 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
   const waveformRef = useRef(null) // Float32Array of peaks
   const animFrameRef = useRef(null)
   const lastFileRef = useRef(null)
+  // Default state shows just track name + a single play/stop button.
+  // Tapping the name flips into wave mode where the canvas takes the full
+  // width and tapping anywhere on it seeks. The volume slider was removed
+  // (browser default is fine; users can adjust system volume).
+  const [waveMode, setWaveMode] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [volume, setVolume] = useState(0.8)
-  const [muted, setMuted] = useState(false)
-
-  // Sync volume to audio element
-  useEffect(() => {
-    if (!audio) return
-    audio.volume = muted ? 0 : volume
-  }, [audio, volume, muted])
+  // Reset to text mode whenever the track changes
+  useEffect(() => { setWaveMode(false) }, [file?.filename])
 
   // Generate waveform from audio element using Web Audio API
   useEffect(() => {
@@ -496,7 +495,7 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
     }
-  }, [file, isPlaying])
+  }, [file, isPlaying, waveMode])
 
   useEffect(() => {
     return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current) }
@@ -527,72 +526,69 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
 
   if (!file) return null
 
+  // Single button toggles between play (when paused/idle) and stop (when
+  // playing). No separate stop button; no pause — the user wanted "stop" to
+  // be the second state of "play". A short tap while playing fully stops
+  // (clears nowPlaying so the bar disappears); from idle it resumes/plays.
+  const handlePrimary = () => {
+    if (isPlaying) onStop()
+    else onPlayPause()
+  }
+
   return (
     <div className="flex-shrink-0 bg-[var(--bg-surface)] border-t border-[var(--border-color)] px-4 py-2">
       <div className="flex items-center gap-3">
-        {/* Play/Pause */}
-        <PlayPauseBtn isPlaying={isPlaying} onClick={onPlayPause} size="lg" className="hover:scale-105 !bg-white !text-black !shadow-md" />
-
-        {/* Stop */}
+        {/* Play / Stop combined button */}
         <button
-          onClick={onStop}
-          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--text-primary,white)] hover:bg-white/10 transition-all flex-shrink-0"
+          onClick={handlePrimary}
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-black shadow-md hover:scale-105 active:scale-95 transition-transform flex-shrink-0"
+          title={isPlaying ? 'Detener' : 'Reproducir'}
         >
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-            <rect x="6" y="6" width="12" height="12" rx="1" />
-          </svg>
-        </button>
-
-        {/* Time current */}
-        <span className="text-xs text-gray-500 flex-shrink-0 w-10 text-right">{formatTime(currentTime)}</span>
-
-        {/* Wave + track info overlaid — entire area is seekable so the user can
-            tap anywhere across the bar (including over the title/artist text)
-            to jump in the track. Canvas sits underneath, text sits on top with
-            pointer-events:none so clicks pass through to the seek handler. */}
-        <div className="flex-1 min-w-0 h-12 relative cursor-pointer" onClick={handleSeek}>
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full rounded" width={800} height={48} />
-          <div className="absolute inset-0 flex flex-col justify-center px-3 pointer-events-none select-none">
-            <div className="text-sm text-[var(--text-primary)] truncate font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
-              {file.title || file.filename}
-            </div>
-            {file.artist && (
-              <div className="text-xs text-gray-300 truncate drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
-                {file.artist}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <span className="text-xs text-gray-500 flex-shrink-0 w-10">{formatTime(duration)}</span>
-
-        {/* Volume */}
-        <button
-          onClick={() => setMuted(m => !m)}
-          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--text-primary,white)] hover:bg-white/10 transition-all flex-shrink-0"
-          title={muted ? 'Unmute' : 'Mute'}
-        >
-          {muted || volume === 0 ? (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          {isPlaying ? (
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="1.5" />
             </svg>
           ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728" />
+            <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
             </svg>
           )}
         </button>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={muted ? 0 : volume}
-          onChange={(e) => { setVolume(parseFloat(e.target.value)); if (muted) setMuted(false) }}
-          className="w-20 h-1 accent-[var(--color-accent)] flex-shrink-0"
-        />
+
+        {/* Right side: track text by default, full-width waveform when expanded.
+            Tapping the title flips into wave mode; tapping the ✕ in wave mode
+            collapses back to the text. Wave mode uses the entire remaining
+            width so seeking is precise. */}
+        {!waveMode ? (
+          <button
+            onClick={() => setWaveMode(true)}
+            className="flex-1 min-w-0 text-left rounded px-2 py-1 hover:bg-white/5 active:bg-white/10 transition-colors"
+            title="Tocar para ver la onda"
+          >
+            <div className="text-sm text-[var(--text-primary)] truncate font-medium">
+              {file.title || file.filename}
+            </div>
+            {file.artist && (
+              <div className="text-xs text-gray-500 truncate">{file.artist}</div>
+            )}
+          </button>
+        ) : (
+          <div className="flex-1 min-w-0 h-12 relative cursor-pointer group" onClick={handleSeek}>
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full rounded" width={1600} height={48} />
+            <div className="absolute top-0 left-2 text-[10px] text-gray-400 pointer-events-none font-mono">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setWaveMode(false) }}
+              className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-all"
+              title="Volver al título"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -5137,6 +5133,31 @@ function App() {
               </svg>
             )}
           </button>
+          {/* Global panic-stop: kills every audio element on the page (HTML5
+              <audio> + autoplay session in Discover) so any "doble tema"
+              that snuck through can be silenced in one tap. Only shown when
+              something is actually playing to avoid clutter. */}
+          {nowPlaying && (
+            <button
+              onClick={() => {
+                autoplayCancelRef.current?.()
+                autoplayCancelRef.current = null
+                document.querySelectorAll('audio').forEach(el => {
+                  try { el.onended = null } catch {}
+                  try { el.onerror = null } catch {}
+                  try { el.pause() } catch {}
+                  try { el.src = '' } catch {}
+                })
+                handleAppStop()
+              }}
+              className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 active:scale-95 flex-shrink-0"
+              title="Detener todo el audio"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="1.5" />
+              </svg>
+            </button>
+          )}
           {!IS_MOBILE_DEVICE && (
             <div
               className="hidden md:flex items-center rounded-full bg-[var(--bg-input)] p-0.5 flex-shrink-0"
