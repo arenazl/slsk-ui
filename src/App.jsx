@@ -573,13 +573,12 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
                 <div className="text-xs text-gray-500 truncate">{file.artist}</div>
               )}
             </button>
-            {/* Right-side action icons. Show only the wave-toggle by default;
-                radio button only when there's something useful to seed with
-                (artist or title). Both intentionally small so they don't
-                compete with the main play/stop button. */}
+            {/* Right-side action icons — distinct colors so they don't blend.
+                Wave is cyan (audio/visual), radio is amber (broadcast/warm).
+                Radio button only shows when we have something to seed with. */}
             <button
               onClick={() => setWaveMode(true)}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--text-primary)] hover:bg-white/10 transition-all flex-shrink-0"
+              className="w-7 h-7 flex items-center justify-center rounded-full text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 transition-all flex-shrink-0"
               title="Ver waveform"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -589,11 +588,13 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
             {onRadio && (file.artist || file.title) && (
               <button
                 onClick={() => onRadio(file)}
-                className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--color-accent)] hover:bg-white/10 transition-all flex-shrink-0"
+                className="w-7 h-7 flex items-center justify-center rounded-full text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 transition-all flex-shrink-0"
                 title="Radio desde este tema"
               >
+                {/* Lucide-style "radio tower" — emanating broadcast waves */}
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M5.288 13.58a9.5 9.5 0 0113.424 0M2.464 10.757a13.5 13.5 0 0119.072 0M12 20h.01" />
+                  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+                  <path strokeLinecap="round" d="M16.24 7.76a6 6 0 010 8.49M7.76 16.24a6 6 0 010-8.48M19.07 4.93a10 10 0 010 14.14M4.93 19.07a10 10 0 010-14.14" />
                 </svg>
               </button>
             )}
@@ -7069,21 +7070,38 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 )
               })}
             </>) : (<>
-              {spotifyCategories.map((cat) => {
-                const isActive = selectedSpotifyCategory?.key === cat.key
-                return (
-                  <button
-                    key={cat.key}
-                    onClick={() => loadSpotifyPlaylist(cat)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
-                      isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
-                    }`}
-                    style={isActive ? { background: `${cat.color}40` } : {}}
-                  >
-                    {cat.name}
-                  </button>
-                )
-              })}
+              {(() => {
+                // Sort Spotify categories by user's click count (tracked in
+                // localStorage). Most-opened first; ties keep backend order.
+                let clicks = {}
+                try { clicks = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}') } catch {}
+                const sorted = [...spotifyCategories]
+                  .map((c, i) => ({ c, i, n: clicks[c.key] || 0 }))
+                  .sort((a, b) => b.n - a.n || a.i - b.i)
+                  .map(x => x.c)
+                return sorted.map((cat) => {
+                  const isActive = selectedSpotifyCategory?.key === cat.key
+                  return (
+                    <button
+                      key={cat.key}
+                      onClick={() => {
+                        try {
+                          const c = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}')
+                          c[cat.key] = (c[cat.key] || 0) + 1
+                          localStorage.setItem('spotify_cat_clicks', JSON.stringify(c))
+                        } catch {}
+                        loadSpotifyPlaylist(cat)
+                      }}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                        isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
+                      }`}
+                      style={isActive ? { background: `${cat.color}40` } : {}}
+                    >
+                      {cat.name}
+                    </button>
+                  )
+                })
+              })()}
             </>)}
           </div>
         </div>
