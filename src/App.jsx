@@ -954,10 +954,21 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     if (!confirm(`Borrar ${toDelete.length} duplicados? Se mantienen los de mejor rating/calidad.`)) return
     setDeletingDupes(true)
     try {
-      const res = await agentFetch('delete-dupes', {
+      // Two-step: agent removes the actual files locally (best-effort if
+      // connected); Heroku updates the Cloudinary manifest (source of truth
+      // the UI reads). Without the Heroku call the dupes count never drops
+      // because /api/library would still include the deleted entries.
+      if (agentConnected) {
+        await agentFetch('delete-dupes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filenames: toDelete }),
+        }).catch(e => console.error('Agent delete-dupes failed:', e))
+      }
+      const res = await fetch(`${API_BASE}/api/delete-dupes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filenames: toDelete }),
+        body: JSON.stringify({ filenames: toDelete, username: authUser?.name || '' }),
       })
       const data = await res.json()
       if (data.deleted > 0) fetchLibrary()
