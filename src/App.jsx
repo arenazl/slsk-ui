@@ -873,7 +873,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const classifyWithAI = async () => {
     setClassifying(true)
     try {
-      const res = await fetch(`${API_BASE}/api/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: authUser?.name || '' }) })
+      // Include the UI's currently ungrouped files so the backend can classify
+      // local-only files that haven't been synced into the Cloudinary manifest.
+      const ungroupedNames = files.filter(f => !f.genre).map(f => f.filename)
+      const res = await fetch(`${API_BASE}/api/classify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: authUser?.name || '', filenames: ungroupedNames }),
+      })
       const data = await res.json()
       // After classification, tell agent to organize files into genre folders
       if (agentConnected && data.classified > 0) {
