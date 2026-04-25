@@ -873,15 +873,19 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const classifyWithAI = async () => {
     setClassifying(true)
     try {
-      // Include the UI's currently ungrouped files so the backend can classify
-      // local-only files that haven't been synced into the Cloudinary manifest.
       const ungroupedNames = files.filter(f => !f.genre).map(f => f.filename)
+      toast(`Clasificando ${ungroupedNames.length} temas con IA...`, 'info', 4000)
       const res = await fetch(`${API_BASE}/api/classify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: authUser?.name || '', filenames: ungroupedNames }),
       })
       const data = await res.json()
+      if (data.error) {
+        toast(`Classify error: ${data.error.slice(0, 100)}`, 'error', 6000)
+      } else {
+        toast(`Clasificados: ${data.classified || 0}/${data.total || ungroupedNames.length}`, 'success', 5000)
+      }
       // After classification, tell agent to organize files into genre folders
       if (agentConnected && data.classified > 0) {
         // Get updated metadata from Heroku to build move list
