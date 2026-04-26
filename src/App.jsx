@@ -168,6 +168,7 @@ const DEVICE = typeof window !== 'undefined' ? getDeviceInfo() : { id: 'server',
 let AGENT_BASE = 'http://localhost:9900'
 let AGENT_MODE = 'local' // 'local' = direct, 'proxy' = through server
 let AGENT_USER = ''
+let AGENT_CONNECTED = false
 
 // Build agent API URL — direct or proxied through the server
 function agentUrl(path) {
@@ -180,6 +181,11 @@ function agentUrl(path) {
 
 // Fetch wrapper for agent calls — emits toast on errors/timeouts
 async function agentFetch(path, opts = {}) {
+  if (!AGENT_CONNECTED) {
+    const msg = 'Agente no conectado — esta acción requiere el agente local corriendo'
+    window.dispatchEvent(new CustomEvent('agent-error', { detail: msg }))
+    throw new Error(msg)
+  }
   const url = typeof path === 'string' && !path.startsWith('http') ? agentUrl(path) : path
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(30000), ...opts })
@@ -210,6 +216,14 @@ function getAudioUrl(file, useAgent) {
 }
 
 async function createAudioElement(file, useAgent) {
+  // Prefer FSA: file lives on user's local disk via a directory handle.
+  // Heroku's /audio/ has no files (downloads land on the agent or in FSA),
+  // so when the agent path is disabled (FSA-ready desktop), this is the only
+  // way <audio> can actually find the bytes.
+  if (await fsaBackend.ready()) {
+    const fsaUrl = await fsaBackend.getFileUrl(file.filename, file.subfolder)
+    if (fsaUrl) return new Audio(fsaUrl)
+  }
   const url = getAudioUrl(file, useAgent)
   // Use Audio element directly — Chrome allows <audio> to load from localhost
   // even on HTTPS pages (unlike fetch which gets blocked by private network policy)
@@ -225,6 +239,9 @@ function killAudio(a) {
   try { a.onerror = null } catch {}
   try { a.oncanplaythrough = null } catch {}
   try { a.pause() } catch {}
+  try {
+    if (a.src && a.src.startsWith('blob:')) URL.revokeObjectURL(a.src)
+  } catch {}
   try { a.src = '' } catch {}
 }
 
@@ -4007,6 +4024,20 @@ function App() {
   }, [authUser])
 
   const [page, setPage] = useQS('page', 'discover')
+  // When leaving Discover, strip its URL params (playlist/genre/label/chart)
+  // so navegar a Biblioteca/Set no arrastra residuos del descubrimiento.
+  useEffect(() => {
+    if (page === 'discover') return
+    const p = new URLSearchParams(window.location.search)
+    let changed = false
+    for (const k of ['playlist', 'genre', 'label', 'chart']) {
+      if (p.has(k)) { p.delete(k); changed = true }
+    }
+    if (changed) {
+      const qs = p.toString()
+      window.history.replaceState(null, '', qs ? '?' + qs : window.location.pathname)
+    }
+  }, [page])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [dlPanelOpen, setDlPanelOpen] = useState(false)
   const [logsExpanded, setLogsExpanded] = useState(false)
@@ -4064,7 +4095,7 @@ function App() {
       if (res.ok) {
         AGENT_MODE = mode
         const status = await res.json()
-        setAgentConnected(true); agentConnectedRef.current = true
+        setAgentConnected(true); agentConnectedRef.current = true; AGENT_CONNECTED = true
         setAgentVersion(status.version || '')
         setAgentHasSlsk(!!status.slsk)
         await configFn()
@@ -4080,12 +4111,12 @@ function App() {
 
     const checkAgent = async () => {
       if (IS_MOBILE) {
-        setAgentConnected(false); agentConnectedRef.current = false
+        setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
         return
       }
       // If FSA is ready, don't bother with the agent
       if (await fsaBackend.ready()) {
-        setAgentConnected(false); agentConnectedRef.current = false
+        setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
         return
       }
       const configBody = JSON.stringify({ username: authUser.name })
@@ -4117,7 +4148,7 @@ function App() {
           )) return
         }
       } catch { /* remote also failed */ }
-      setAgentConnected(false); agentConnectedRef.current = false
+      setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
     }
     checkAgent()
     const interval = setInterval(checkAgent, 30000)
@@ -4808,10 +4839,11 @@ function App() {
           filename: result.filename,
           sources: result.sources && result.sources.length ? result.sources : [result],
           callback_url: `${API_BASE}/api/agent-dl-callback`,
+          collection,
         }),
       }).catch(e => {
         console.error('agent slsk-download failed, fallback to heroku:', e)
-        wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result, app_user: authUser?.name || '' }))
+        wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result, app_user: authUser?.name || '', collection }))
       })
       return
     }
@@ -4822,6 +4854,7 @@ function App() {
       password,
       result,
       app_user: authUser?.name || '',
+      collection,
     }))
   }
 
@@ -5079,7 +5112,6 @@ function App() {
           <div className="hidden md:flex gap-1">
             {(isGuest ? [{ id: 'discover', label: 'Discover' }] : [
               { id: 'discover', label: 'Discover' },
-              { id: 'download', label: 'Descargar' },
               { id: 'library', label: 'Biblioteca' },
               { id: 'set', label: 'Set' },
               ...(mixTracks ? [{ id: 'mix', label: 'Mix Editor' }] : []),
@@ -5350,7 +5382,6 @@ function App() {
                 { id: 'discover', label: 'Discover', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
               ] : [
                 { id: 'discover', label: 'Discover', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-                { id: 'download', label: 'Descargar', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' },
                 { id: 'library', label: 'Biblioteca', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
                 { id: 'set', label: 'Set Builder', icon: 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3' },
                 ...(mixTracks ? [{ id: 'mix', label: 'Mix Editor', icon: 'M9 19V6l12-3v13' }] : []),
@@ -6873,12 +6904,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             filename: best.filename,
             sources: bestSources,
             callback_url: `${API_BASE}/api/agent-dl-callback`,
+            collection,
           }),
         }).catch(() => {
-          wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '' }))
+          wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '', collection }))
         })
       } else {
-        wsRef.current.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '' }))
+        wsRef.current.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '', collection }))
       }
     }
 
@@ -7097,67 +7129,31 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               >
                 All
               </button>
-              {(() => {
-                // Sort Beatport genres by user's click count (localStorage).
-                // Most-clicked first, ties keep original order. Same pattern
-                // as Spotify categories below.
-                let clicks = {}
-                try { clicks = JSON.parse(localStorage.getItem('beatport_genre_clicks') || '{}') } catch {}
-                const sorted = genres
-                  .map((g, i) => ({ g, i, n: clicks[g.name] || 0 }))
-                  .sort((a, b) => b.n - a.n || a.i - b.i)
-                return sorted.map(({ g, i: gi }) => {
-                  const isActive = selectedGenre?.name === g.name
-                  const c = GENRE_COLORS[gi % GENRE_COLORS.length]
-                  return (
-                    <button
-                      key={g.name}
-                      onClick={() => {
-                        try {
-                          const c = JSON.parse(localStorage.getItem('beatport_genre_clicks') || '{}')
-                          c[g.name] = (c[g.name] || 0) + 1
-                          localStorage.setItem('beatport_genre_clicks', JSON.stringify(c))
-                        } catch {}
-                        loadChart(g)
-                      }}
-                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
-                        isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
-                      }`}
-                      style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
-                    >
-                      {g.name}
-                    </button>
-                  )
-                })
-              })()}
-            </>) : (<>
-              {(() => {
-                // Filter playlists by collection (POP = English/global, LATIN = Spanish-speaking)
-                // then sort by click count, most-opened first.
-                let clicks = {}
-                try { clicks = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}') } catch {}
-                const wantedCategory = collection // 'pop' or 'latin'
-                const filtered = spotifyCategories.filter(c =>
-                  // Default to 'pop' if no category set (backwards compat with older API responses)
-                  (c.category || 'pop') === wantedCategory
+              {genres.map((g, gi) => {
+                const isActive = selectedGenre?.name === g.name
+                const c = GENRE_COLORS[gi % GENRE_COLORS.length]
+                return (
+                  <button
+                    key={g.name}
+                    onClick={() => loadChart(g)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                      isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
+                    }`}
+                    style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
+                  >
+                    {g.name}
+                  </button>
                 )
-                const sorted = filtered
-                  .map((c, i) => ({ c, i, n: clicks[c.key] || 0 }))
-                  .sort((a, b) => b.n - a.n || a.i - b.i)
-                  .map(x => x.c)
-                return sorted.map((cat) => {
+              })}
+            </>) : (<>
+              {spotifyCategories
+                .filter(c => (c.category || 'pop') === collection)
+                .map((cat) => {
                   const isActive = selectedSpotifyCategory?.key === cat.key
                   return (
                     <button
                       key={cat.key}
-                      onClick={() => {
-                        try {
-                          const c = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}')
-                          c[cat.key] = (c[cat.key] || 0) + 1
-                          localStorage.setItem('spotify_cat_clicks', JSON.stringify(c))
-                        } catch {}
-                        loadSpotifyPlaylist(cat)
-                      }}
+                      onClick={() => loadSpotifyPlaylist(cat)}
                       className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
                         isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
                       }`}
@@ -7166,8 +7162,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       {cat.name}
                     </button>
                   )
-                })
-              })()}
+                })}
             </>)}
           </div>
         </div>
