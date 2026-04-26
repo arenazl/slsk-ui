@@ -6979,6 +6979,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     let ranked = []
     let rankIdx = -1
     let currentFilename = ''
+    let variantWatchdog = null
+
+    const clearVariantWatchdog = () => {
+      if (variantWatchdog) { clearTimeout(variantWatchdog); variantWatchdog = null }
+    }
 
     const qScore = (r) => {
       const ext = (r.ext || '').toLowerCase()
@@ -6990,7 +6995,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
 
     const dispatchPick = (idx) => {
+      clearVariantWatchdog()
       if (idx >= ranked.length) {
+        console.warn('[DL] all variants exhausted', { track: track.title, tried: ranked.length })
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: `Sin éxito en ${ranked.length} variantes` } }))
         addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
         wsRef.current?.removeEventListener('message', handler)
@@ -7000,10 +7007,15 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       const best = ranked[idx]
       currentFilename = best.filename
       const bestSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : [best]
-      // Status UI limpio: "Descargando" solo — la mecánica de variantes queda
-      // en el log técnico para debug.
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: 'Descargando' } }))
+
+      const sendViaWs = (reason) => {
+        console.info('[DL] via=ws', { reason, filename: best.filename })
+        wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '', collection }))
+      }
+
       if (agentConnected && agentHasSlsk) {
+        console.info('[DL] via=agent', { filename: best.filename })
         agentFetch('slsk-download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -7014,12 +7026,20 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             callback_url: `${API_BASE}/api/agent-dl-callback`,
             collection,
           }),
-        }).catch(() => {
-          wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '', collection }))
+        }).catch(err => {
+          console.warn('[DL] agent failed, falling back to ws', err?.message || err)
+          sendViaWs('agent-error')
         })
       } else {
-        wsRef.current.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '', collection }))
+        sendViaWs(agentConnected ? 'no-aioslsk' : 'agent-disconnected')
       }
+
+      // Watchdog: if we don't even get a queued/downloading status within 90s,
+      // treat the variant as stuck and advance.
+      variantWatchdog = setTimeout(() => {
+        console.warn('[DL] variant pre-status timeout, advancing', { filename: best.filename })
+        dispatchPick(idx + 1)
+      }, 90000)
     }
 
     // Listen for search results + download progress
@@ -7041,6 +7061,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             if (ds) return ds
             return 0
           })
+          console.info('[DL] search_results', { track: track.title, total: results.length, viable: viable.length, ranked: ranked.length })
           if (ranked.length === 0) {
             setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
             addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
@@ -7051,14 +7072,22 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         }
         if (data.type === 'search_dl_status') {
           const fname = data.filename || ''
-          // Match against current pick's filename to avoid reacting to other downloads
           if (currentFilename && fname === currentFilename) {
-            if (data.status === 'completed') {
+            if (data.status === 'queued' || data.status === 'downloading') {
+              // Server signaled progress — extend the watchdog (slow peers OK,
+              // truly-stuck transfers still get caught at 3 min).
+              clearVariantWatchdog()
+              variantWatchdog = setTimeout(() => {
+                console.warn('[DL] variant stuck after status, advancing', { fname, lastStatus: data.status })
+                dispatchPick(rankIdx + 1)
+              }, 180000)
+            } else if (data.status === 'completed') {
+              clearVariantWatchdog()
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Descargado' } }))
               fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
               wsRef.current.removeEventListener('message', handler)
             } else if (data.status === 'error') {
-              // Esta variante se agotó — probar la siguiente
+              console.warn('[DL] variant error from server, advancing', { fname, error: data.error })
               dispatchPick(rankIdx + 1)
             }
           }
@@ -7083,6 +7112,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         const curr = prev[track.id]
         if (curr?.status === 'searching') {
           wsRef.current?.removeEventListener('message', handler)
+          clearVariantWatchdog()
           addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
           return { ...prev, [track.id]: { status: 'not_found', message: 'No encontrado' } }
         }
