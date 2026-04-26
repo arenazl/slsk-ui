@@ -6862,7 +6862,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Agregado a pendientes' } }))
       return
     }
-    const query = `${track.artist} - ${track.title}`.replace(/[()[\]{}]/g, '')
+    // Dedupe consecutive identical parenthetical groups before stripping brackets
+    // (charts sometimes return "Title (feat. X) (feat. X)" — search needs clean text)
+    const cleanTitle = (track.title || '').replace(/(\([^)]*\)|\[[^\]]*\])\s*\1/g, '$1')
+    const query = `${track.artist} - ${cleanTitle}`.replace(/[()[\]{}]/g, '')
     setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'searching', message: `Buscando...` } }))
 
     // Ranked list of variants to try in order (calidad → fuentes). Filled
