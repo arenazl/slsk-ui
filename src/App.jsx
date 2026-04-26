@@ -2039,7 +2039,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   )
 })
 
-function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary }) {
+function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary, playNextRef }) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
   const [setSelectedStars, setSetSelectedStars] = useState([])
@@ -2099,6 +2099,20 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       setLoadingSuggestions(false)
     }
   }
+
+  // Autoplay-next: when a set track finishes (real audio, not preview/stop),
+  // advance to the next one. Re-registered on every setTracks/onPlay change
+  // so the closure always sees the current list.
+  useEffect(() => {
+    if (!playNextRef || page !== 'set') return
+    playNextRef.current = (endedFilename) => {
+      const idx = setTracks.findIndex(t => t.filename === endedFilename)
+      if (idx >= 0 && idx + 1 < setTracks.length) {
+        onPlay(setTracks[idx + 1])
+      }
+    }
+    return () => { if (playNextRef.current) playNextRef.current = null }
+  }, [setTracks, onPlay, playNextRef, page])
 
   const addToSet = (track) => {
     setSetTracks(prev => [...prev, track])
@@ -4199,6 +4213,10 @@ function App() {
   // Without this, pause()ing audioRef left the timer alive — it fired playNext()
   // 30s later and resumed playback over whatever track the user had selected.
   const autoplayCancelRef = useRef(null)
+  // Pages can register here to be notified when the *real* track audio
+  // finishes (not preview, not manual stop). Used by SetBuilder to advance
+  // to the next track in the set automatically.
+  const playNextRef = useRef(null)
   const wsRef = useRef(null)
   const libraryRef = useRef(null)
   const logsEndRef = useRef(null)
@@ -4733,7 +4751,11 @@ function App() {
     try {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
-      audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+      audio.onended = () => {
+        const ended = file.filename
+        setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
+        playNextRef.current?.(ended)
+      }
       audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
       audio.play().catch(() => {})
       audioRef.current = audio
@@ -4757,6 +4779,9 @@ function App() {
   const handleAppStop = () => {
     autoplayCancelRef.current?.()
     autoplayCancelRef.current = null
+    // Manual stop must NOT trigger autoplay-next. The page's effect will
+    // re-arm playNextRef next time it plays a track from the set.
+    playNextRef.current = null
     killAudio(audioRef.current)
     audioRef.current = null
     setPlayingFile(null)
@@ -6043,7 +6068,7 @@ function App() {
       </div>
 
       {/* Set Builder page */}
-      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} onGoToLibrary={goToLibraryTrack} />
+      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} onGoToLibrary={goToLibraryTrack} playNextRef={playNextRef} />
 
       {/* Mix Editor page */}
       {page === 'mix' && mixTracks && (
