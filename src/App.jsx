@@ -552,6 +552,9 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
     else onPlayPause()
   }
 
+  // Desktop (md+) always shows title + waveform + actions side-by-side, no
+  // toggle needed. On mobile we keep the title-by-default layout with a
+  // tap-to-expand wave mode because there isn't enough width for both.
   return (
     <div className="flex-shrink-0 bg-[var(--bg-surface)] border-t border-[var(--border-color)] px-4 py-2">
       <div className="flex items-center gap-3">
@@ -572,66 +575,75 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
           )}
         </button>
 
-        {/* Right side: track text by default, full-width waveform when expanded.
-            Tapping the title flips into wave mode; tapping the ✕ in wave mode
-            collapses back to the text. Wave mode uses the entire remaining
-            width so seeking is precise. */}
-        {!waveMode ? (
-          <>
-            <button
-              onClick={() => setWaveMode(true)}
-              className="flex-1 min-w-0 text-left rounded px-2 py-1 hover:bg-white/5 active:bg-white/10 transition-colors"
-              title="Tocar para ver la onda"
-            >
-              <div className="text-sm text-[var(--text-primary)] truncate font-medium">
-                {file.title || file.filename}
-              </div>
-              {file.artist && (
-                <div className="text-xs text-gray-500 truncate">{file.artist}</div>
-              )}
-            </button>
-            {/* Right-side action icons — distinct colors so they don't blend.
-                Wave is cyan (audio/visual), radio is amber (broadcast/warm).
-                Radio button only shows when we have something to seed with. */}
-            <button
-              onClick={() => setWaveMode(true)}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 transition-all flex-shrink-0"
-              title="Ver waveform"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" d="M4 12h2M8 8v8M12 5v14M16 8v8M20 12h-2" />
-              </svg>
-            </button>
-            {onRadio && (file.artist || file.title) && (
-              <button
-                onClick={() => onRadio(file)}
-                className="w-7 h-7 flex items-center justify-center rounded-full text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 transition-all flex-shrink-0"
-                title="Radio desde este tema"
-              >
-                {/* Lucide-style "radio tower" — emanating broadcast waves */}
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-                  <path strokeLinecap="round" d="M16.24 7.76a6 6 0 010 8.49M7.76 16.24a6 6 0 010-8.48M19.07 4.93a10 10 0 010 14.14M4.93 19.07a10 10 0 010-14.14" />
-                </svg>
-              </button>
-            )}
-          </>
-        ) : (
-          <div className="flex-1 min-w-0 h-12 relative cursor-pointer group" onClick={handleSeek}>
-            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full rounded" width={1600} height={48} />
-            <div className="absolute top-0 left-2 text-[10px] text-gray-400 pointer-events-none font-mono">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); setWaveMode(false) }}
-              className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-all"
-              title="Volver al título"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+        {/* Title block — always visible on desktop (compact width), takes full
+            width on mobile when wave mode is collapsed, hidden on mobile when
+            the user expanded the wave. The button click only matters on mobile
+            (no-op on desktop where wave is already shown). */}
+        <button
+          onClick={() => setWaveMode(true)}
+          className={`text-left rounded px-2 py-1 transition-colors min-w-0 md:cursor-default md:hover:bg-transparent ${
+            waveMode ? 'hidden md:block md:flex-shrink-0 md:w-56' : 'flex-1 hover:bg-white/5 active:bg-white/10 md:flex-shrink-0 md:w-56 md:hover:bg-transparent'
+          }`}
+          title="Tocar para ver la onda"
+        >
+          <div className="text-sm text-[var(--text-primary)] truncate font-medium">
+            {file.title || file.filename}
           </div>
+          {file.artist && (
+            <div className="text-xs text-gray-500 truncate">{file.artist}</div>
+          )}
+        </button>
+
+        {/* Waveform — always rendered so canvasRef stays mounted. Visually
+            hidden on mobile until the user expands wave mode; always shown on
+            desktop where it consumes the remaining width. */}
+        <div
+          className={`relative cursor-pointer min-w-0 h-12 group ${
+            waveMode ? 'flex-1' : 'hidden md:block md:flex-1'
+          }`}
+          onClick={handleSeek}
+        >
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full rounded" width={1600} height={48} />
+          <div className="absolute top-0 left-2 text-[10px] text-gray-400 pointer-events-none font-mono">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </div>
+          {/* Mobile-only collapse button — desktop has no need to collapse */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setWaveMode(false) }}
+            className="md:hidden absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-all"
+            title="Volver al título"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Wave-toggle icon — mobile only, when wave is collapsed */}
+        {!waveMode && (
+          <button
+            onClick={() => setWaveMode(true)}
+            className="md:hidden w-7 h-7 flex items-center justify-center rounded-full text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 transition-all flex-shrink-0"
+            title="Ver waveform"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" d="M4 12h2M8 8v8M12 5v14M16 8v8M20 12h-2" />
+            </svg>
+          </button>
+        )}
+
+        {/* Radio button — always visible on both layouts */}
+        {onRadio && (file.artist || file.title) && (
+          <button
+            onClick={() => onRadio(file)}
+            className="w-7 h-7 flex items-center justify-center rounded-full text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 transition-all flex-shrink-0"
+            title="Radio desde este tema"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+              <path strokeLinecap="round" d="M16.24 7.76a6 6 0 010 8.49M7.76 16.24a6 6 0 010-8.48M19.07 4.93a10 10 0 010 14.14M4.93 19.07a10 10 0 010-14.14" />
+            </svg>
+          </button>
         )}
       </div>
     </div>
