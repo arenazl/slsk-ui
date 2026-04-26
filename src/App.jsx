@@ -779,11 +779,17 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         // silently hidden (which caused Discover/Biblioteca inconsistencies).
         const merged = localFiles.map(f => {
           const meta = metadata[f.filename] || {}
+          // Genre source: AI-classified value if present, else folder name as
+          // a *visual* hint (rendered dimmed). genre_estimated lets the UI
+          // distinguish the two so we don't lie about what we know.
+          const aiGenre = meta.genre || ''
+          const folderGenre = f.subfolder || ''
           return {
             filename: f.filename,
             title: meta.title || '',
             artist: meta.artist || '',
-            genre: meta.genre || f.subfolder || '',
+            genre: aiGenre || folderGenre,
+            genre_estimated: !aiGenre && !!folderGenre,
             collection: meta.collection || '',  // edm/pop/latin — used by toggle filter
             key: meta.key || '',
             bpm: meta.bpm,
@@ -815,6 +821,34 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   useEffect(() => {
     fetchLibrary()
   }, [fetchLibrary])
+
+  // Background auto-classify: any track without an AI genre gets sent to
+  // Groq silently. Dedup by filename so we don't re-classify what we already
+  // attempted in this session. Refresh once when a batch lands so the UI
+  // swaps the dimmed folder-estimated genre for the real one.
+  const autoClassifyRef = useRef(new Set())
+  const autoClassifyInflightRef = useRef(false)
+  useEffect(() => {
+    if (!authUser?.name || autoClassifyInflightRef.current) return
+    const candidates = files
+      .filter(f => f.genre_estimated || (!f.genre && f.has_metadata !== undefined))
+      .map(f => f.filename)
+      .filter(fn => !autoClassifyRef.current.has(fn))
+    if (candidates.length === 0) return
+    candidates.forEach(fn => autoClassifyRef.current.add(fn))
+    autoClassifyInflightRef.current = true
+    fetch(`${API_BASE}/api/classify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: authUser.name, filenames: candidates }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.classified > 0) fetchLibrary()
+      })
+      .catch(() => {})
+      .finally(() => { autoClassifyInflightRef.current = false })
+  }, [files, authUser, fetchLibrary])
 
   useImperativeHandle(ref, () => ({
     refresh: fetchLibrary,
@@ -1726,7 +1760,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
                     </a>
                   </div>
-                  <span className="hidden md:block w-32 flex-shrink-0 text-xs text-gray-500 truncate">{f.genre || '-'}</span>
+                  <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
                   <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
                   <div className="w-20 md:w-24 flex-shrink-0 flex justify-center">
                     <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
@@ -1870,7 +1904,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         </a>
                       </div>
                       <a href={`https://www.beatport.com/search?q=${encodeURIComponent(f.artist || '')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="w-36 flex-shrink-0 text-sm text-gray-400 truncate hover:text-[var(--color-accent)] transition-colors" title="Buscar artista en Beatport">{f.artist}</a>
-                      <span className="w-32 flex-shrink-0 text-xs text-gray-500 truncate">{f.genre || '-'}</span>
+                      <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
                       <span className={`w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
                       <div className="w-24 flex-shrink-0 flex justify-center">
                         <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
