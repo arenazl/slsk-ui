@@ -6421,12 +6421,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
 
     const checker = (track) => findFilename(track) != null
-    // Returns the subfolder/genre of the matched library file, or '' if no
-    // genre is recorded. Returns null when the track isn't in the library.
-    checker.findFolder = (track) => {
+    // Returns { folder, file } for the matched library entry — used to
+    // build the agent's open-folder?folder=&file= request which reveals the
+    // file in Explorer. Returns null when the track isn't in the library.
+    checker.findLocation = (track) => {
       const filename = findFilename(track)
       if (!filename) return null
-      return libraryManifest[filename]?.genre || ''
+      return { folder: libraryManifest[filename]?.genre || '', file: filename }
     }
     return checker
   }, [libraryManifest])
@@ -7757,8 +7758,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             agentConnected ? (
               <button
                 onClick={() => {
-                  const folder = isInLibrary.findFolder(discoverCtx.track) || ''
-                  agentFetch(`open-folder?folder=${encodeURIComponent(folder)}`).catch(() => {})
+                  const loc = isInLibrary.findLocation(discoverCtx.track) || { folder: '', file: '' }
+                  agentFetch(`open-folder?folder=${encodeURIComponent(loc.folder)}&file=${encodeURIComponent(loc.file)}`).catch(() => {})
                   setDiscoverCtx(null)
                 }}
                 className="w-full text-left px-3 py-2 text-sm text-green-400 hover:bg-[var(--bg-hover)] hover:text-green-300 transition-colors flex items-center gap-2"
@@ -7856,8 +7857,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               agentConnected ? (
                 <button
                   onClick={() => {
-                    const folder = isInLibrary.findFolder(discoverCtx.track) || ''
-                    agentFetch(`open-folder?folder=${encodeURIComponent(folder)}`).catch(() => {})
+                    const loc = isInLibrary.findLocation(discoverCtx.track) || { folder: '', file: '' }
+                    agentFetch(`open-folder?folder=${encodeURIComponent(loc.folder)}&file=${encodeURIComponent(loc.file)}`).catch(() => {})
                     setDiscoverCtx(null)
                   }}
                   className="w-full text-left px-4 py-3 rounded-xl text-sm text-green-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]"
