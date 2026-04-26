@@ -995,17 +995,21 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     if (!toDelete.length) return
     if (!confirm(`Borrar ${toDelete.length} duplicados? Se mantienen los de mejor rating/calidad.`)) return
     setDeletingDupes(true)
+    let agentDeleted = 0
     try {
-      // Two-step: agent removes the actual files locally (best-effort if
-      // connected); Heroku updates the Cloudinary manifest (source of truth
-      // the UI reads). Without the Heroku call the dupes count never drops
-      // because /api/library would still include the deleted entries.
+      // Agent removes the actual files locally; Heroku updates the Cloudinary
+      // manifest. Files added directly to disk may not be in the manifest, so
+      // refresh whenever EITHER side reports a delete.
       if (agentConnected) {
-        await agentFetch('delete-dupes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filenames: toDelete }),
-        }).catch(e => console.error('Agent delete-dupes failed:', e))
+        try {
+          const ar = await agentFetch('delete-dupes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filenames: toDelete }),
+          })
+          const ad = await ar.json().catch(() => ({}))
+          agentDeleted = ad.deleted || 0
+        } catch (e) { console.error('Agent delete-dupes failed:', e) }
       }
       const res = await fetch(`${API_BASE}/api/delete-dupes`, {
         method: 'POST',
@@ -1013,7 +1017,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         body: JSON.stringify({ filenames: toDelete, username: authUser?.name || '' }),
       })
       const data = await res.json()
-      if (data.deleted > 0) fetchLibrary()
+      if ((data.deleted || 0) + agentDeleted > 0) fetchLibrary()
     } catch (e) {
       console.error('Failed to delete dupes', e)
     } finally {
@@ -1406,7 +1410,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
-              Duplicados ({dupeKeys.size})
+              Duplicados ({dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})
             </button>
             <button
               onClick={deleteDupes}
@@ -1515,7 +1519,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                           <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                         )}
                       </div>
-                      {deletingDupes ? 'Borrando...' : `Borrar duplicados (${dupeKeys.size})`}
+                      {deletingDupes ? 'Borrando...' : `Borrar duplicados (${dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})`}
                     </button>
                   )}
                   <button onClick={() => { openFolder(''); setToolsOpen(false) }}
