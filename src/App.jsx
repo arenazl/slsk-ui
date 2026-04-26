@@ -3920,7 +3920,7 @@ function LoginScreen({ onLogin }) {
           </button>
           <button
             type="button"
-            onClick={() => { window.location.href = `${window.location.pathname}?share=1` }}
+            onClick={() => { window.location.href = `${window.location.pathname}?guest=1` }}
             className="w-full py-2 rounded-xl text-sm text-gray-300 hover:text-white border border-white/10 hover:border-white/20 transition-all duration-200 active:scale-98"
           >
             Entrar como invitado
@@ -5057,7 +5057,7 @@ function App() {
   // they can browse Discover and play previews without logging in. No favorites,
   // no downloads, no library — pure discovery. They can click "Login" to upgrade.
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
-  const isGuest = !authUser && urlParams.get('share') === '1'
+  const isGuest = !authUser && urlParams.get('guest') === '1'
 
   // Guests land on Discover and can't navigate elsewhere
   useEffect(() => { if (isGuest && page !== 'discover') setPage('discover') }, [isGuest, page, setPage])
