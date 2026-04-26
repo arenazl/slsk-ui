@@ -3918,6 +3918,13 @@ function LoginScreen({ onLogin }) {
           >
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
+          <button
+            type="button"
+            onClick={() => { window.location.href = `${window.location.pathname}?share=1` }}
+            className="w-full py-2 rounded-xl text-sm text-gray-300 hover:text-white border border-white/10 hover:border-white/20 transition-all duration-200 active:scale-98"
+          >
+            Entrar como invitado
+          </button>
         </form>
       </div>
     </div>
@@ -4480,9 +4487,15 @@ function App() {
     return () => { cancelled = true; window.removeEventListener('library-changed', handler) }
   }, [agentConnected, authUser?.name])
 
-  // Load favorites from Cloudinary on mount
+  // Load favorites — Cloudinary if logged in, localStorage if guest
   useEffect(() => {
-    if (!username) return
+    if (!username) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('guest_favorites') || '[]')
+        if (Array.isArray(saved)) setFavoriteTracks(saved)
+      } catch {}
+      return
+    }
     fetch(`${API_BASE}/api/favorites?user=${encodeURIComponent(username)}`)
       .then(r => r.json())
       .then(arr => { if (Array.isArray(arr)) setFavoriteTracks(arr) })
@@ -4578,9 +4591,12 @@ function App() {
   }
 
   // Favorites: heart toggle on Discover rows. Used for filtering in Biblioteca —
-  // never triggers a download. Persisted in Cloudinary per user.
+  // never triggers a download. Persisted in Cloudinary per user, or localStorage for guests.
   const persistFavorites = (tracks) => {
-    if (!username) return
+    if (!username) {
+      try { localStorage.setItem('guest_favorites', JSON.stringify(tracks)) } catch {}
+      return
+    }
     fetch(`${API_BASE}/api/favorites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5096,7 +5112,7 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="text-xs md:text-sm text-[var(--text-primary)] truncate">
-              Modo invitado — explorá y escuchá previews. Para bajar música y guardar favoritos, logueate.
+              Modo invitado — explorá, escuchá previews y marcá favoritos. Para bajar música, logueate.
             </span>
           </div>
         </div>
@@ -7580,24 +7596,22 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     <span className="text-xs text-gray-600 w-10 text-center">{formatDuration(t.duration_ms)}</span>
                   </div>
 
-                  {/* Heart button — hidden in guest mode (needs login to save favorites) */}
-                  {!isGuest && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleFavorite?.(t) }}
-                      className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-full transition-all duration-200 active:scale-90"
-                      title={isFavorite?.(t) ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                  {/* Heart button — guests save favs to localStorage */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleFavorite?.(t) }}
+                    className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-full transition-all duration-200 active:scale-90"
+                    title={isFavorite?.(t) ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                  >
+                    <svg
+                      className={`w-4 h-4 md:w-4.5 md:h-4.5 transition-colors duration-200 ${isFavorite?.(t) ? 'text-pink-500' : 'text-gray-500 hover:text-pink-400'}`}
+                      fill={isFavorite?.(t) ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      strokeWidth={isFavorite?.(t) ? 0 : 2}
+                      viewBox="0 0 24 24"
                     >
-                      <svg
-                        className={`w-4 h-4 md:w-4.5 md:h-4.5 transition-colors duration-200 ${isFavorite?.(t) ? 'text-pink-500' : 'text-gray-500 hover:text-pink-400'}`}
-                        fill={isFavorite?.(t) ? 'currentColor' : 'none'}
-                        stroke="currentColor"
-                        strokeWidth={isFavorite?.(t) ? 0 : 2}
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                      </svg>
-                    </button>
-                  )}
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </button>
 
                   {/* Action button — hidden in guest mode (can't download without login) */}
                   {!isGuest && (() => {
