@@ -209,6 +209,48 @@ export const fsaBackend = {
     }
   },
 
+  // Returns a blob: URL that <audio> can play, or null if the file isn't
+  // reachable via FSA. Caller must URL.revokeObjectURL() when done.
+  // If subfolder isn't provided, scans top-level + immediate subdirs.
+  async getFileUrl(filename, subfolder = '') {
+    if (!FSA_SUPPORTED) return null
+    try {
+      const root = await loadHandle()
+      if (!root) return null
+      const ok = await ensurePermission(root)
+      if (!ok) return null
+
+      const tryRead = async (dir) => {
+        try {
+          const fh = await dir.getFileHandle(filename, { create: false })
+          const f = await fh.getFile()
+          return URL.createObjectURL(f)
+        } catch { return null }
+      }
+
+      if (subfolder) {
+        const safe = subfolder.replace(/[\\\/]/g, '_').replace(/^_+|_+$/g, '')
+        try {
+          const dir = await root.getDirectoryHandle(safe, { create: false })
+          const url = await tryRead(dir)
+          if (url) return url
+        } catch { /* fall through to root scan */ }
+      }
+      const url = await tryRead(root)
+      if (url) return url
+      // Last resort: scan one level of subdirs (genre folders)
+      for await (const [name, h] of root.entries()) {
+        if (h.kind === 'directory') {
+          const u = await tryRead(h)
+          if (u) return u
+        }
+      }
+      return null
+    } catch {
+      return null
+    }
+  },
+
   // Save a Blob to the picked folder, optionally inside a subfolder (genre).
   // Subfolder is created automatically if it doesn't exist.
   async saveFile(filename, blob, subfolder = '') {
