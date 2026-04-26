@@ -6360,30 +6360,75 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       }
     }
 
-    return (track) => {
+    // Returns the matching library filename (key into libraryManifest) or null.
+    // Used both to answer "is in library?" (truthy) and to recover the
+    // matched file so the UI can resolve its folder/genre and open it.
+    const findFilename = (track) => {
       const a = norm(track.artist || '')
       const t = norm(track.title || '')
-      if (!t) return false
+      if (!t) return null
 
-      // 1) Exact artist+title
-      if (a && artistTitle.has(`${a}|${t}`)) return true
+      const findInFilenames = (predicate) => {
+        for (const [filename, meta] of Object.entries(libraryManifest)) {
+          const fn = norm(filename)
+          if (predicate(fn, filename, meta)) return filename
+        }
+        return null
+      }
+
+      // 1) Exact artist+title — scan manifest to recover the actual filename
+      if (a && artistTitle.has(`${a}|${t}`)) {
+        const hit = findInFilenames((fn, filename, meta) => {
+          const ma = norm(meta.artist || '')
+          const mt = norm(meta.title || '')
+          if (ma === a && mt === t) return true
+          // Also check filename-derived parts
+          const base = filename.replace(/\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i, '')
+          const parts = base.split(/\s*-\s*/)
+          if (parts.length >= 2) {
+            if (norm(parts[0]) === a && norm(parts.slice(1).join(' ')) === t) return true
+          }
+          return false
+        })
+        if (hit) return hit
+      }
       // 2) Title-only exact
-      if (titleWords.has(t)) return true
+      if (titleWords.has(t)) {
+        const hit = findInFilenames((fn, filename, meta) => norm(meta.title || '') === t)
+        if (hit) return hit
+      }
       // 3) artist+title concatenated matches any full filename
-      if (a && filenames.some(f => f.full === a + t || f.full.includes(a + t))) return true
+      if (a) {
+        const hit = findInFilenames((fn) => fn === a + t || fn.includes(a + t))
+        if (hit) return hit
+      }
       // 4) Substring: title of length ≥ 4 appearing inside any filename
-      if (t.length >= 4 && filenames.some(f => f.full.includes(t))) return true
+      if (t.length >= 4) {
+        const hit = findInFilenames((fn) => fn.includes(t))
+        if (hit) return hit
+      }
       // 5) Token overlap: title+artist words with ≥ 70% matching any filename tokens
       const trackTokens = [...tokens(track.artist || ''), ...tokens(track.title || '')]
       if (trackTokens.length >= 2) {
         const needed = Math.max(2, Math.ceil(trackTokens.length * 0.7))
-        for (const f of filenames) {
-          const matches = trackTokens.filter(w => f.tokens.has(w)).length
-          if (matches >= needed) return true
+        for (const filename of Object.keys(libraryManifest)) {
+          const fnTokens = new Set(tokens(filename))
+          const matches = trackTokens.filter(w => fnTokens.has(w)).length
+          if (matches >= needed) return filename
         }
       }
-      return false
+      return null
     }
+
+    const checker = (track) => findFilename(track) != null
+    // Returns the subfolder/genre of the matched library file, or '' if no
+    // genre is recorded. Returns null when the track isn't in the library.
+    checker.findFolder = (track) => {
+      const filename = findFilename(track)
+      if (!filename) return null
+      return libraryManifest[filename]?.genre || ''
+    }
+    return checker
   }, [libraryManifest])
   // Download queue state
   const [downloadQueue, setDownloadQueue] = useState({}) // trackId -> {status, message}
@@ -7709,10 +7754,26 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             {discoverCtx.track?.artist} - {discoverCtx.track?.title}
           </div>
           {isInLibrary(discoverCtx.track) && !clearedTrackIds.has(discoverCtx.track?.id) ? (
-            <div className="w-full text-left px-3 py-2 text-sm text-green-400 flex items-center gap-2 cursor-default">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-              Ya descargado
-            </div>
+            agentConnected ? (
+              <button
+                onClick={() => {
+                  const folder = isInLibrary.findFolder(discoverCtx.track) || ''
+                  agentFetch(`open-folder?folder=${encodeURIComponent(folder)}`).catch(() => {})
+                  setDiscoverCtx(null)
+                }}
+                className="w-full text-left px-3 py-2 text-sm text-green-400 hover:bg-[var(--bg-hover)] hover:text-green-300 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                </svg>
+                Abrir en Explorer
+              </button>
+            ) : (
+              <div className="w-full text-left px-3 py-2 text-sm text-green-400 flex items-center gap-2 cursor-default">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                Ya descargado
+              </div>
+            )
           ) : (
             <button onClick={() => { searchAndDownload(discoverCtx.track); setDiscoverCtx(null) }}
               className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
@@ -7792,12 +7853,30 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           {/* Actions */}
           <div className="py-2 px-2">
             {isInLibrary(discoverCtx.track) && !clearedTrackIds.has(discoverCtx.track?.id) ? (
-              <div className="w-full text-left px-4 py-3 rounded-xl text-sm text-green-400 flex items-center gap-3 cursor-default">
-                <div className="w-8 h-8 rounded-full bg-green-500/15 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+              agentConnected ? (
+                <button
+                  onClick={() => {
+                    const folder = isInLibrary.findFolder(discoverCtx.track) || ''
+                    agentFetch(`open-folder?folder=${encodeURIComponent(folder)}`).catch(() => {})
+                    setDiscoverCtx(null)
+                  }}
+                  className="w-full text-left px-4 py-3 rounded-xl text-sm text-green-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]"
+                >
+                  <div className="w-8 h-8 rounded-full bg-green-500/15 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                    </svg>
+                  </div>
+                  Abrir en Explorer
+                </button>
+              ) : (
+                <div className="w-full text-left px-4 py-3 rounded-xl text-sm text-green-400 flex items-center gap-3 cursor-default">
+                  <div className="w-8 h-8 rounded-full bg-green-500/15 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                  </div>
+                  Ya descargado
                 </div>
-                Ya descargado
-              </div>
+              )
             ) : (
               <button onClick={() => { searchAndDownload(discoverCtx.track); setDiscoverCtx(null) }}
                 className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
