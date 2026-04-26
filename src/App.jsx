@@ -1477,26 +1477,23 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   </div>
                 </div>
                 <div className="py-2 px-2">
-                  {ungrouped.length > 0 && (
-                    <button onClick={() => { classifyWithAI(); setToolsOpen(false) }} disabled={classifying}
+                  {(() => {
+                    const toOrganize = files.filter(f => !f.in_subfolder && f.genre).length
+                    const pending = ungrouped.length + toOrganize
+                    if (pending === 0) return null
+                    const busy = classifying || organizing
+                    const label = classifying ? 'Clasificando...' : organizing ? 'Organizando...' : `Organizar (${pending})`
+                    return (
+                    <button onClick={() => { classifyAndOrganize(); setToolsOpen(false) }} disabled={busy}
                       className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
                       <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 flex items-center justify-center">
-                        {classifying ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                          : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>}
-                      </div>
-                      {classifying ? 'Clasificando...' : `Clasificar (${ungrouped.length})`}
-                    </button>
-                  )}
-                  {files.some(f => !f.in_subfolder && f.genre) && (
-                    <button onClick={() => { organizeAll(); setToolsOpen(false) }} disabled={organizing}
-                      className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
-                      <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 flex items-center justify-center">
-                        {organizing ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                        {busy ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
                           : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>}
                       </div>
-                      {organizing ? 'Organizando...' : 'Organizar en carpetas'}
+                      {label}
                     </button>
-                  )}
+                    )
+                  })()}
                   {files.some(f => !f.key) && (
                     <button onClick={() => { detectKeys(); setToolsOpen(false) }} disabled={detectingKeys}
                       className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
@@ -4106,11 +4103,6 @@ function App() {
 
     const checkAgent = async () => {
       if (IS_MOBILE) {
-        setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
-        return
-      }
-      // If FSA is ready, don't bother with the agent
-      if (await fsaBackend.ready()) {
         setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
         return
       }
