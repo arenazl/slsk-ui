@@ -6087,6 +6087,7 @@ function App() {
           agentHasSlsk={agentHasSlsk}
           authUser={authUser}
           collection={collection}
+          onGoToLibrary={goToLibraryTrack}
         />
       </div>
 
@@ -6198,7 +6199,7 @@ function SwipeableRow({ children, onReveal }) {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection, onGoToLibrary }) {
   const toast = useToast()
   const [genres, setGenres] = useState([])
   // URL-synced selections: share/bookmark any view directly
@@ -7807,6 +7808,20 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
             Compartir link
           </button>
+          {isInLibrary(discoverCtx.track) && onGoToLibrary && (
+            <button
+              onClick={() => {
+                const loc = isInLibrary.findLocation(discoverCtx.track)
+                const target = loc?.file || `${discoverCtx.track.artist || ''} ${discoverCtx.track.title || ''}`.trim()
+                onGoToLibrary(target)
+                setDiscoverCtx(null)
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+              Ir a la biblioteca
+            </button>
+          )}
           {discoverCtx.track?.album_id && (
             <button onClick={async () => {
                 const albumId = discoverCtx.track.album_id; const albumName = discoverCtx.track.album || 'Album'
@@ -7915,6 +7930,22 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               </div>
               Compartir link
             </button>
+            {isInLibrary(discoverCtx.track) && onGoToLibrary && (
+              <button
+                onClick={() => {
+                  const loc = isInLibrary.findLocation(discoverCtx.track)
+                  const target = loc?.file || `${discoverCtx.track.artist || ''} ${discoverCtx.track.title || ''}`.trim()
+                  onGoToLibrary(target)
+                  setDiscoverCtx(null)
+                }}
+                className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]"
+              >
+                <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                </div>
+                Ir a la biblioteca
+              </button>
+            )}
             {discoverCtx.track?.album_id && (
               <button onClick={async () => {
                   const albumId = discoverCtx.track.album_id; const albumName = discoverCtx.track.album || 'Album'
