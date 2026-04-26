@@ -5234,8 +5234,8 @@ function App() {
             </svg>
           </button>
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Groove Sync" className="h-6 object-contain" />
-            <span className="font-semibold text-base text-[var(--text-primary)] hidden sm:inline">Groove Sync</span>
+            <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain" />
+            <span className="font-semibold text-base text-[var(--text-primary)] hidden sm:inline">DJ Free App</span>
           </div>
           <div className="hidden md:flex gap-1">
             {(isGuest ? [{ id: 'discover', label: 'Discover' }] : [
@@ -5496,8 +5496,8 @@ function App() {
           <div className="absolute left-0 top-0 bottom-0 w-64 bg-[var(--bg-panel)] border-r border-[var(--border-color)] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
               <div className="flex items-center gap-2">
-                <img src="/logo.png" alt="Groove Sync" className="h-6 object-contain" />
-                <span className="font-semibold text-base text-[var(--text-primary)]">Groove Sync</span>
+                <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain" />
+                <span className="font-semibold text-base text-[var(--text-primary)]">DJ Free App</span>
               </div>
               <button onClick={() => setMobileMenuOpen(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-[var(--bg-hover)]">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -8135,7 +8135,7 @@ function ShareView() {
   const audioRef = useRef(null)
 
   useEffect(() => {
-    document.title = artist && title ? `${artist} – ${title}` : 'GrooveSync DJ'
+    document.title = artist && title ? `${artist} – ${title}` : 'DJ Free App'
   }, [artist, title])
 
   useEffect(() => {
@@ -8171,7 +8171,7 @@ function ShareView() {
           <div className="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center">
             <svg className="w-4 h-4 text-[var(--color-accent-text,white)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
           </div>
-          <span className="font-bold text-sm md:text-base">GrooveSync DJ</span>
+          <span className="font-bold text-sm md:text-base">DJ Free App</span>
         </div>
         <span className="text-xs text-gray-500">Preview compartida</span>
       </header>
@@ -8216,7 +8216,7 @@ function ShareView() {
             className="mt-2 px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-sm flex items-center gap-2 transition-colors duration-200 active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-            Abrí GrooveSync DJ
+            Abrí DJ Free App
           </a>
         </div>
       </main>

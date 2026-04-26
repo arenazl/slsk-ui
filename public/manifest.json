@@ -1,6 +1,6 @@
 {
-  "name": "Groove Sync",
-  "short_name": "Groove Sync",
+  "name": "DJ Free App",
+  "short_name": "DJ Free App",
   "description": "DJ library sync y downloader via SoulSeek + Beatport",
   "start_url": "/",
   "scope": "/",
