@@ -582,7 +582,7 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
         <button
           onClick={() => setWaveMode(true)}
           className={`text-left rounded px-2 py-1 transition-colors min-w-0 md:cursor-default md:hover:bg-transparent ${
-            waveMode ? 'hidden md:block md:flex-shrink-0 md:w-56' : 'flex-1 hover:bg-white/5 active:bg-white/10 md:flex-shrink-0 md:w-56 md:hover:bg-transparent'
+            waveMode ? 'hidden md:block md:flex-shrink-0 md:w-auto md:max-w-[14rem]' : 'flex-1 hover:bg-white/5 active:bg-white/10 md:flex-shrink-0 md:w-auto md:max-w-[14rem] md:hover:bg-transparent'
           }`}
           title="Tocar para ver la onda"
         >
@@ -908,56 +908,49 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     }
   }
 
-  const classifyWithAI = async () => {
-    setClassifying(true)
+  const classifyAndOrganize = async () => {
+    setOrganizing(true)
     try {
       const ungroupedNames = files.filter(f => !f.genre).map(f => f.filename)
-      toast(`Clasificando ${ungroupedNames.length} temas con IA...`, 'info', 4000)
-      const res = await fetch(`${API_BASE}/api/classify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: authUser?.name || '', filenames: ungroupedNames }),
-      })
-      const data = await res.json()
-      if (data.error) {
-        toast(`Classify error: ${data.error.slice(0, 100)}`, 'error', 6000)
-      } else {
-        toast(`Clasificados: ${data.classified || 0}/${data.total || ungroupedNames.length}`, 'success', 5000)
+      if (ungroupedNames.length > 0) {
+        setClassifying(true)
+        toast(`Clasificando ${ungroupedNames.length} temas con IA...`, 'info', 4000)
+        const res = await fetch(`${API_BASE}/api/classify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: authUser?.name || '', filenames: ungroupedNames }),
+        })
+        const data = await res.json()
+        setClassifying(false)
+        if (data.error) {
+          toast(`Classify error: ${data.error.slice(0, 100)}`, 'error', 6000)
+        } else {
+          toast(`Clasificados: ${data.classified || 0}/${data.total || ungroupedNames.length}`, 'success', 4000)
+        }
       }
-      // After classification, tell agent to organize files into genre folders
-      if (agentConnected && data.classified > 0) {
-        // Get updated metadata from Heroku to build move list
+      if (agentConnected) {
         const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`)
         const metadata = await metaRes.json()
         const moves = Object.entries(metadata)
           .filter(([, info]) => info.genre)
           .map(([filename, info]) => ({ filename, genre: info.genre }))
-        await agentFetch('organize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ moves }),
-        }).catch(() => {})
+        if (moves.length > 0) {
+          const res = await agentFetch('organize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ moves }),
+          }).catch(() => null)
+          if (res) {
+            const data = await res.json().catch(() => ({}))
+            if (data.moved) toast(`Organizados: ${data.moved}`, 'success', 4000)
+          }
+        }
       }
       fetchLibrary()
     } catch (e) {
-      console.error('Failed to classify', e)
+      console.error('Failed classifyAndOrganize', e)
     } finally {
       setClassifying(false)
-    }
-  }
-
-  const organizeAll = async () => {
-    setOrganizing(true)
-    try {
-      await agentFetch('organize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      fetchLibrary()
-    } catch (e) {
-      console.error('Failed to organize', e)
-    } finally {
       setOrganizing(false)
     }
   }
@@ -1360,40 +1353,30 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </button>
         )}
 
-        {ungrouped.length > 0 && (
+        {(() => {
+          const toOrganize = files.filter(f => !f.in_subfolder && f.genre).length
+          const pending = ungrouped.length + toOrganize
+          if (pending === 0) return null
+          const busy = classifying || organizing
+          const label = classifying ? 'Clasificando...' : organizing ? 'Organizando...' : `Organizar (${pending})`
+          return (
           <button
-            onClick={classifyWithAI}
-            disabled={classifying}
+            onClick={classifyAndOrganize}
+            disabled={busy}
             className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
             style={{ background: 'var(--color-accent)' }}
           >
-            {classifying ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-            )}
-            {classifying ? 'Clasificando...' : `Clasificar (${ungrouped.length})`}
-          </button>
-        )}
-        {files.some(f => !f.in_subfolder && f.genre) && (
-          <button
-            onClick={organizeAll}
-            disabled={organizing}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
-            style={{ background: 'var(--color-accent)' }}
-          >
-            {organizing ? (
+            {busy ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
               </svg>
             )}
-            {organizing ? 'Organizando...' : 'Organizar'}
+            {label}
           </button>
-        )}
+          )
+        })()}
         {files.some(f => !f.key) && (
           <button
             onClick={detectKeys}
