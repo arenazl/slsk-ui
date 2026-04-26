@@ -2043,7 +2043,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   )
 })
 
-function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection }) {
+function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary }) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
   const [setSelectedStars, setSetSelectedStars] = useState([])
@@ -4168,7 +4168,12 @@ function App() {
   const [dlSearch, setDlSearch] = useState('')
   const [searchResults, setSearchResults] = useState(null) // null = no search, [] = empty results
   const [searchStatus, setSearchStatus] = useState('idle') // idle, connecting, searching
-  const [searchDlStatus, setSearchDlStatus] = useState({}) // { filename: 'downloading'|'completed'|'error' }
+  const [searchDlStatus, setSearchDlStatus] = useState({}) // { filename: { status, local_name?, ... } }
+  // Filenames the user actually has in local storage (FSA / agent / synced).
+  // The "Descargado" badge in search results derives from this — not from
+  // searchDlStatus.completed — so the badge cannot lie when the server says
+  // completed but the file never aterrizó local.
+  const [localFilesSet, setLocalFilesSet] = useState(() => new Set())
   const [pendingTracks, setPendingTracks] = useState([]) // tracks that failed to download
   // Favorite tracks (hearts) — marked for filtering, never downloaded automatically.
   // Persisted in Cloudinary per user. Each entry: { artist, title, addedAt, source }.
@@ -4321,10 +4326,17 @@ function App() {
       }
 
       if (data.type === 'search_dl_status') {
+        // The server may rename the file between request and save (peer's
+        // actual filename can differ from the search-result filename). The
+        // broadcast carries `local_name` = real on-disk filename — we keep it
+        // so the UI fetch/save uses the correct name AND so the "Descargado"
+        // badge can later be verified against the local file listing.
+        const localName = data.local_name || data.filename
         setSearchDlStatus(prev => ({ ...prev, [data.filename]: {
           status: data.status, pct: data.pct, speed: data.speed,
           queue: data.queue, source: data.source, wait_secs: data.wait_secs,
           timeout_secs: data.timeout_secs, source_idx: data.source_idx, source_total: data.source_total,
+          local_name: localName,
         }}))
         // When a single download finishes, drop the matching pending entry (logged on click in Discover)
         if (data.status === 'completed' && data.filename) {
@@ -4355,30 +4367,75 @@ function App() {
           // refresh para que la library se entere.
           if (data.via === 'agent') {
             libraryRef.current?.refresh()
+            window.dispatchEvent(new Event('library-changed'))
           } else {
-            fetch(`${API_BASE}/audio/${encodeURIComponent(data.filename)}`)
+            // Use the real on-disk name (server may have renamed it) — fetching
+            // /audio/<original_search_name> returns 404 when the peer's file had
+            // a different name, leaving the file orphaned on Heroku.
+            const markError = (reason) => setSearchDlStatus(prev => ({
+              ...prev,
+              [data.filename]: { ...(prev[data.filename] || {}), status: 'error', error: reason },
+            }))
+            fetch(`${API_BASE}/audio/${encodeURIComponent(localName)}`)
               .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
               .then(async (blob) => {
                 if (await fsaBackend.ready()) {
-                  await fsaBackend.saveFile(data.filename, blob, '')
+                  await fsaBackend.saveFile(localName, blob, '')
                   libraryRef.current?.refresh()
+                  window.dispatchEvent(new Event('library-changed'))
                 } else if (agentConnectedRef.current) {
                   const form = new FormData()
-                  form.append('file', blob, data.filename)
-                  form.append('filename', data.filename)
+                  form.append('file', blob, localName)
+                  form.append('filename', localName)
                   const r = await agentFetch('save-file', { method: 'POST', body: form })
                   await r.json()
                   libraryRef.current?.refresh()
+                  window.dispatchEvent(new Event('library-changed'))
                 } else {
-                  libraryRef.current?.refresh()
+                  // No local storage available — file stays on Heroku only.
+                  // Surface this so the badge does NOT claim "Descargado".
+                  markError('no_local_storage')
                 }
               })
-              .catch(e => console.error('Failed to save file locally:', e))
+              .catch(e => {
+                console.error('Failed to save file locally:', e)
+                markError(e.message || 'save_failed')
+              })
           }
         }
       }
     }
   }, [])
+
+  // Source of truth for the "Descargado" badge in search results: a Set of
+  // filenames the user actually has in local storage (FSA / agent / synced).
+  // Re-scans on mount and on every `library-changed` event (dispatched by the
+  // Library and by the WS download handler after a successful save).
+  useEffect(() => {
+    let cancelled = false
+    const scan = async () => {
+      let localFiles = []
+      try {
+        if (await fsaBackend.ready()) {
+          localFiles = await fsaBackend.listLibrary()
+        } else if (agentConnected) {
+          const res = await agentFetch('library')
+          const arr = await res.json()
+          if (Array.isArray(arr)) localFiles = arr
+        } else if (authUser?.name) {
+          const res = await fetch(`${API_BASE}/api/user-files?user=${encodeURIComponent(authUser.name)}`)
+          const arr = await res.json()
+          if (Array.isArray(arr)) localFiles = arr
+        }
+      } catch {}
+      if (cancelled) return
+      setLocalFilesSet(new Set(localFiles.map(f => f.filename).filter(Boolean)))
+    }
+    scan()
+    const handler = () => scan()
+    window.addEventListener('library-changed', handler)
+    return () => { cancelled = true; window.removeEventListener('library-changed', handler) }
+  }, [agentConnected, authUser?.name])
 
   // Load favorites from Cloudinary on mount
   useEffect(() => {
@@ -5826,10 +5883,17 @@ function App() {
                       const dlInfo = searchDlStatus[filename]
                       const dlSt = dlInfo?.status || dlInfo
                       const dlPct = dlInfo?.pct
+                      // The badge MUST reflect filesystem reality: green only when
+                      // the file (under its real on-disk name, possibly renamed by
+                      // the peer) is in the user's local storage. The server's
+                      // `completed` event alone is not enough — /audio fetch +
+                      // FSA save can still fail and leave it on Heroku only.
+                      const localName = dlInfo?.local_name || filename
+                      const isLocal = localFilesSet.has(localName) || localFilesSet.has(filename)
                       return (
                         <div key={filename}
-                          onDoubleClick={() => dlSt === 'completed' && goToLibraryTrack(filename)}
-                          className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-2 border-b border-[var(--border-color)]/50 hover:bg-gray-800/30 transition-colors text-sm ${dlSt === 'completed' ? 'cursor-pointer' : ''}`}>
+                          onDoubleClick={() => isLocal && goToLibraryTrack(localName)}
+                          className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-2 border-b border-[var(--border-color)]/50 hover:bg-gray-800/30 transition-colors text-sm ${isLocal ? 'cursor-pointer' : ''}`}>
                           <PlayPauseBtn
                             isPlaying={playingFile === filename && isAudioPlaying}
                             loading={previewLoading === filename}
@@ -5845,8 +5909,10 @@ function App() {
                               <span className="text-gray-600">{sourceCount} fuente{sourceCount > 1 ? 's' : ''}</span>
                             </div>
                           </div>
-                          {dlSt === 'completed' ? (
+                          {isLocal ? (
                             <span className="text-green-400 text-xs flex-shrink-0">Descargado</span>
+                          ) : dlSt === 'completed' ? (
+                            <span className="text-yellow-400 text-xs flex-shrink-0 animate-pulse">Guardando local…</span>
                           ) : dlSt === 'queued' ? (
                             <div className="flex-shrink-0 flex items-center gap-2">
                               <div className="flex flex-col items-end">
@@ -5879,8 +5945,9 @@ function App() {
                           ) : dlSt === 'error' ? (
                             <button
                               onClick={() => { setSearchDlStatus(prev => { const n = {...prev}; delete n[filename]; return n }); handleDownloadSingle({ ...best, sources: effectiveSources }) }}
+                              title={dlInfo?.error === 'no_local_storage' ? 'Servidor descargó pero no hay storage local (FSA/agente). Reintentar para guardar.' : (dlInfo?.error || 'Reintentar')}
                               className="text-red-400 hover:text-red-300 text-xs flex-shrink-0 hover:underline transition-colors"
-                            >Reintentar</button>
+                            >{dlInfo?.error === 'no_local_storage' ? 'Sin storage local' : 'Reintentar'}</button>
                           ) : (
                             <button
                               onClick={() => handleDownloadSingle({ ...best, sources: effectiveSources })}
@@ -5985,7 +6052,7 @@ function App() {
       </div>
 
       {/* Set Builder page */}
-      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} />
+      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} onGoToLibrary={goToLibraryTrack} />
 
       {/* Mix Editor page */}
       {page === 'mix' && mixTracks && (
@@ -7132,31 +7199,58 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               >
                 All
               </button>
-              {genres.map((g, gi) => {
-                const isActive = selectedGenre?.name === g.name
-                const c = GENRE_COLORS[gi % GENRE_COLORS.length]
-                return (
-                  <button
-                    key={g.name}
-                    onClick={() => loadChart(g)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
-                      isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
-                    }`}
-                    style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
-                  >
-                    {g.name}
-                  </button>
-                )
-              })}
+              {(() => {
+                let clicks = {}
+                try { clicks = JSON.parse(localStorage.getItem('beatport_genre_clicks') || '{}') } catch {}
+                const sorted = genres
+                  .map((g, i) => ({ g, i, n: clicks[g.name] || 0 }))
+                  .sort((a, b) => b.n - a.n || a.i - b.i)
+                return sorted.map(({ g, i: gi }) => {
+                  const isActive = selectedGenre?.name === g.name
+                  const c = GENRE_COLORS[gi % GENRE_COLORS.length]
+                  return (
+                    <button
+                      key={g.name}
+                      onClick={() => {
+                        try {
+                          const cur = JSON.parse(localStorage.getItem('beatport_genre_clicks') || '{}')
+                          cur[g.name] = (cur[g.name] || 0) + 1
+                          localStorage.setItem('beatport_genre_clicks', JSON.stringify(cur))
+                        } catch {}
+                        loadChart(g)
+                      }}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
+                        isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
+                      }`}
+                      style={isActive ? { background: `rgba(${c.rgb}, 0.3)` } : {}}
+                    >
+                      {g.name}
+                    </button>
+                  )
+                })
+              })()}
             </>) : (<>
-              {spotifyCategories
-                .filter(c => (c.category || 'pop') === collection)
-                .map((cat) => {
+              {(() => {
+                let clicks = {}
+                try { clicks = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}') } catch {}
+                const filtered = spotifyCategories.filter(c => (c.category || 'pop') === collection)
+                const sorted = filtered
+                  .map((c, i) => ({ c, i, n: clicks[c.key] || 0 }))
+                  .sort((a, b) => b.n - a.n || a.i - b.i)
+                  .map(x => x.c)
+                return sorted.map((cat) => {
                   const isActive = selectedSpotifyCategory?.key === cat.key
                   return (
                     <button
                       key={cat.key}
-                      onClick={() => loadSpotifyPlaylist(cat)}
+                      onClick={() => {
+                        try {
+                          const cur = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}')
+                          cur[cat.key] = (cur[cat.key] || 0) + 1
+                          localStorage.setItem('spotify_cat_clicks', JSON.stringify(cur))
+                        } catch {}
+                        loadSpotifyPlaylist(cat)
+                      }}
                       className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
                         isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
                       }`}
@@ -7165,7 +7259,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                       {cat.name}
                     </button>
                   )
-                })}
+                })
+              })()}
             </>)}
           </div>
         </div>
@@ -7613,11 +7708,18 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           <div className="px-3 py-1.5 text-xs text-gray-500 border-b border-[var(--border-color)] truncate">
             {discoverCtx.track?.artist} - {discoverCtx.track?.title}
           </div>
-          <button onClick={() => { searchAndDownload(discoverCtx.track); setDiscoverCtx(null) }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
-            <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            Descargar
-          </button>
+          {isInLibrary(discoverCtx.track) && !clearedTrackIds.has(discoverCtx.track?.id) ? (
+            <div className="w-full text-left px-3 py-2 text-sm text-green-400 flex items-center gap-2 cursor-default">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+              Ya descargado
+            </div>
+          ) : (
+            <button onClick={() => { searchAndDownload(discoverCtx.track); setDiscoverCtx(null) }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
+              <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Descargar
+            </button>
+          )}
           <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-t border-[var(--border-color)]">Preview continuo desde este tema</div>
           {[30, 60, 90, 120].map(secs => (
             <button
@@ -7643,6 +7745,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
             Compartir link
           </button>
+          {isInLibrary(discoverCtx.track) && onGoToLibrary && (
+            <button onClick={() => { onGoToLibrary(`${discoverCtx.track.artist || ''} ${discoverCtx.track.title || ''}`.trim()); setDiscoverCtx(null) }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+              Ir a la biblioteca
+            </button>
+          )}
           {discoverCtx.track?.album_id && (
             <button onClick={async () => {
                 const albumId = discoverCtx.track.album_id; const albumName = discoverCtx.track.album || 'Album'
@@ -7682,13 +7791,22 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           </div>
           {/* Actions */}
           <div className="py-2 px-2">
-            <button onClick={() => { searchAndDownload(discoverCtx.track); setDiscoverCtx(null) }}
-              className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
-              <div className="w-8 h-8 rounded-full bg-yellow-500/15 flex items-center justify-center">
-                <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            {isInLibrary(discoverCtx.track) && !clearedTrackIds.has(discoverCtx.track?.id) ? (
+              <div className="w-full text-left px-4 py-3 rounded-xl text-sm text-green-400 flex items-center gap-3 cursor-default">
+                <div className="w-8 h-8 rounded-full bg-green-500/15 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                Ya descargado
               </div>
-              Agregar a pendientes
-            </button>
+            ) : (
+              <button onClick={() => { searchAndDownload(discoverCtx.track); setDiscoverCtx(null) }}
+                className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
+                <div className="w-8 h-8 rounded-full bg-yellow-500/15 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                Agregar a pendientes
+              </button>
+            )}
             <button onClick={() => { playPreview(discoverCtx.track); setDiscoverCtx(null) }}
               className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
               <div className="w-8 h-8 rounded-full bg-green-500/15 flex items-center justify-center">
@@ -7724,6 +7842,15 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               </div>
               Compartir link
             </button>
+            {isInLibrary(discoverCtx.track) && onGoToLibrary && (
+              <button onClick={() => { onGoToLibrary(`${discoverCtx.track.artist || ''} ${discoverCtx.track.title || ''}`.trim()); setDiscoverCtx(null) }}
+                className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                </div>
+                Ir a la biblioteca
+              </button>
+            )}
             {discoverCtx.track?.album_id && (
               <button onClick={async () => {
                   const albumId = discoverCtx.track.album_id; const albumName = discoverCtx.track.album || 'Album'
