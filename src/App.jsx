@@ -4932,8 +4932,13 @@ function App() {
   }
 
   const goToLibraryTrack = (filename) => {
-    libraryRef.current?.goToTrack(filename)
+    console.info('[goToLibraryTrack]', { filename, libraryReady: !!libraryRef.current })
     setPage('library')
+    // Defer to next frame so Library is visible before applying the search.
+    // Without this, the search filter can race with page switch on slow paths.
+    requestAnimationFrame(() => {
+      libraryRef.current?.goToTrack(filename)
+    })
   }
 
   const handleParse = () => {
