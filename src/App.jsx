@@ -730,6 +730,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     if (authUser?.name) {
       fetch(`${API_BASE}/api/manifest/backfill-collection?user=${encodeURIComponent(authUser.name)}`,
             { method: 'POST' }).catch(() => {})
+      // Lazy-cache iTunes preview URLs (~50/call, ~3s each = ~2.5min). Lets
+      // iOS play library tracks sync from cached URL instead of fetching on
+      // each click (gesture-blocked on iOS).
+      fetch(`${API_BASE}/api/manifest/cache-previews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: authUser.name, limit: 50 }),
+      }).catch(() => {})
     }
     try {
       // Fetch metadata from Heroku (Cloudinary = source of truth)
@@ -802,6 +810,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             subfolder: f.subfolder || '',
             manual_genre: meta.manual_genre || false,
             has_metadata: !!metadata[f.filename],  // flag for UI (e.g. grey out orphans)
+            preview_url: meta.preview_url,  // iTunes cached URL for iOS sync play
           }
         })
         if (id === fetchIdRef.current) setFiles(merged)
@@ -4729,14 +4738,28 @@ function App() {
     autoplayCancelRef.current?.()
     autoplayCancelRef.current = null
     killAudio(audioRef.current)
+
+    // FAST PATH (iOS gesture preserved): cached preview_url from manifest.
+    // new Audio(url) + play() in same call frame as click → iOS allows it.
+    if (file.preview_url) {
+      const audio = new Audio(file.preview_url)
+      audio.preload = 'auto'
+      audioRef.current = audio
+      audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+      audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+      audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
+      return
+    }
+
+    // SLOW PATH (no cached URL yet): create empty Audio sync, fetch async,
+    // swap src. iOS likely blocks this on a cold gesture — used as fallback
+    // and to populate the cache for next time.
     const audio = new Audio()
     audio.preload = 'auto'
     audioRef.current = audio
     audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
     audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
 
-    // Fire the search then swap src. Do NOT await — we must return from the
-    // original click handler synchronously so the gesture stays valid.
     const fallbackQuery = (file.filename || '').replace(/\.(flac|mp3|wav|m4a|wav|aif|aiff|ogg)$/i, '').replace(/^\d+[\s.\-]+/, '').replace(/_/g, ' ')
     const query = `${file.artist || ''} ${file.title || ''}`.trim() || fallbackQuery
     if (!query) return
