@@ -4247,14 +4247,24 @@ function App() {
   // Desktop: default 'local', can toggle to 'preview'.
   const IS_MOBILE_DEVICE = typeof navigator !== 'undefined' &&
     /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
+  // Mobile: default to 'preview' when no agent (no way to reach files), but
+  // if the agent IS connected (via proxy/Funnel) prefer 'local' so the
+  // actual track plays instead of an iTunes substitute that may not exist.
   const [playbackMode, setPlaybackModeState] = useState(() => {
-    if (IS_MOBILE_DEVICE) return 'preview'
-    return localStorage.getItem('playback_mode') || 'local'
+    return localStorage.getItem('playback_mode') || (IS_MOBILE_DEVICE ? 'preview' : 'local')
   })
   const setPlaybackMode = (mode) => {
     setPlaybackModeState(mode)
-    if (!IS_MOBILE_DEVICE) localStorage.setItem('playback_mode', mode)
+    localStorage.setItem('playback_mode', mode)
   }
+  // On mobile: auto-switch to 'local' when the agent comes online so the
+  // user hears the actual track (via Heroku proxy → Funnel → agent), not the
+  // iTunes substitute. Only flip if the user hasn't explicitly chosen.
+  useEffect(() => {
+    if (!IS_MOBILE_DEVICE) return
+    if (localStorage.getItem('playback_mode')) return  // user-chosen, respect it
+    setPlaybackModeState(agentConnected ? 'local' : 'preview')
+  }, [agentConnected, IS_MOBILE_DEVICE])
   const [mixTracks, setMixTracks] = useState(null) // tracks array for MixEditor
   const previewTimerRef = useRef(null)
   const audioRef = useRef(null)
