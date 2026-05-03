@@ -4751,25 +4751,34 @@ function App() {
       return
     }
 
-    // SLOW PATH (no cached URL yet): create empty Audio sync, fetch async,
-    // swap src. iOS likely blocks this on a cold gesture — used as fallback
-    // and to populate the cache for next time.
-    const audio = new Audio()
+    // SLOW PATH (no cached URL yet). Trick to keep iOS gesture alive:
+    // start playing a 1-frame silent MP3 SYNCHRONOUSLY so iOS marks the
+    // element as "user-initiated"; then swap src to the real URL once iTunes
+    // responds. The element stays unlocked across the swap.
+    const SILENT_MP3 = 'data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
+    const audio = new Audio(SILENT_MP3)
     audio.preload = 'auto'
     audioRef.current = audio
     audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-    audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+    audio.onerror = () => {}  // silent.mp3 may error on some browsers — ignore until real src loaded
+    audio.play().catch(() => { /* ignore — keeps iOS unlock attempt */ })
 
     const fallbackQuery = (file.filename || '').replace(/\.(flac|mp3|wav|m4a|wav|aif|aiff|ogg)$/i, '').replace(/^\d+[\s.\-]+/, '').replace(/_/g, ' ')
     const query = `${file.artist || ''} ${file.title || ''}`.trim() || fallbackQuery
     if (!query) return
+
+    const swapSrc = (url) => {
+      // Element already unlocked — set the real src and resume playback.
+      audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+      audio.src = url
+      audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
+    }
 
     fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=1`)
       .then(r => r.json())
       .then(data => {
         const url = data.results?.[0]?.previewUrl
         if (!url) {
-          // No iTunes match — try with just filename (strip Extended Mix noise)
           const cleanQuery = fallbackQuery.replace(/\b(extended|original|radio|club)\s*mix\b/gi, '').replace(/\s+/g, ' ').trim()
           if (cleanQuery && cleanQuery !== query) {
             return fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQuery)}&media=music&limit=1`)
@@ -4777,18 +4786,13 @@ function App() {
           }
           return { results: [] }
         }
-        audio.src = url
-        audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
+        swapSrc(url)
       })
       .then(fallbackData => {
         if (!fallbackData) return
         const url = fallbackData.results?.[0]?.previewUrl
-        if (url) {
-          audio.src = url
-          audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
-        } else {
-          setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
-        }
+        if (url) swapSrc(url)
+        else { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
       })
       .catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
   }
