@@ -5156,10 +5156,10 @@ function ReelHeader({ active }) {
 // Mirrors DemoSources — Melodic House Beatport-style page in portrait.
 function ReelDiscover() {
   const tracks = [
-    { n: 'Hot Sauce (Extended)',  a: 'Kapuchon, Miss Monique', label: 'AETERNA',  bpm: 129, k: 'Gb · 11A', d: '5:36', state: 'dl',                          thumb: 'from-orange-500 to-red-700' },
-    { n: 'Be The One (Extended)', a: 'Adam Port, Keinemusik',  label: 'Keinemusik', bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                         thumb: 'from-cyan-400 to-blue-600' },
-    { n: 'Recall (Extended Mix)', a: 'HotLap',                 label: 'One Seven', bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done', dot: true,             thumb: 'from-red-500 to-pink-700' },
-    { n: "Didn't Miss You (OG)",  a: 'Liva K',                 label: 'Magnifik',  bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',   highlight: true,       thumb: 'from-purple-500 to-blue-700' },
+    { n: 'Hot Sauce (Extended)',  a: 'Kapuchon, Miss Monique', label: 'AETERNA',    bpm: 129, k: 'Gb · 11A', d: '5:36', state: 'dl',                       cover: '/demo/covers/hot-sauce.jpg' },
+    { n: 'Be The One (Extended)', a: 'Adam Port, Keinemusik',  label: 'Keinemusik', bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                       cover: '/demo/covers/be-the-one.jpg' },
+    { n: 'Recall (Extended Mix)', a: 'HotLap',                 label: 'One Seven',  bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done', dot: true,          cover: '/demo/covers/recall.jpg' },
+    { n: "Didn't Miss You (OG)",  a: 'Liva K',                 label: 'Magnifik',   bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',   highlight: true,    cover: '/demo/covers/didnt-miss.jpg' },
   ]
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
@@ -6816,6 +6816,7 @@ function App() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [demoVideoOpen, setDemoVideoOpen] = useState(false)
+  const [agentInstallOpen, setAgentInstallOpen] = useState(false)
   const requireLogin = () => { if (!authUser) { setLoginModalOpen(true); return false } return true }
   useEffect(() => { window.requireLogin = requireLogin }, [authUser])
 
@@ -6854,6 +6855,104 @@ function App() {
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
+          </div>
+        </div>
+      )}
+      {agentInstallOpen && (
+        <div className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setAgentInstallOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl bg-[var(--bg-panel)] border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setAgentInstallOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all"
+              aria-label="Cerrar"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+
+            <div className="text-center mb-5">
+              <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 items-center justify-center mb-3 shadow-lg shadow-blue-500/30">
+                <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+              </div>
+              <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Instalá el agente local</h2>
+              <p className="text-sm text-[var(--text-muted)]">El agente corre en tu PC y maneja descargas + biblioteca local</p>
+            </div>
+
+            {/* Heads-up about Windows warning */}
+            <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <div className="text-xs md:text-sm text-amber-100">
+                  <strong className="text-amber-300">Windows va a mostrar un aviso de seguridad.</strong> Es normal — la app no está firmada todavía con cert comercial. <strong>No es virus</strong>, solo Windows siendo cauto. Te dejo los pasos abajo.
+                </div>
+              </div>
+            </div>
+
+            {/* Step-by-step with mock screenshots */}
+            <div className="space-y-3 mb-5">
+              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">1</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-[var(--text-primary)] font-semibold">Bajá el .exe</div>
+                  <div className="text-xs text-[var(--text-muted)] mt-0.5">Click en el botón abajo. Se baja a tu carpeta Descargas.</div>
+                </div>
+              </div>
+              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">2</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-[var(--text-primary)] font-semibold">Abrí <code className="px-1.5 py-0.5 rounded bg-white/10 text-xs font-mono">GrooveSyncAgent.exe</code></div>
+                  <div className="text-xs text-[var(--text-muted)] mt-0.5">Doble click. Aparece un cuadro azul: <span className="font-semibold text-white">"Windows protegió tu PC"</span></div>
+                </div>
+              </div>
+              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">3</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-[var(--text-primary)] font-semibold">Click en <span className="text-blue-300">"Más información"</span></div>
+                  <div className="text-xs text-[var(--text-muted)] mt-0.5">Es un texto chiquito en el cuadro azul. Lo expande con un nuevo botón.</div>
+                </div>
+              </div>
+              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-sm font-bold">4</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-[var(--text-primary)] font-semibold">Click en <span className="text-green-300">"Ejecutar de todos modos"</span></div>
+                  <div className="text-xs text-[var(--text-muted)] mt-0.5">App arranca silenciosa. Vas a ver el icono ✨ en la bandeja del sistema (al lado del reloj).</div>
+                </div>
+              </div>
+              <div className="flex gap-3 p-3 rounded-xl bg-green-500/10 border border-green-500/30">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/30 text-green-300 flex items-center justify-center">✓</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-green-200 font-semibold">Listo</div>
+                  <div className="text-xs text-green-200/80 mt-0.5">El indicador en la topbar de DJ Free App pasa a verde. Ya podés bajar tracks de SoulSeek.</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Download buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <a
+                href="https://djfreeapp.ar/GrooveSyncAgent.exe"
+                className="group relative overflow-hidden rounded-2xl px-5 py-4 text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
+                style={{ background: 'linear-gradient(135deg, #00b1ea, #0080c9)' }}
+              >
+                <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+                <div className="relative flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+                  <span className="font-semibold text-white">Descargar para Windows</span>
+                </div>
+              </a>
+              <a
+                href="https://djfreeapp.ar/GrooveSyncAgent-macOS.zip"
+                className="group relative overflow-hidden rounded-2xl px-5 py-4 text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
+                style={{ background: 'linear-gradient(135deg, #4b5563, #1f2937)' }}
+              >
+                <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+                <div className="relative flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                  <span className="font-semibold text-white">Descargar para Mac</span>
+                </div>
+              </a>
+            </div>
+
+            <p className="mt-4 text-center text-[10px] text-[var(--text-muted)]">El agente solo se conecta a tu carpeta de música. No envía ningún dato a terceros.</p>
           </div>
         </div>
       )}
@@ -7305,8 +7404,8 @@ function App() {
               </button>
             </div>
           )}
-          <a
-            href="https://djfreeapp.ar/GrooveSyncAgent.exe"
+          <button
+            onClick={() => setAgentInstallOpen(true)}
             className="hidden lg:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows)'}
           >
@@ -7314,7 +7413,7 @@ function App() {
               <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
             </svg>
             <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-panel)] ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
-          </a>
+          </button>
           <a
             href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
             className="hidden lg:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
