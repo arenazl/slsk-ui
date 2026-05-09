@@ -4437,6 +4437,21 @@ function DemoShowcase() {
   )
 }
 
+// Centered scene title overlay — appears in the middle of the screen with
+// a fade+scale animation, holds, then fades out so the mockup behind is fully
+// visible. One per scene, consistent placement.
+function DemoSceneTitle({ title, subtitle, accent = 'text-blue-400' }) {
+  return (
+    <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none animate-demo-title-overlay px-6">
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-slate-950/70 to-slate-950/40" />
+      <div className="relative text-center max-w-2xl">
+        <h2 className="text-3xl md:text-5xl font-black text-white leading-tight drop-shadow-2xl">{title}</h2>
+        <p className={`text-base md:text-xl mt-3 font-bold ${accent} drop-shadow-2xl`}>{subtitle}</p>
+      </div>
+    </div>
+  )
+}
+
 // Faux app-shell topbar — makes a scene feel like a real app screenshot.
 function DemoAppHeader({ active }) {
   const tabs = ['Discover', 'Biblioteca', 'Set', 'Mix']
@@ -4496,20 +4511,28 @@ function DemoSources() {
       genre: 'Melodic House',
       count: 100,
       tracks: [
-        { n: 'Hot Sauce (Extended)',    a: 'Kapuchon, Miss Monique', label: 'AETERNA',    bpm: 129, k: 'Gb · 11A', d: '5:36', state: 'dl',                       cover: '/demo/covers/hot-sauce.jpg' },
-        { n: 'Be The One (Extended)',   a: 'Adam Port, Keinemusik',  label: 'Keinemusik', bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                       cover: '/demo/covers/be-the-one.jpg' },
-        { n: 'Recall (Extended Mix)',   a: 'HotLap',                 label: 'One Seven',  bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done', dot: true,          cover: '/demo/covers/recall.jpg' },
-        { n: "Didn't Miss You (OG)",    a: 'Liva K',                 label: 'Magnifik',   bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',   highlight: true,    cover: '/demo/covers/didnt-miss.jpg' },
+        { n: 'Hot Sauce (Extended)',    a: 'Kapuchon, Miss Monique', label: 'AETERNA',     bpm: 129, k: 'Gb · 11A', d: '5:36', state: 'dl',                       cover: '/demo/covers/hot-sauce.jpg' },
+        { n: 'Be The One (Extended)',   a: 'Adam Port, Keinemusik',  label: 'Keinemusik',  bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                       cover: '/demo/covers/be-the-one.jpg' },
+        { n: 'Recall (Extended Mix)',   a: 'HotLap',                 label: 'One Seven',   bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done', dot: true,          cover: '/demo/covers/recall.jpg' },
+        { n: "Didn't Miss You (OG)",    a: 'Liva K',                 label: 'Magnifik',    bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',   highlight: true,    cover: '/demo/covers/didnt-miss.jpg' },
+        { n: 'Eternity (Extended Mix)', a: 'Anyma',                  label: 'Afterlife',   bpm: 124, k: '8A',       d: '6:54', state: 'dl',                       cover: '/demo/covers/eternity.jpg' },
+        { n: 'Innerbloom (RÜFÜS Remix)',a: 'RÜFÜS DU SOL',           label: 'Rose Avenue', bpm: 122, k: '6B',       d: '7:21', state: 'done', dot: true,          cover: '/demo/covers/innerbloom.jpg' },
+        { n: 'At Night (Extended)',     a: 'Anyma, Layton Giordani', label: 'Afterlife',   bpm: 124, k: '8A',       d: '6:18', state: 'dl',                       cover: '/demo/covers/at-night.jpg' },
+        { n: 'Velvet Avenue (Extended)',a: 'Aname',                  label: 'Crosstown',   bpm: 122, k: 'Fm · 4A',  d: '5:24', state: 'dl',                       cover: '/demo/covers/velvet.jpg' },
       ],
     },
     {
       genre: 'Tech House',
       count: 88,
       tracks: [
-        { n: 'Tesla (Extended Mix)',    a: 'Mau P',                  label: 'Repopulate', bpm: 128, k: '4A',       d: '6:12', state: 'dl',                       cover: '/demo/covers/tesla.jpg' },
-        { n: 'Crush (Extended Mix)',    a: 'Biscits',                label: 'Solid Grooves', bpm: 128, k: 'Fm · 4A', d: '5:48', state: 'dl',                     cover: '/demo/covers/biscits-crush.jpg' },
-        { n: 'Operate (Extended)',      a: 'Deeper Purpose',         label: 'Drumcode',   bpm: 128, k: 'Gm · 6A',  d: '5:32', state: 'done', dot: true,          cover: '/demo/covers/deeper-purpose.jpg' },
-        { n: 'Pom (Original Mix) 130',  a: 'Chico Rose (NL)',        label: 'Toolroom',   bpm: 130, k: 'D# · 5B',  d: '5:11', state: 'dl',                       cover: '/demo/covers/chico-rose.jpg' },
+        { n: 'Tesla (Extended Mix)',    a: 'Mau P',                  label: 'Repopulate',     bpm: 128, k: '4A',       d: '6:12', state: 'dl',                       cover: '/demo/covers/tesla.jpg' },
+        { n: 'Crush (Extended Mix)',    a: 'Biscits',                label: 'Solid Grooves',  bpm: 128, k: 'Fm · 4A',  d: '5:48', state: 'dl',                       cover: '/demo/covers/biscits-crush.jpg' },
+        { n: 'Operate (Extended)',      a: 'Deeper Purpose',         label: 'Drumcode',       bpm: 128, k: 'Gm · 6A',  d: '5:32', state: 'done', dot: true,          cover: '/demo/covers/deeper-purpose.jpg' },
+        { n: 'Pom (Original Mix) 130',  a: 'Chico Rose (NL)',        label: 'Toolroom',       bpm: 130, k: 'D# · 5B',  d: '5:11', state: 'dl',   highlight: true,    cover: '/demo/covers/chico-rose.jpg' },
+        { n: "Don't Stop (Extended)",   a: 'Prospa',                 label: 'Higher Ground',  bpm: 124, k: 'D# · 5B',  d: '5:02', state: 'dl',                       cover: '/demo/covers/prospa.jpg' },
+        { n: 'Sweet Dreams (Original)', a: 'Polovich',               label: 'Repopulate',     bpm: 130, k: 'B · 1B',   d: '4:37', state: 'done', dot: true,          cover: '/demo/covers/polovich.jpg' },
+        { n: 'Spotlight (Original)',    a: 'Andrea Oliva',           label: 'VOD',            bpm: 122, k: 'Eb · 4B',  d: '6:21', state: 'dl',                       cover: '/demo/covers/spotlight.jpg' },
+        { n: 'Pa Ca (Original Mix)',    a: 'Massano, Silver Panda',  label: 'Simulate',       bpm: 128, k: 'B · 1B',   d: '4:47', state: 'dl',                       cover: '/demo/covers/paca.jpg' },
       ],
     },
   ]
@@ -4522,6 +4545,11 @@ function DemoSources() {
   const tracks = cat.tracks
   return (
     <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
+      <DemoSceneTitle
+        title="Recorré los charts de Beatport y Spotify"
+        subtitle="top charts renovados cada semana · EDM · POP · LATIN"
+        accent="text-blue-400"
+      />
       <DemoAppHeader active="Discover" />
       {/* Hero header: dynamic genre + track count + refresh + album thumbs */}
       <div className="flex-shrink-0 flex items-center gap-3 mb-2 px-1">
@@ -4603,12 +4631,6 @@ function DemoSources() {
         ))}
       </div>
 
-      <div className="flex-shrink-0 mt-1 text-center">
-        <p className="text-[11px] text-white font-bold">
-          Recorré los catálogos de <span className="text-blue-400">Beatport</span> y <span className="text-green-400">Spotify</span>
-        </p>
-        <p className="text-[10px] text-gray-400">top charts <span className="text-purple-300 font-bold">renovados cada semana</span></p>
-      </div>
     </div>
   )
 }
@@ -4630,11 +4652,12 @@ function DemoDownload() {
   ]
   return (
     <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
+      <DemoSceneTitle
+        title="Descarga directa · calidad profesional"
+        subtitle="FLAC sin pérdida · MP3 320k · WAV — al instante"
+        accent="text-green-400"
+      />
       <DemoAppHeader active="Discover" />
-      <div className="text-center mb-2">
-        <h2 className="text-base md:text-lg font-extrabold text-white">Descarga directa · <span className="text-blue-400">calidad profesional</span></h2>
-        <p className="text-[10px] text-gray-400">FLAC sin pérdida · MP3 320k · WAV — al instante, sin colas ni intermediarios</p>
-      </div>
 
       <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
         {/* Left: track list with context menu popup */}
@@ -4746,11 +4769,12 @@ function DemoLibrary() {
   ]
   return (
     <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
+      <DemoSceneTitle
+        title="Biblioteca clasificada por IA"
+        subtitle="305 tracks · BPM · Camelot Key · género — sin tocar nada"
+        accent="text-purple-400"
+      />
       <DemoAppHeader active="Biblioteca" />
-      <div className="text-center mb-2">
-        <h2 className="text-base md:text-lg font-extrabold text-white">Biblioteca clasificada automáticamente <span className="text-purple-400">por IA</span></h2>
-        <p className="text-[10px] text-gray-400"><span className="text-white font-bold">305 tracks</span> · BPM · Camelot Key · género — sin tocar nada</p>
-      </div>
       {/* Stats bar replicando el header real "305 tracks · Cards · Join · Tracks · All ★...★★★★★ · Organizar (3) · Keys (115) · Buscar..." */}
       <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 mb-2 rounded-lg bg-slate-900/60 border border-white/10 overflow-hidden">
         <span className="text-[10px] text-gray-400"><span className="text-white font-bold">305</span> tracks</span>
@@ -4865,11 +4889,12 @@ function DemoSetBuilder() {
 
   return (
     <div className="absolute inset-0 flex flex-col p-4 md:p-6 animate-fade-in z-10">
+      <DemoSceneTitle
+        title="Asistente IA de playlists"
+        subtitle="Sets compatibles por Camelot · Energy — 1 click"
+        accent="text-purple-400"
+      />
       <DemoAppHeader active="Set" />
-      <div className="text-center mb-2">
-        <h2 className="text-lg md:text-xl font-extrabold text-white">Asistente <span className="text-blue-400">IA</span> de playlists</h2>
-        <p className="text-[11px] text-gray-400">Sets compatibles por <span className="text-purple-300 font-bold">Camelot · Energy</span> — 1 click</p>
-      </div>
 
       {/* Filter row (always visible) */}
       <div className="flex flex-wrap justify-center gap-1.5 mb-2">
@@ -5008,11 +5033,11 @@ function DemoExport() {
         </button>
       </div>
 
-      {/* Title */}
-      <div className="text-center mt-1 mb-1">
-        <h2 className="text-base md:text-lg font-extrabold text-white">Previsualizá tu mix <span className="text-blue-400">antes de tocarlo</span></h2>
-        <p className="text-[10px] text-gray-400">Crossfading auto · beatmatching · fade 16s · export MP3 320k</p>
-      </div>
+      <DemoSceneTitle
+        title="Previsualizá tu mix antes de tocarlo"
+        subtitle="Crossfading auto · beatmatching · export MP3 320k"
+        accent="text-pink-400"
+      />
 
       {/* Timeline ruler */}
       <div className="flex-shrink-0 flex border-b border-white/10 px-1 py-0.5 text-[8px] text-gray-500 font-mono">
