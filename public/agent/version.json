@@ -1,0 +1,7 @@
+{
+  "version": "2.10.0",
+  "windows_url": "https://djfreeapp.ar/GrooveSyncAgent.exe",
+  "macos_url": "https://djfreeapp.ar/GrooveSyncAgent-macOS.zip",
+  "released_at": "2026-05-09",
+  "changelog": "DJ Free App branding + djfreeapp.ar in CORS + Netlify-hosted updates"
+}

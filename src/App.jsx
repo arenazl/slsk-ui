@@ -4800,49 +4800,35 @@ function DemoLibrary() {
 // 4 different orderings. Each method ~2s on screen.
 function DemoSetBuilder() {
   const TRACKS = [
-    { name: 'Velvet Avenue', artist: 'Aname',     k: '8A',  bpm: 122, energy: 5, genre: 'Deep House' },
-    { name: 'At Night',      artist: 'Anyma',     k: '8B',  bpm: 124, energy: 7, genre: 'Mel. Techno' },
-    { name: 'Tesla',         artist: 'Mau P',     k: '9B',  bpm: 128, energy: 8, genre: 'Tech House' },
-    { name: 'Eternity',      artist: 'Anyma',     k: '10B', bpm: 128, energy: 9, genre: 'Mel. Techno' },
-    { name: 'Innerbloom',    artist: 'RÜFÜS',     k: '9A',  bpm: 122, energy: 6, genre: 'Mel. House' },
+    { name: 'Prospa - Don\'t Stop (Extended Mix)',           k: 'D# · 5B', bpm: 124, energy: 5, genre: 'Indie Dance',  fmt: 'FLAC', size: '27.82MB', stars: 3 },
+    { name: 'Chico Rose (NL) - Pom (Original Mix) 130',      k: 'D# · 5B', bpm: 130, energy: 6, genre: 'Tech House',   fmt: 'FLAC', size: '49.8MB',  stars: 4 },
+    { name: '22 - Deeper Purpose - Operate (Extended)',      k: 'Gm · 6A', bpm: 128, energy: 7, genre: 'Tech House',   fmt: 'FLAC', size: '40.39MB', stars: 5 },
+    { name: 'Polovich - Sweet Dreams (Original Mix)',        k: 'B · 1B',  bpm: 130, energy: 8, genre: 'Melodic House',fmt: 'MP3',  size: '10.73MB', stars: 5 },
+    { name: 'Biscits - Crush (Extended Mix)',                k: 'Fm · 4A', bpm: 128, energy: 9, genre: 'Tech House',   fmt: 'FLAC', size: '43.18MB', stars: 5 },
   ]
-  // Per-method ordering of TRACKS (indices)
+  // Only Camelot + Energy methods (per user feedback — Genre/Peak removed)
   const METHODS = [
     {
       id: 'camelot',
       label: '🎯 Camelot',
-      desc: 'Mixing armónico — keys ±1 en la rueda',
-      order: [0, 1, 2, 3, 4],         // 8A → 8B → 9B → 10B → 9A
+      desc: 'Encadena tracks por compatibilidad armónica',
+      order: [0, 1, 2, 3, 4],
       color: 'purple',
     },
     {
       id: 'energy',
       label: '⚡ Energy',
-      desc: 'Curva progresiva — energy 5 → 9',
-      order: [0, 4, 1, 2, 3],         // 5, 6, 7, 8, 9
+      desc: 'Por curva de energía — sube progresivamente',
+      order: [0, 1, 2, 3, 4],
       color: 'yellow',
-    },
-    {
-      id: 'genre',
-      label: '🎭 Genre',
-      desc: 'Agrupado por género y subgéneros vecinos',
-      order: [0, 4, 1, 3, 2],         // Deep → MelHouse → MelTechno → MelTechno → Tech
-      color: 'pink',
-    },
-    {
-      id: 'peak',
-      label: '📈 Peak',
-      desc: 'Estructura DJ pro: warmup → peak → cooldown',
-      order: [0, 1, 3, 2, 4],         // 5, 7, 9, 8, 6
-      color: 'orange',
     },
   ]
 
-  const [stage, setStage] = useState(-1) // -1 = intro, 0..3 = method showcase
+  const [stage, setStage] = useState(-1)
   useEffect(() => {
     const t = setTimeout(() => {
       setStage(s => (s >= METHODS.length - 1 ? s : s + 1))
-    }, stage === -1 ? 1500 : 2000)
+    }, stage === -1 ? 1500 : 3500)
     return () => clearTimeout(t)
   }, [stage])
 
@@ -4861,7 +4847,7 @@ function DemoSetBuilder() {
       <DemoAppHeader active="Set" />
       <div className="text-center mb-2">
         <h2 className="text-lg md:text-xl font-extrabold text-white">Asistente <span className="text-blue-400">IA</span> de playlists</h2>
-        <p className="text-[11px] text-gray-400">Sets compatibles por <span className="text-purple-300 font-bold">Camelot · Energy · Genre · Peak</span> — 1 click</p>
+        <p className="text-[11px] text-gray-400">Sets compatibles por <span className="text-purple-300 font-bold">Camelot · Energy</span> — 1 click</p>
       </div>
 
       {/* Filter row (always visible) */}
@@ -4902,48 +4888,43 @@ function DemoSetBuilder() {
         )}
       </div>
 
-      {/* Track sequence — vertical stack with gradient that intensifies by track energy.
-          Visualizes the set's intensity progression: cool blue (low energy) → hot pink/red (peak). */}
-      <div key={activeMethod?.id || 'intro'} className="flex-1 space-y-1.5 mb-2 min-h-0 overflow-hidden">
+      {/* Track sequence — compact rows like the real Set page:
+          # | name | genre | format | size | key | stars | ×
+          With a left-edge accent bar whose intensity tracks the energy. */}
+      <div key={activeMethod?.id || 'intro'} className="flex-1 space-y-0.5 mb-2 min-h-0 overflow-hidden">
         {orderedTracks.map((t, i) => {
-          // Energy → gradient. Each level intensifies the warmth.
-          const intensityByEnergy = {
-            5: 'from-blue-600/30 via-blue-700/30 to-blue-800/30 border-blue-500/40',
-            6: 'from-cyan-500/35 via-blue-600/35 to-blue-800/35 border-cyan-400/40',
-            7: 'from-purple-500/40 via-blue-600/40 to-purple-700/40 border-purple-400/50',
-            8: 'from-pink-500/55 via-purple-500/55 to-purple-700/55 border-pink-400/60',
-            9: 'from-red-500/65 via-pink-500/60 to-pink-700/55 border-red-400/70',
-          }
-          const grad = intensityByEnergy[t.energy] || 'from-slate-600/30 to-slate-800/30 border-white/10'
+          const accent = {
+            5: 'bg-blue-500',
+            6: 'bg-cyan-400',
+            7: 'bg-purple-500',
+            8: 'bg-pink-500',
+            9: 'bg-red-500',
+          }[t.energy] || 'bg-slate-500'
+          const rowBg = {
+            5: 'bg-blue-500/[0.04]',
+            6: 'bg-cyan-500/[0.05]',
+            7: 'bg-purple-500/[0.06]',
+            8: 'bg-pink-500/[0.08]',
+            9: 'bg-red-500/[0.10]',
+          }[t.energy] || ''
           return (
             <div
               key={`${activeMethod?.id || 'intro'}-${i}`}
-              className={`bg-gradient-to-r ${grad} border rounded-xl px-3 py-2 flex items-center gap-3 animate-demo-tag-pop`}
-              style={{ animationDelay: `${i * 100}ms` }}
+              className={`relative ${rowBg} hover:bg-white/[0.02] rounded px-2 py-1.5 flex items-center gap-2 animate-demo-tag-pop`}
+              style={{ animationDelay: `${i * 80}ms` }}
             >
-              <span className="text-[10px] text-white/60 font-mono font-bold w-3 flex-shrink-0">{i + 1}</span>
+              <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r ${accent}`} />
+              <span className="text-[10px] text-gray-500 font-mono w-4 flex-shrink-0">{i + 1}</span>
+              <svg className="w-3 h-3 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
               <div className="flex-1 min-w-0">
-                <div className="text-xs md:text-sm font-bold text-white truncate">{t.name}</div>
-                <div className="text-[10px] text-white/70 truncate">{t.artist}</div>
+                <div className="text-[11px] font-semibold text-white truncate">{t.name}</div>
               </div>
-              {/* Energy bar visualizer */}
-              <div className="flex items-end gap-0.5 h-4 flex-shrink-0">
-                {Array.from({ length: 10 }).map((_, j) => (
-                  <span
-                    key={j}
-                    className={`w-1 rounded-sm ${
-                      j < t.energy
-                        ? t.energy >= 9 ? 'bg-red-400' : t.energy >= 7 ? 'bg-pink-400' : t.energy >= 6 ? 'bg-purple-400' : 'bg-cyan-400'
-                        : 'bg-white/10'
-                    }`}
-                    style={{ height: `${(j + 1) * 10}%` }}
-                  />
-                ))}
-              </div>
-              {/* Camelot key — emphasized */}
-              <span className="text-sm font-extrabold font-mono px-2.5 py-1 rounded-lg bg-white/15 text-white shadow-md flex-shrink-0">{t.k}</span>
-              {/* BPM */}
-              <span className="text-[10px] font-mono text-white/80 flex-shrink-0 hidden md:inline">{t.bpm} BPM</span>
+              <span className="text-[9px] text-gray-300 truncate flex-shrink-0 hidden md:inline">{t.genre}</span>
+              <span className={`text-[9px] font-bold flex-shrink-0 ${t.fmt === 'FLAC' ? 'text-green-400' : 'text-blue-400'}`}>{t.fmt}</span>
+              <span className="text-[9px] font-mono text-gray-400 flex-shrink-0 hidden md:inline w-14 text-right">{t.size}</span>
+              <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 flex-shrink-0">{t.k}</span>
+              <span className="text-[10px] text-yellow-400 tracking-tighter flex-shrink-0">{'★'.repeat(t.stars)}<span className="text-white/10">{'★'.repeat(5 - t.stars)}</span></span>
+              <span className="text-gray-500 text-xs flex-shrink-0">×</span>
             </div>
           )
         })}
@@ -6968,6 +6949,16 @@ function App() {
           >
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
             Ver demo
+          </button>
+          {/* TEMPORAL — preview de la versión vertical 9:16 para reels (no persistente) */}
+          <button
+            onClick={() => window.open('?reels=1', '_blank', 'width=540,height=960,resizable=yes')}
+            className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0 border border-white/20"
+            style={{ background: 'linear-gradient(135deg, #ec4899, #f59e0b)' }}
+            title="Vista vertical 9:16 — temporal para testear"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+            Demo Reel
           </button>
           <div className="hidden md:flex gap-1">
             {[
