@@ -10452,10 +10452,11 @@ function ReelsView() {
         </div>
 
         <video
-          src="/feature-video.webm"
+          src="/feature-video.mp4"
           controls
           autoPlay
           loop
+          muted
           playsInline
           className="w-full rounded-3xl shadow-2xl ring-1 ring-white/10 aspect-[9/16] bg-black object-cover"
         />
