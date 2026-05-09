@@ -4199,20 +4199,18 @@ function App() {
   }, [toast])
 
   const handleInstall = async () => {
-    // iOS Safari: no prompt event — show instructions modal instead
-    const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent)
-    if (isIos && !installPrompt) {
-      setShowIosInstall(true)
+    // 1. If Chrome already gave us a beforeinstallprompt, use it (best UX).
+    if (installPrompt) {
+      installPrompt.prompt()
+      const { outcome } = await installPrompt.userChoice
+      if (outcome === 'accepted') toast('Instalando...', 'success', 2000)
+      setInstallPrompt(null)
       return
     }
-    if (!installPrompt) {
-      toast('Este browser no soporta instalación automática', 'warning', 3000)
-      return
-    }
-    installPrompt.prompt()
-    const { outcome } = await installPrompt.userChoice
-    if (outcome === 'accepted') toast('Instalando...', 'success', 2000)
-    setInstallPrompt(null)
+    // 2. No native prompt available — always show the iOS-style instructions
+    //    modal (works for Safari + as a fallback for Chrome desktop where the
+    //    user can also use the URL-bar install icon).
+    setShowIosInstall(true)
   }
 
   const pickStorageFolder = async () => {
@@ -5303,6 +5301,7 @@ function App() {
 
   // Login modal triggered by gated actions (download, etc).
   const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const requireLogin = () => { if (!authUser) { setLoginModalOpen(true); return false } return true }
   // Expose globally so any component can call window.requireLogin()
   useEffect(() => { window.requireLogin = requireLogin }, [authUser])
@@ -5330,24 +5329,34 @@ function App() {
             className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-bold text-[var(--text-primary)] mb-3">Instalá en tu iPhone</h2>
+            <h2 className="text-lg font-bold text-[var(--text-primary)] mb-3">Instalá DJ Free App</h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              Safari no tiene botón directo. Tres pasos:
+              Elegí tu dispositivo:
             </p>
-            <ol className="space-y-3 mb-5 text-sm text-[var(--text-primary)]">
-              <li className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] flex items-center justify-center text-xs font-bold">1</span>
-                <span>Tocá el botón <strong>Compartir</strong> <svg className="inline w-4 h-4 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.032 4.026a3 3 0 10-5.368-2.684m5.368 2.684a3 3 0 11-5.368-2.684M12 9v6m-6.316-9.026a3 3 0 10-5.368 2.684M19 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> (abajo, medio).</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] flex items-center justify-center text-xs font-bold">2</span>
-                <span>Bajá y tocá <strong>"Añadir a pantalla de inicio"</strong>.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] flex items-center justify-center text-xs font-bold">3</span>
-                <span>Tocá <strong>Añadir</strong> arriba a la derecha. Listo — icono en home.</span>
-              </li>
-            </ol>
+            <div className="space-y-4 mb-5 text-sm text-[var(--text-primary)]">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">📱 iPhone (Safari)</div>
+                <ol className="space-y-2 ml-2">
+                  <li className="flex gap-2"><span className="text-[var(--color-accent)] font-bold">1.</span><span>Tocá el botón <strong>Compartir</strong> abajo del browser</span></li>
+                  <li className="flex gap-2"><span className="text-[var(--color-accent)] font-bold">2.</span><span>Bajá y tocá <strong>"Añadir a pantalla de inicio"</strong></span></li>
+                  <li className="flex gap-2"><span className="text-[var(--color-accent)] font-bold">3.</span><span>Tocá <strong>Añadir</strong> arriba a la derecha</span></li>
+                </ol>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">💻 Chrome / Edge (PC)</div>
+                <ol className="space-y-2 ml-2">
+                  <li className="flex gap-2"><span className="text-[var(--color-accent)] font-bold">1.</span><span>Click en el ícono <strong>Instalar</strong> ⊕ a la derecha de la barra de URL</span></li>
+                  <li className="flex gap-2"><span className="text-[var(--color-accent)] font-bold">2.</span><span>O menú ⋮ → <strong>"Instalar DJ Free App"</strong></span></li>
+                </ol>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">🤖 Android (Chrome)</div>
+                <ol className="space-y-2 ml-2">
+                  <li className="flex gap-2"><span className="text-[var(--color-accent)] font-bold">1.</span><span>Menú ⋮ arriba a la derecha</span></li>
+                  <li className="flex gap-2"><span className="text-[var(--color-accent)] font-bold">2.</span><span>Tocá <strong>"Instalar app"</strong> o "Añadir a pantalla de inicio"</span></li>
+                </ol>
+              </div>
+            </div>
             <button
               onClick={() => setShowIosInstall(false)}
               className="w-full py-3 rounded-xl text-sm font-semibold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-90 transition-all active:scale-95"
@@ -5714,14 +5723,65 @@ function App() {
             )}
           </div>
           {authUser && (
-            <button
-              onClick={() => { localStorage.removeItem('auth_token'); localStorage.removeItem('auth_user'); setAuthUser(null) }}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-[var(--bg-hover)] transition-all"
-              title="Cerrar sesión"
-            >
-              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{authUser.name?.[0]?.toUpperCase()}</span>
-              <span className="hidden sm:inline">{authUser.name}</span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setUserMenuOpen(o => !o)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-[var(--bg-hover)] transition-all"
+                title={authUser.name}
+              >
+                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ring-1 ring-white/10" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{authUser.name?.[0]?.toUpperCase()}</span>
+                <span className="hidden sm:inline">{authUser.name}</span>
+                <svg className="w-3 h-3 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {userMenuOpen && (<>
+                <div className="fixed inset-0 z-30" onClick={() => setUserMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-2 z-40 w-64 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+                  <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{authUser.name?.[0]?.toUpperCase()}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-[var(--text-primary)] truncate">{authUser.name}</div>
+                      <div className="text-[11px] text-[var(--text-muted)] truncate">@{authUser.user || authUser.name?.toLowerCase()}</div>
+                    </div>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      onClick={() => { setUserMenuOpen(false); setShowTutorial(true) }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3"
+                    >
+                      <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                      Ver tutorial
+                    </button>
+                    <a
+                      href="https://github.com/arenazl/slsk-ui/issues"
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3"
+                    >
+                      <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                      Reportar bug
+                    </a>
+                    <a
+                      href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3"
+                    >
+                      <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                      Descargar agente
+                    </a>
+                  </div>
+                  <div className="border-t border-[var(--border-color)] py-1">
+                    <button
+                      onClick={() => { localStorage.removeItem('auth_token'); localStorage.removeItem('auth_user'); setAuthUser(null); setUserMenuOpen(false) }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                      Cerrar sesión
+                    </button>
+                  </div>
+                </div>
+              </>)}
+            </div>
           )}
           {isGuest && (
             <button
