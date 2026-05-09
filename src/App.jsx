@@ -5379,7 +5379,9 @@ function App() {
     return <Tutorial onDone={dismissTutorial} />
   }
 
-  const isGuest = isDemo
+  // Demo can navigate everywhere — only the Subscribirse button distinguishes it
+  const isGuest = false
+  const showDemoBanner = isDemo
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
