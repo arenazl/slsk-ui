@@ -2120,6 +2120,21 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     }).catch(() => {})
   }, [page, minStars, setSelectedStars, authUser, collection])
 
+  // Hint banner — dismissible, persisted via localStorage
+  const [hintDismissed, setHintDismissed] = useState(() => !!localStorage.getItem('set_hint_dismissed'))
+  const dismissHint = () => { localStorage.setItem('set_hint_dismissed', '1'); setHintDismissed(true) }
+
+  // Auto-generate a starter set on first entry (when no set yet)
+  const autoGenRef = useRef(false)
+  useEffect(() => {
+    if (page !== 'set') return
+    if (autoGenRef.current) return
+    if (setTracks.length > 0) return
+    if (allTracks.length === 0) return  // wait until library loads
+    autoGenRef.current = true
+    generateSet('camelot')
+  }, [page, allTracks.length, setTracks.length])
+
   const fetchSuggestions = async (currentTracks) => {
     if (!currentTracks.length) return
     setLoadingSuggestions(true)
@@ -2184,15 +2199,17 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     })
   }
 
-  const generateSet = async (m, overrideStars, overrideDuration) => {
+  const generateSet = async (m, overrideStars, overrideDuration, overrideSelectedStars, overrideGenres) => {
     const useMethod = m || method
     setMethod(useMethod)
     setGenerating(true)
     try {
+      const selStars = overrideSelectedStars !== undefined ? overrideSelectedStars : setSelectedStars
+      const gens = overrideGenres !== undefined ? overrideGenres : selectedGenres
       const res = await fetch(`${API_BASE}/api/generate-set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: setSelectedStars.length > 0 ? setSelectedStars : undefined, duration: overrideDuration ?? duration, method: useMethod, genres: selectedGenres.length > 0 ? selectedGenres : undefined, username: authUser?.name || '' }),
+        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: selStars.length > 0 ? selStars : undefined, duration: overrideDuration ?? duration, method: useMethod, genres: gens.length > 0 ? gens : undefined, username: authUser?.name || '' }),
       })
       const data = await res.json()
       setSetTracks(data.tracks || [])
@@ -2247,12 +2264,28 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {/* Hint banner — guides first-time users, dismissible */}
+      {!hintDismissed && (
+        <div className="flex-shrink-0 bg-gradient-to-r from-[var(--color-accent)]/10 via-purple-500/10 to-pink-500/10 border-b border-[var(--color-accent)]/30 px-3 md:px-6 py-2.5 flex items-center gap-3">
+          <svg className="w-5 h-5 text-[var(--color-accent)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+          <div className="flex-1 min-w-0 text-xs md:text-sm text-[var(--text-primary)]">
+            <strong>Set generado automáticamente.</strong> Tocá <span className="font-semibold text-[var(--color-accent)]">estrellas</span>, <span className="font-semibold text-[var(--color-accent)]">duración</span>, <span className="font-semibold text-[var(--color-accent)]">método</span> (Camelot/Energy/Genre/Peak) o <span className="font-semibold text-[var(--color-accent)]">género</span> para regenerar.
+          </div>
+          <button
+            onClick={dismissHint}
+            className="flex-shrink-0 p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            title="No mostrar de nuevo"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+      )}
       {/* Controls: single compact row - duration + algorithms + search */}
       <div className="flex-shrink-0 flex items-center gap-1.5 md:gap-3 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
         {/* Star filter - desktop only */}
         <div className="hidden lg:flex items-center gap-1">
           <button
-            onClick={() => { setSetSelectedStars([]); setMinStars(1) }}
+            onClick={() => { setSetSelectedStars([]); setMinStars(1); if (method) generateSet(method, 1, undefined, []) }}
             className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
               setSelectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
@@ -2267,6 +2300,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
                   setSetSelectedStars(next)
                   const newMin = next.length > 0 ? Math.min(...next) : 1
                   setMinStars(newMin)
+                  if (method) generateSet(method, newMin, undefined, next)
                 }}
                 className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
                   active ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -2335,7 +2369,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       {availableGenres.length > 0 && (
         <div className="flex-shrink-0 flex items-center gap-1 px-3 md:px-6 py-1.5 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
           <button
-            onClick={() => setSelectedGenres([])}
+            onClick={() => { setSelectedGenres([]); if (method) generateSet(method, undefined, undefined, undefined, []) }}
             className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all duration-200 active:scale-95 ${
               selectedGenres.length === 0 ? 'btn-accent font-semibold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
@@ -2346,7 +2380,11 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
             return (
               <button
                 key={genre}
-                onClick={() => setSelectedGenres(prev => active ? prev.filter(g => g !== genre) : [...prev, genre])}
+                onClick={() => {
+                  const next = active ? selectedGenres.filter(g => g !== genre) : [...selectedGenres, genre]
+                  setSelectedGenres(next)
+                  if (method) generateSet(method, undefined, undefined, undefined, next)
+                }}
                 className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all duration-200 active:scale-95`}
                 style={{
                   background: active ? `rgba(${gColor.rgb}, 0.25)` : `rgba(${gColor.rgb}, 0.08)`,
