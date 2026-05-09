@@ -5675,12 +5675,12 @@ function App() {
             Ver demo
           </button>
           <div className="hidden md:flex gap-1">
-            {(isGuest ? [{ id: 'discover', label: 'Discover' }] : [
+            {[
               { id: 'discover', label: 'Discover' },
               { id: 'library', label: 'Biblioteca' },
-              { id: 'set', label: 'Set' },
-              ...(mixTracks ? [{ id: 'mix', label: 'Mix Editor' }] : []),
-            ]).map(tab => (
+              { id: 'set', label: 'Export' },
+              { id: 'mix', label: 'Mix' },
+            ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setPage(tab.id)}
@@ -6616,9 +6616,9 @@ function App() {
       <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} onGoToLibrary={goToLibraryTrack} playNextRef={playNextRef} />
 
       {/* Mix Editor page */}
-      {page === 'mix' && mixTracks && (
+      {page === 'mix' && (
         <MixEditor
-          tracks={mixTracks}
+          tracks={mixTracks || []}
           onBack={() => setPage('set')}
           agentConnected={agentConnected}
         />
