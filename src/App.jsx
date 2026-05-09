@@ -4455,7 +4455,7 @@ function DemoSceneTitle({ title, subtitle, accent = 'text-blue-400' }) {
 
 // Faux app-shell topbar — makes a scene feel like a real app screenshot.
 function DemoAppHeader({ active }) {
-  const tabs = ['Discover', 'Biblioteca', 'Set', 'Mix']
+  const tabs = ['Discover', 'Biblioteca', 'Export', 'Mix']
   return (
     <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 mb-3 rounded-lg bg-slate-900/60 border border-white/10 backdrop-blur-sm">
       <img src="/logo.png" alt="" className="w-4 h-4 rounded" />
@@ -4904,7 +4904,7 @@ function DemoSetBuilder() {
         subtitle="Sets compatibles por Camelot · Energy — 1 click"
         accent="text-purple-400"
       />
-      <DemoAppHeader active="Set" />
+      <DemoAppHeader active="Export" />
 
       {/* Filter row (always visible) */}
       <div className="flex flex-wrap justify-center gap-1.5 mb-2">
@@ -5218,7 +5218,7 @@ function ReelIntro() {
 
 // Vertical app-shell header — bigger version of DemoAppHeader for 1080×1920
 function ReelHeader({ active }) {
-  const tabs = ['Discover', 'Biblioteca', 'Set', 'Mix']
+  const tabs = ['Discover', 'Biblioteca', 'Export', 'Mix']
   return (
     <div className="flex items-center gap-4 px-6 py-4 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
       <img src="/logo.png" alt="" className="w-10 h-10 rounded-lg" />
@@ -5546,7 +5546,7 @@ function ReelSet() {
   }
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
-      <ReelHeader active="Set" />
+      <ReelHeader active="Export" />
       <div className="text-center">
         <h2 className="text-4xl font-black text-white">Asistente <span className="text-blue-400">IA</span> de playlists</h2>
         <p className="text-xl text-gray-400 mt-2">Sets compatibles por <span className="text-purple-300 font-bold">Camelot · Energy</span> — 1 click</p>
