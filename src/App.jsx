@@ -4021,7 +4021,8 @@ function LoginScreen({ onLogin, isModal = false, onClose }) {
 
   return (
     <Wrapper>
-      {!isModal && <video
+      {!isModal && (<>
+      <video
         autoPlay
         muted
         loop
@@ -4030,7 +4031,8 @@ function LoginScreen({ onLogin, isModal = false, onClose }) {
         onError={(e) => { e.currentTarget.style.display = 'none' }}
       >
         <source src="/bg.mp4" type="video/mp4" />
-      </video>}
+      </video></>)}
+      {!isModal && (<></>)}
 
       {/* Animated mesh gradient blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -5367,6 +5369,13 @@ function App() {
               Modo invitado — explorá, escuchá previews y marcá favoritos. Para bajar música, logueate.
             </span>
           </div>
+          <button
+            onClick={() => setLoginModalOpen(true)}
+            className="flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all"
+            style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
+          >
+            Iniciar sesión
+          </button>
         </div>
       )}
 
@@ -5723,13 +5732,7 @@ function App() {
           )}
           {isGuest && (
             <button
-              onClick={() => {
-                // Drop the share= param so the login screen appears on next mount
-                const p = new URLSearchParams(window.location.search)
-                p.delete('share')
-                window.history.replaceState(null, '', p.toString() ? '?' + p.toString() : window.location.pathname)
-                window.location.reload()
-              }}
+              onClick={() => setLoginModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all active:scale-95"
               style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
             >
