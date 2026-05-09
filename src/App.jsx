@@ -6549,15 +6549,15 @@ function App() {
         />
       )}
       {demoVideoOpen && (
-        <div className="fixed inset-0 z-[80] bg-black flex items-center justify-center animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="relative w-full h-full flex items-center justify-center">
+        <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl">
             <DemoShowcase />
             <button
               onClick={() => setDemoVideoOpen(false)}
-              className="absolute top-4 right-4 z-40 w-10 h-10 rounded-full bg-slate-800/90 border border-white/10 text-white hover:bg-slate-700 transition-colors flex items-center justify-center backdrop-blur"
+              className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-slate-800 border border-white/10 text-white hover:bg-slate-700 transition-colors flex items-center justify-center"
               aria-label="Cerrar"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         </div>
