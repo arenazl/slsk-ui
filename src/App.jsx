@@ -2232,9 +2232,33 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       // M3U-only path: build the playlist text in the browser. No agent
       // needed → works for any user/domain regardless of agent CORS state.
       if (!exportWithTracks) {
-        // Build absolute paths if user configured library root (Settings).
-        // Otherwise just filenames (works in basic players, not pro DJ tools).
-        const root = (libraryRoot || '').replace(/[\\/]+$/, '')
+        // Resolve root via fallback chain so user gets absolute paths even
+        // if they didn't fill the Settings field. Order:
+        //  1. Settings (libraryRoot prop)
+        //  2. Agent's actual download folder via /api/status (live)
+        //  3. Cached value from previous agent fetch
+        //  4. Platform default guess
+        let root = (libraryRoot || '').trim()
+        if (!root && agentConnected) {
+          try {
+            const r = await agentFetch('status', { signal: AbortSignal.timeout(5000) })
+            if (r.ok) {
+              const s = await r.json()
+              if (s?.folder) {
+                root = s.folder
+                try { localStorage.setItem('library_root_cached', root) } catch {}
+              }
+            }
+          } catch {}
+        }
+        if (!root) {
+          try { root = localStorage.getItem('library_root_cached') || '' } catch {}
+        }
+        if (!root) {
+          if (navigator.userAgent.includes('Windows')) root = 'C:\\Users\\Public\\Music\\groove-new'
+          else if (navigator.userAgent.includes('Mac')) root = '~/Music/groove-new'
+        }
+        root = root.replace(/[\\/]+$/, '')
         const sep = root.includes('\\') ? '\\' : '/'
         const lines = ['#EXTM3U']
         for (const t of setTracks) {
