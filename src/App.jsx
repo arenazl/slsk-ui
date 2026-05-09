@@ -2083,7 +2083,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   )
 })
 
-function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary, playNextRef }) {
+function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary, playNextRef, libraryRoot }) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
   const [setSelectedStars, setSetSelectedStars] = useState([])
@@ -2235,12 +2235,19 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       // M3U-only path: build the playlist text in the browser. No agent
       // needed → works for any user/domain regardless of agent CORS state.
       if (!exportWithTracks) {
+        // Build absolute paths if user configured library root (Settings).
+        // Otherwise just filenames (works in basic players, not pro DJ tools).
+        const root = (libraryRoot || '').replace(/[\\/]+$/, '')
+        const sep = root.includes('\\') ? '\\' : '/'
         const lines = ['#EXTM3U']
         for (const t of setTracks) {
           const dur = t.duration_est ? Math.round(t.duration_est * 60) : -1
           const label = t.artist ? `${t.artist} - ${t.title || t.filename}` : (t.title || t.filename)
           lines.push(`#EXTINF:${dur},${label}`)
-          lines.push(t.filename)
+          const path = root
+            ? (t.subfolder ? `${root}${sep}${t.subfolder}${sep}${t.filename}` : `${root}${sep}${t.filename}`)
+            : t.filename
+          lines.push(path)
         }
         const m3uContent = lines.join('\n')
         const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' })
@@ -5641,6 +5648,9 @@ function App() {
   const [trialMpUrl, setTrialMpUrl] = useState(() => localStorage.getItem('trial_mp_url') || 'https://www.mercadopago.com.ar/')
   const [demoUser, setDemoUser] = useState(() => localStorage.getItem('demo_user') || 'demo')
   const [demoPass, setDemoPass] = useState(() => localStorage.getItem('demo_pass') || '123')
+  // Absolute path to user's music library root (used for client-side m3u
+  // exports with full paths so DJ software like Rekordbox / Serato can resolve).
+  const [libraryRoot, setLibraryRoot] = useState(() => localStorage.getItem('library_root') || '')
 
   const isDemo = !!authUser && authUser.user === demoUser
   const trialStart = parseInt(localStorage.getItem('trial_start') || '0', 10)
@@ -5745,6 +5755,18 @@ function App() {
                   onChange={e => { setTrialMpUrl(e.target.value); localStorage.setItem('trial_mp_url', e.target.value) }}
                   className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)]"
                 />
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Biblioteca local</div>
+                <label className="block text-sm text-[var(--text-secondary)] mb-1">Carpeta raíz de tu música (path absoluto)</label>
+                <input
+                  type="text"
+                  value={libraryRoot}
+                  onChange={e => { setLibraryRoot(e.target.value); localStorage.setItem('library_root', e.target.value) }}
+                  placeholder="C:\Users\look\Music\groove-new"
+                  className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] font-mono"
+                />
+                <div className="text-xs text-[var(--text-muted)] mt-1">Se usa para que los .m3u exportados tengan paths absolutos válidos en Rekordbox / Serato / Traktor.</div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -6915,7 +6937,7 @@ function App() {
       </div>
 
       {/* Set Builder page */}
-      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} onGoToLibrary={goToLibraryTrack} playNextRef={playNextRef} />
+      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} onGoToLibrary={goToLibraryTrack} playNextRef={playNextRef} libraryRoot={libraryRoot} />
 
       {/* Mix Editor page */}
       {page === 'mix' && (
