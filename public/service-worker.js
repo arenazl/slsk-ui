@@ -29,10 +29,11 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cache successful responses for offline fallback
-        if (response.ok) {
+        // Cache only full 200 responses. 206 (partial content, range requests
+        // for video/audio) and opaque/redirect responses break Cache.put.
+        if (response.ok && response.status === 200 && response.type === 'basic') {
           const clone = response.clone()
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone))
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone)).catch(() => {})
         }
         return response
       })
