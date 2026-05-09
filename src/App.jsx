@@ -10483,6 +10483,11 @@ function ReelsView() {
 function AppWithToast() {
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search)
+    // Native vertical DemoReels — used by playwright to record the raw
+    // animation at 1080x1920 (no landing wrapper, no controls)
+    if (params.get('demorec') === '1') {
+      return <DemoReels />
+    }
     if (params.get('reels') === '1') {
       return <ToastProvider><ReelsView /></ToastProvider>
     }
