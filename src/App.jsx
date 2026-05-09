@@ -8700,19 +8700,27 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     if (track.artwork_url) params.set('artwork', track.artwork_url)
     const preview = track.sample_url || track.preview_url
     if (preview) params.set('preview', preview)
-    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`
+    // Always share the production HTTPS root, not whatever local origin the
+    // user is on. Avoids leaking localhost / dev URLs and guarantees ShareView
+    // (no-login preview) gets served.
+    const url = `https://djfreeapp.ar/?${params.toString()}`
     const shareText = `🎵 ${track.artist || ''} - ${track.title || ''}`.trim()
-    if (navigator.share) {
+
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
+    // On mobile, Web Share gives the OS-native sheet (WhatsApp, IG, etc).
+    // On desktop, that often fails silently → go straight to clipboard.
+    if (isMobile && navigator.share) {
       try {
         await navigator.share({ title: shareText, text: shareText, url })
         setDiscoverCtx(null)
         return
-      } catch { /* user cancelled or share unsupported — fall through to clipboard */ }
+      } catch { /* fall through */ }
     }
     try {
       await navigator.clipboard.writeText(url)
-      toast('Link copiado', 'success', 2000)
+      toast('Link copiado al portapapeles', 'success', 2500)
     } catch {
+      // Last resort: prompt so user can copy manually
       window.prompt('Copiá el link para compartir:', url)
     }
     setDiscoverCtx(null)
