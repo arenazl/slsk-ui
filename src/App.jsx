@@ -4857,28 +4857,37 @@ function DemoSetBuilder() {
     {
       id: 'camelot',
       label: '🎯 Camelot',
-      desc: 'Encadena tracks por compatibilidad armónica',
+      desc: 'Encadena tracks por compatibilidad armónica (Mixed in Key)',
       order: [0, 1, 2, 3, 4],
       color: 'purple',
     },
     {
       id: 'energy',
       label: '⚡ Energy',
-      desc: 'Por curva de energía — sube progresivamente',
+      desc: 'Por curva de energía — sube progresivamente sin saltos',
       order: [0, 1, 2, 3, 4],
       color: 'yellow',
     },
   ]
+  // Features enumeration shown after the method cycling.
+  const FEATURES = [
+    { icon: '🎯', label: 'Mixed in Key',     desc: 'Compatibilidad armónica por nota — rueda Camelot' },
+    { icon: '⚡', label: 'Energy progresiva', desc: 'Curva de intensidad sin saltos · 1 → 10' },
+    { icon: '🎭', label: 'Genre matching',   desc: 'Mismo género o subgéneros vecinos' },
+    { icon: '📈', label: 'Peak Time',        desc: 'Warmup → Peak → Cooldown automático' },
+    { icon: '💾', label: 'Export Rekordbox', desc: 'XML con rating · BPM · Camelot Key + M3U' },
+  ]
+  const TOTAL_STAGES = METHODS.length + 1 // methods + features list
 
   const [stage, setStage] = useState(-1)
   useEffect(() => {
-    const t = setTimeout(() => {
-      setStage(s => (s >= METHODS.length - 1 ? s : s + 1))
-    }, stage === -1 ? 1500 : 3500)
+    if (stage >= TOTAL_STAGES - 1) return // freeze on features
+    const t = setTimeout(() => setStage(s => s + 1), stage === -1 ? 1500 : 3500)
     return () => clearTimeout(t)
   }, [stage])
 
-  const activeMethod = stage >= 0 ? METHODS[stage] : null
+  const showFeatures = stage >= METHODS.length
+  const activeMethod = stage >= 0 && stage < METHODS.length ? METHODS[stage] : null
   const orderedTracks = activeMethod ? activeMethod.order.map(i => TRACKS[i]) : TRACKS
 
   const colorMap = {
