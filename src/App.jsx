@@ -5125,180 +5125,473 @@ function ReelIntro() {
   )
 }
 
-function ReelDiscover() {
-  const tracks = [
-    { n: 'Innerbloom',    a: 'RÜFÜS DU SOL', bpm: 122, k: '6B' },
-    { n: 'Tesla',         a: 'Mau P',         bpm: 128, k: '4A' },
-    { n: 'At Night',      a: 'Anyma',         bpm: 124, k: '8A' },
-  ]
+// Vertical app-shell header — bigger version of DemoAppHeader for 1080×1920
+function ReelHeader({ active }) {
+  const tabs = ['Discover', 'Biblioteca', 'Set', 'Mix']
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
-      <p className="text-2xl font-bold text-blue-400 uppercase tracking-widest mb-4 animate-fade-in-up">Discover</p>
-      <h2 className="text-7xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
-        Catálogo<br/><span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span>
-      </h2>
-      <p className="text-3xl text-gray-300 mb-12 animate-fade-in-up">renovado <span className="text-purple-300 font-bold">cada semana</span></p>
-      <div className="w-full space-y-4">
-        {tracks.map((t, i) => (
-          <div
-            key={i}
-            className="bg-white/[0.06] border border-white/10 rounded-3xl px-6 py-5 flex items-center gap-5 animate-demo-tag-pop"
-            style={{ animationDelay: `${i * 250}ms` }}
+    <div className="flex items-center gap-4 px-6 py-4 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
+      <img src="/logo.png" alt="" className="w-10 h-10 rounded-lg" />
+      <span className="text-2xl text-white font-bold">DJ Free App</span>
+      <div className="flex-1 flex justify-center gap-1">
+        {tabs.map(t => (
+          <span
+            key={t}
+            className={`text-xl px-4 py-1.5 rounded-lg font-bold transition-colors ${
+              t === active ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40' : 'text-gray-500'
+            }`}
           >
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-black text-2xl shadow-xl flex-shrink-0">{t.bpm}</div>
-            <div className="flex-1 min-w-0">
-              <div className="text-3xl font-bold text-white truncate">{t.n}</div>
-              <div className="text-xl text-gray-400 truncate">{t.a}</div>
-            </div>
-            <span className="text-2xl px-4 py-2 rounded-xl bg-orange-500/20 text-orange-300 font-bold font-mono flex-shrink-0">{t.k}</span>
-          </div>
+            {t}
+          </span>
         ))}
+      </div>
+      <div className="flex gap-2">
+        <span className="w-3 h-3 rounded-full bg-red-500/70" />
+        <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
+        <span className="w-3 h-3 rounded-full bg-green-500/70" />
       </div>
     </div>
   )
 }
 
-function ReelDownload() {
+// Mirrors DemoSources — Melodic House Beatport-style page in portrait.
+function ReelDiscover() {
+  const tracks = [
+    { n: 'Hot Sauce (Extended)',  a: 'Kapuchon, Miss Monique', label: 'AETERNA',  bpm: 129, k: 'Gb · 11A', d: '5:36', state: 'dl',                          thumb: 'from-orange-500 to-red-700' },
+    { n: 'Be The One (Extended)', a: 'Adam Port, Keinemusik',  label: 'Keinemusik', bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                         thumb: 'from-cyan-400 to-blue-600' },
+    { n: 'Recall (Extended Mix)', a: 'HotLap',                 label: 'One Seven', bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done', dot: true,             thumb: 'from-red-500 to-pink-700' },
+    { n: "Didn't Miss You (OG)",  a: 'Liva K',                 label: 'Magnifik',  bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',   highlight: true,       thumb: 'from-purple-500 to-blue-700' },
+  ]
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
-      <p className="text-2xl font-bold text-green-400 uppercase tracking-widest mb-4 animate-fade-in-up">Download</p>
-      <h2 className="text-7xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
-        Descarga<br/><span className="text-blue-400">directa</span>
-      </h2>
-      <p className="text-3xl text-gray-300 mb-12 animate-fade-in-up">calidad <span className="text-green-300 font-bold">profesional</span></p>
-      <div className="w-full space-y-5">
-        {[
-          { n: 'Anyma · Eternity.flac', s: '67MB', f: 'FLAC' },
-          { n: 'RÜFÜS · Innerbloom.flac', s: '62MB', f: 'FLAC' },
-          { n: 'Tinlicker · Fractal.mp3', s: '12MB', f: 'MP3' },
-        ].map((t, i) => (
+    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <ReelHeader active="Discover" />
+      {/* Hero header */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-5xl font-black text-white leading-tight">Melodic House</h2>
+          <p className="text-xl text-gray-400 flex items-center gap-2">
+            <span className="text-white font-bold">100</span> tracks · actualizado hoy 12:28
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-orange-500 to-red-700 ring-2 ring-white/20" />
+          <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 ring-2 ring-white/20" />
+          <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-red-500 to-pink-700 ring-2 ring-white/20" />
+        </div>
+      </div>
+      {/* Genre tabs */}
+      <div className="flex items-center gap-3 overflow-hidden text-lg">
+        <span className="text-gray-500">All</span>
+        <span className="text-blue-300 border-b-2 border-blue-400 pb-1 font-semibold">Melodic House</span>
+        <span className="text-gray-500">Mel. Techno</span>
+        <span className="text-gray-500">Tech House</span>
+        <span className="text-gray-500">Afro</span>
+        <span className="text-gray-500">Deep</span>
+      </div>
+      {/* Preview continuo */}
+      <div className="flex items-center gap-3">
+        <span className="text-lg px-4 py-1.5 rounded-full bg-purple-500/30 border-2 border-purple-400/50 text-purple-200 font-bold flex items-center gap-2">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          Preview continuo
+        </span>
+        <span className="text-base px-3 py-1 rounded-md bg-blue-500/30 text-blue-200 font-bold">30s</span>
+        <span className="text-base text-gray-400">60s</span>
+        <span className="text-base text-gray-400">90s</span>
+        <span className="text-base text-gray-400">120s</span>
+        <span className="text-lg px-4 py-1.5 rounded-full bg-red-500/30 border-2 border-red-400/50 text-red-200 font-bold">● Stop</span>
+      </div>
+      {/* Track list */}
+      <div className="flex-1 space-y-2.5 overflow-hidden">
+        {tracks.map((t, i) => (
           <div
             key={i}
-            className="bg-white/[0.06] border border-white/10 rounded-3xl p-6 animate-demo-tag-pop"
+            className={`flex items-center gap-3 px-3 py-3 rounded-xl animate-demo-tag-pop ${t.highlight ? 'bg-green-500/[0.10] ring-2 ring-green-500/40' : 'bg-white/[0.04]'}`}
             style={{ animationDelay: `${i * 250}ms` }}
           >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-14 h-14 rounded-2xl bg-blue-500/30 flex items-center justify-center flex-shrink-0">
-                <svg className="w-7 h-7 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 1}</span>
+            <div className={`w-14 h-14 rounded-xl flex-shrink-0 bg-gradient-to-br ${t.thumb}`} />
+            <div className="flex-1 min-w-0">
+              <div className={`text-xl font-bold truncate flex items-center gap-2 ${t.highlight ? 'text-green-300' : 'text-white'}`}>
+                {t.n}
+                {t.dot && <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />}
+              </div>
+              <div className="text-base text-gray-400 truncate">{t.a}</div>
+            </div>
+            <span className="text-base text-gray-500 font-mono flex-shrink-0">{t.bpm}</span>
+            <span className="text-base px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-300 font-bold font-mono flex-shrink-0">{t.k}</span>
+            <button
+              className={`text-base px-4 py-1.5 rounded-full font-bold flex-shrink-0 ${
+                t.state === 'done' ? 'bg-green-500/30 text-green-300 border border-green-500/40' : 'bg-blue-500 text-white shadow-lg shadow-blue-500/40'
+              }`}
+            >
+              {t.state === 'done' ? '✓' : '↓'}
+            </button>
+          </div>
+        ))}
+      </div>
+      {/* Tagline */}
+      <div className="text-center pt-2">
+        <p className="text-3xl font-black text-white">Catálogo <span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span></p>
+        <p className="text-xl text-gray-400">renovado <span className="text-purple-300 font-bold">cada semana</span></p>
+      </div>
+    </div>
+  )
+}
+
+// Mirrors DemoDownload — track list + context menu popup + active downloads.
+function ReelDownload() {
+  const listRows = [
+    { n: 'Recall (Extended Mix)',     a: 'HotLap',                 fmt: 'FLAC', state: 'done', thumb: 'from-red-500 to-pink-700' },
+    { n: "Didn't Miss You (OG)",      a: 'Liva K',                 fmt: 'FLAC', state: 'menu', thumb: 'from-purple-500 to-blue-700', highlight: true },
+    { n: 'Spotlight (Original Mix)',  a: 'Andrea Oliva',           fmt: 'FLAC', state: 'dl',   thumb: 'from-yellow-400 to-orange-600' },
+    { n: 'Pa Ca (Original Mix)',      a: 'Massano, Silver Panda',  fmt: 'FLAC', state: 'dl',   thumb: 'from-cyan-400 to-blue-600' },
+  ]
+  const downloads = [
+    { name: "Liva K - Didn't Miss You.flac", size: '40MB', fmt: 'FLAC' },
+    { name: 'Andrea Oliva - Spotlight.flac', size: '46MB', fmt: 'FLAC' },
+    { name: 'Massano - Pa Ca.flac',          size: '32MB', fmt: 'FLAC' },
+  ]
+  return (
+    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <ReelHeader active="Discover" />
+      <div className="text-center">
+        <h2 className="text-5xl font-black text-white">Descarga directa · <span className="text-blue-400">calidad profesional</span></h2>
+        <p className="text-xl text-gray-400 mt-2">FLAC sin pérdida · MP3 320k · WAV — al instante, sin colas</p>
+      </div>
+      {/* Track list with context menu popup */}
+      <div className="relative flex-1">
+        <div className="space-y-2">
+          {listRows.map((t, i) => (
+            <div
+              key={i}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl animate-demo-tag-pop ${t.highlight ? 'bg-green-500/[0.10] ring-2 ring-green-500/40' : 'bg-white/[0.04]'}`}
+              style={{ animationDelay: `${i * 200}ms` }}
+            >
+              <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 3}</span>
+              <div className={`w-12 h-12 rounded-xl flex-shrink-0 bg-gradient-to-br ${t.thumb}`} />
+              <div className="flex-1 min-w-0">
+                <div className={`text-xl font-bold truncate ${t.highlight ? 'text-green-300' : 'text-white'}`}>{t.n}</div>
+                <div className="text-base text-gray-400 truncate">{t.a}</div>
+              </div>
+              <span className="text-base text-green-400 font-bold flex-shrink-0">{t.fmt}</span>
+            </div>
+          ))}
+        </div>
+        {/* Context menu popup */}
+        <div className="absolute right-4 top-16 w-72 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl shadow-black/60 z-30 overflow-hidden animate-demo-tag-pop" style={{ animationDelay: '600ms' }}>
+          <div className="px-4 py-2.5 border-b border-white/10 text-base text-white font-bold truncate">Liva K · Didn't Miss You</div>
+          <div className="px-4 py-2.5 flex items-center gap-2.5 text-lg text-white">
+            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            Descargar
+          </div>
+          <div className="px-4 pt-3 pb-1 text-sm uppercase tracking-wider text-gray-500 font-semibold">Preview continuo</div>
+          <div className="px-4 py-1.5 flex items-center gap-2.5 bg-purple-500/10 text-lg text-purple-200">
+            <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            Autoplay 30s por tema
+          </div>
+          <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">
+            <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            Autoplay 60s por tema
+          </div>
+          <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">
+            <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            Autoplay 90s · 120s
+          </div>
+          <div className="border-t border-white/10 px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">📻 Radio</div>
+          <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">🔗 Compartir link</div>
+        </div>
+      </div>
+      {/* Active downloads */}
+      <div className="space-y-2">
+        <div className="text-base font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+          Descargas activas · 3/3
+        </div>
+        {downloads.map((d, i) => (
+          <div key={i} className="bg-white/[0.04] border border-white/10 rounded-xl p-3 animate-demo-tag-pop" style={{ animationDelay: `${500 + i * 200}ms` }}>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/30 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-2xl text-white font-semibold truncate">{t.n}</div>
-                <div className="text-lg text-gray-500">{t.s}</div>
+                <div className="text-base text-white truncate">{d.name}</div>
+                <div className="text-sm text-gray-500">{d.size}</div>
               </div>
-              <span className="text-xl px-4 py-1.5 rounded-xl bg-green-500/30 text-green-300 font-black flex-shrink-0">{t.f}</span>
+              <span className="text-sm px-2.5 py-1 rounded-full bg-green-500/30 text-green-300 font-bold flex-shrink-0">{d.fmt}</span>
             </div>
-            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-demo-progress" style={{ animationDelay: `${i * 250}ms` }} />
             </div>
           </div>
         ))}
+        <div className="px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-sm text-green-300 font-bold flex items-center gap-2">
+          ✓ SoulSeek · análisis BPM/Key automático al terminar
+        </div>
       </div>
-      <p className="mt-10 text-2xl text-white font-bold text-center">FLAC · MP3 320k · WAV — al instante</p>
     </div>
   )
 }
 
+// Mirrors DemoLibrary — Cards layout with stats, filter pills, 3 genre cards.
 function ReelLibrary() {
+  const groups = [
+    { name: 'Tech House',    count: 92, dot: 'bg-blue-500',   tracks: [
+      { t: '04 - 05 - Biscits - 2C2 (Extended)', f: 'FLAC' },
+      { t: '06 - Corrupt (Uk) - Trippin', f: 'FLAC' },
+      { t: '08 - Biscits - Freak (Extended)', f: 'FLAC' },
+      { t: '01-mau_p-merther_(extended)', f: 'FLAC' },
+    ]},
+    { name: 'Deep House',    count: 47, dot: 'bg-green-500',  tracks: [
+      { t: 'For The Soul', f: 'FLAC' },
+      { t: '01. Feels Like Us (Extended)', f: 'FLAC' },
+      { t: '02-zehv-leland.mp3', f: 'MP3' },
+      { t: 'dreams (Extended Mix)', f: 'FLAC' },
+    ]},
+    { name: 'Melodic House', count: 41, dot: 'bg-purple-500', tracks: [
+      { t: '07 - 03-nordfold-forever_(extended)', f: 'MP3' },
+      { t: '01 - Rainy (Devault Remix)', f: 'FLAC' },
+      { t: '01 RÜFÜS DU SOL - On My Knees', f: 'M4A' },
+      { t: '01 Somebody (2024)', f: 'FLAC' },
+    ]},
+  ]
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
-      <p className="text-2xl font-bold text-purple-400 uppercase tracking-widest mb-4 animate-fade-in-up">Library</p>
-      <h2 className="text-7xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
-        Biblioteca<br/>clasificada<br/><span className="text-purple-400">por IA</span>
-      </h2>
-      <p className="text-3xl text-gray-300 mb-12 animate-fade-in-up">BPM · Camelot · género — <span className="text-white font-bold">automático</span></p>
-      <div className="grid grid-cols-2 gap-4 w-full">
+    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <ReelHeader active="Biblioteca" />
+      <div className="text-center">
+        <h2 className="text-5xl font-black text-white">Biblioteca clasificada <span className="text-purple-400">por IA</span></h2>
+        <p className="text-xl text-gray-400 mt-2"><span className="text-white font-bold">305 tracks</span> · BPM · Camelot Key · género — sin tocar nada</p>
+      </div>
+      {/* Stats bar */}
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-900/60 border border-white/10">
+        <span className="text-base text-gray-400"><span className="text-white font-bold">305</span> tracks</span>
+        <span className="text-base px-3 py-1 rounded-md bg-blue-500/30 text-blue-200 font-bold">Cards</span>
+        <span className="text-base text-gray-500">Tracks</span>
+        <span className="text-base px-2 py-1 rounded bg-blue-500/20 text-blue-300 font-bold">All</span>
+        <span className="text-base text-yellow-400 tracking-wider">★★★★★</span>
+        <span className="flex-1" />
+        <span className="text-base px-3 py-1 rounded-md bg-blue-500/20 text-blue-300 font-bold">📁 Organizar (3)</span>
+        <span className="text-base px-3 py-1 rounded-md bg-purple-500/20 text-purple-300 font-bold">🎵 Keys (115)</span>
+      </div>
+      {/* Genre filter pills */}
+      <div className="flex items-center gap-2 overflow-hidden">
+        <span className="text-sm px-2.5 py-1 rounded-full bg-blue-500/30 border border-blue-400/40 text-blue-200 font-bold flex-shrink-0">All</span>
         {[
-          { g: 'Tech House',     n: 92, color: 'from-blue-500 to-blue-700' },
-          { g: 'Deep House',     n: 47, color: 'from-green-500 to-green-700' },
-          { g: 'Melodic House',  n: 41, color: 'from-purple-500 to-purple-700' },
-          { g: 'Progressive',    n: 20, color: 'from-orange-500 to-orange-700' },
-          { g: 'Afro House',     n: 18, color: 'from-pink-500 to-pink-700' },
-          { g: 'Mel. Techno',    n: 17, color: 'from-cyan-500 to-cyan-700' },
-        ].map((g, i) => (
+          { n: 'Tech House',    c: 92, color: 'text-blue-400' },
+          { n: 'Deep House',    c: 47, color: 'text-green-400' },
+          { n: 'Melodic House', c: 41, color: 'text-purple-400' },
+          { n: 'Progressive',   c: 20, color: 'text-orange-400' },
+          { n: 'Afro House',    c: 18, color: 'text-pink-400' },
+          { n: 'Mel. Techno',   c: 17, color: 'text-cyan-400' },
+        ].map(g => (
+          <span key={g.n} className={`text-sm px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/10 ${g.color} font-semibold flex items-center gap-1.5 flex-shrink-0`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            {g.n} ({g.c})
+          </span>
+        ))}
+      </div>
+      {/* Cards stacked vertically (instead of 3 cols horizontal) */}
+      <div className="flex-1 space-y-3 overflow-hidden">
+        {groups.map((g, gi) => (
           <div
-            key={g.g}
-            className={`bg-gradient-to-br ${g.color} rounded-2xl p-5 animate-demo-tag-pop shadow-xl`}
-            style={{ animationDelay: `${i * 150}ms` }}
+            key={g.name}
+            className="bg-slate-900/80 border border-white/10 rounded-2xl overflow-hidden animate-demo-tag-pop"
+            style={{ animationDelay: `${gi * 200}ms` }}
           >
-            <div className="text-4xl font-black text-white">{g.n}</div>
-            <div className="text-lg text-white/90 font-bold">{g.g}</div>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className={`w-3 h-3 rounded-full ${g.dot} flex-shrink-0`} />
+                <span className="text-2xl font-bold text-white truncate">{g.name}</span>
+              </div>
+              <span className="text-base font-bold text-gray-300 bg-white/10 px-3 py-1 rounded-md">{g.count}</span>
+            </div>
+            <div className="px-4 py-2 space-y-1">
+              {g.tracks.map((tr, ti) => (
+                <div key={ti} className="flex items-center gap-3 py-1 animate-demo-tag-pop" style={{ animationDelay: `${gi * 200 + 300 + ti * 80}ms` }}>
+                  <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  <span className="text-base text-gray-300 truncate flex-1">{tr.t}</span>
+                  <span className={`text-sm font-bold flex-shrink-0 ${tr.f === 'FLAC' ? 'text-green-400' : tr.f === 'MP3' ? 'text-blue-400' : 'text-purple-400'}`}>{tr.f}</span>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
-      <p className="mt-12 text-3xl font-black text-white text-center">305 tracks · sin tocar nada</p>
     </div>
   )
 }
 
+// Mirrors DemoSetBuilder — 2 methods (Camelot/Energy) cycling + compact rows
+// with intensity-graded accent.
 function ReelSet() {
-  const METHODS = [
-    { id: 0, label: '🎯 Camelot', desc: 'Mixing armónico', color: 'purple' },
-    { id: 1, label: '⚡ Energy',   desc: 'Curva 5 → 9',     color: 'yellow' },
-    { id: 2, label: '🎭 Genre',    desc: 'Por género',      color: 'pink'   },
-    { id: 3, label: '📈 Peak',     desc: 'Warmup → Peak',   color: 'orange' },
+  const TRACKS = [
+    { name: "Prospa - Don't Stop (Extended Mix)",        k: 'D# · 5B', bpm: 124, energy: 5, genre: 'Indie Dance',   fmt: 'FLAC', size: '27.82MB', stars: 3 },
+    { name: 'Chico Rose (NL) - Pom (Original Mix) 130',  k: 'D# · 5B', bpm: 130, energy: 6, genre: 'Tech House',    fmt: 'FLAC', size: '49.8MB',  stars: 4 },
+    { name: '22 - Deeper Purpose - Operate (Extended)',  k: 'Gm · 6A', bpm: 128, energy: 7, genre: 'Tech House',    fmt: 'FLAC', size: '40.39MB', stars: 5 },
+    { name: 'Polovich - Sweet Dreams (Original Mix)',    k: 'B · 1B',  bpm: 130, energy: 8, genre: 'Melodic House', fmt: 'MP3',  size: '10.73MB', stars: 5 },
+    { name: 'Biscits - Crush (Extended Mix)',            k: 'Fm · 4A', bpm: 128, energy: 9, genre: 'Tech House',    fmt: 'FLAC', size: '43.18MB', stars: 5 },
   ]
-  const [active, setActive] = useState(0)
+  const METHODS = [
+    { id: 'camelot', label: '🎯 Camelot', desc: 'Encadena tracks por compatibilidad armónica', color: 'purple' },
+    { id: 'energy',  label: '⚡ Energy',   desc: 'Por curva de energía — sube progresivamente',  color: 'yellow' },
+  ]
+  const [stage, setStage] = useState(-1)
   useEffect(() => {
-    if (active >= METHODS.length - 1) return
-    const t = setTimeout(() => setActive(a => a + 1), 1100)
+    const t = setTimeout(() => setStage(s => (s >= METHODS.length - 1 ? s : s + 1)), stage === -1 ? 1500 : 3500)
     return () => clearTimeout(t)
-  }, [active])
+  }, [stage])
+  const activeMethod = stage >= 0 ? METHODS[stage] : null
   const colorMap = {
-    purple: 'from-purple-500 to-purple-700 shadow-purple-500/50',
-    yellow: 'from-yellow-500 to-orange-500 shadow-yellow-500/50',
-    pink:   'from-pink-500 to-pink-700 shadow-pink-500/50',
-    orange: 'from-orange-500 to-red-600 shadow-orange-500/50',
+    purple: { chip: 'bg-purple-500/30 border-purple-400/60 text-purple-200 shadow-purple-500/40', text: 'text-purple-300' },
+    yellow: { chip: 'bg-yellow-500/30 border-yellow-400/60 text-yellow-200 shadow-yellow-500/40', text: 'text-yellow-300' },
   }
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
-      <p className="text-2xl font-bold text-yellow-400 uppercase tracking-widest mb-4 animate-fade-in-up">Killer feature</p>
-      <h2 className="text-8xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
-        Asistente <span className="text-blue-400">IA</span><br/>de playlists
-      </h2>
-      <p className="text-3xl text-gray-300 mb-12 animate-fade-in-up">4 estilos · resultado en <span className="text-yellow-300 font-bold">1 click</span></p>
-      <div className="grid grid-cols-2 gap-5 w-full">
-        {METHODS.map((m, i) => (
-          <div
-            key={m.id}
-            className={`rounded-3xl p-8 transition-all duration-500 ${
-              active === i
-                ? `bg-gradient-to-br ${colorMap[m.color]} shadow-2xl scale-105`
-                : 'bg-white/[0.04] border border-white/10'
-            }`}
-          >
-            <div className="text-4xl font-black text-white mb-2">{m.label}</div>
-            <div className={`text-2xl font-bold ${active === i ? 'text-white/90' : 'text-gray-400'}`}>{m.desc}</div>
-          </div>
-        ))}
+    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <ReelHeader active="Set" />
+      <div className="text-center">
+        <h2 className="text-5xl font-black text-white">Asistente <span className="text-blue-400">IA</span> de playlists</h2>
+        <p className="text-xl text-gray-400 mt-2">Sets compatibles por <span className="text-purple-300 font-bold">Camelot · Energy</span> — 1 click</p>
       </div>
-      <p className="mt-12 text-3xl font-black text-white text-center">sets compatibles · sin pensar</p>
+      {/* Filter chips */}
+      <div className="flex justify-center gap-2.5 flex-wrap">
+        <span className="text-base px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 font-bold">60'</span>
+        <span className="text-base px-4 py-1.5 rounded-full bg-yellow-500/20 border border-yellow-400/40 text-yellow-300 font-bold">★★★★★</span>
+        <span className="text-base px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 font-bold">Tech House</span>
+      </div>
+      {/* Method chips */}
+      <div className="flex justify-center gap-3">
+        {METHODS.map((m, i) => {
+          const isActive = stage === i
+          const c = colorMap[m.color]
+          return (
+            <span
+              key={m.id}
+              className={`text-2xl px-6 py-3 rounded-full border-2 font-bold transition-all duration-300 ${
+                isActive ? `${c.chip} shadow-2xl scale-110` : 'bg-white/[0.04] border-white/10 text-gray-500'
+              }`}
+            >
+              {m.label}
+            </span>
+          )
+        })}
+      </div>
+      {/* Method description */}
+      <div className="text-center min-h-8">
+        {activeMethod ? (
+          <p key={activeMethod.id} className={`text-2xl font-bold animate-fade-in ${colorMap[activeMethod.color].text}`}>{activeMethod.desc}</p>
+        ) : (
+          <p className="text-2xl text-gray-500 animate-fade-in">Generando set…</p>
+        )}
+      </div>
+      {/* Track rows — full info, intensity-graded accent bar */}
+      <div key={activeMethod?.id || 'intro'} className="flex-1 space-y-2 overflow-hidden">
+        {TRACKS.map((t, i) => {
+          const accent = { 5: 'bg-blue-500', 6: 'bg-cyan-400', 7: 'bg-purple-500', 8: 'bg-pink-500', 9: 'bg-red-500' }[t.energy]
+          const rowBg = { 5: 'bg-blue-500/[0.05]', 6: 'bg-cyan-500/[0.07]', 7: 'bg-purple-500/[0.09]', 8: 'bg-pink-500/[0.12]', 9: 'bg-red-500/[0.15]' }[t.energy]
+          return (
+            <div
+              key={`${activeMethod?.id || 'intro'}-${i}`}
+              className={`relative ${rowBg} rounded-xl px-4 py-3 flex items-center gap-3 animate-demo-tag-pop`}
+              style={{ animationDelay: `${i * 100}ms` }}
+            >
+              <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-10 rounded-r ${accent}`} />
+              <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 1}</span>
+              <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-bold text-white truncate">{t.name}</div>
+              </div>
+              <span className="text-sm text-gray-300 truncate flex-shrink-0">{t.genre}</span>
+              <span className={`text-sm font-bold flex-shrink-0 ${t.fmt === 'FLAC' ? 'text-green-400' : 'text-blue-400'}`}>{t.fmt}</span>
+              <span className="text-sm font-mono text-gray-400 flex-shrink-0 w-20 text-right">{t.size}</span>
+              <span className="text-sm font-bold font-mono px-2.5 py-1 rounded-md bg-orange-500/20 text-orange-300 flex-shrink-0">{t.k}</span>
+              <span className="text-base text-yellow-400 tracking-tighter flex-shrink-0">{'★'.repeat(t.stars)}<span className="text-white/10">{'★'.repeat(5 - t.stars)}</span></span>
+              <span className="text-gray-500 text-xl flex-shrink-0">×</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
+// Mirrors DemoExport — Mix Editor toolbar + timeline with crossfading.
 function ReelMix() {
+  const blocks = [
+    { name: 'Nick Curly · Attention',                    color: 'from-blue-500/40 to-blue-700/40 border-blue-400/60',     text: 'text-blue-200',   waveColor: 'text-blue-300' },
+    { name: 'Adriatique · Miracle (RÜFÜS Remix)',        color: 'from-purple-500/40 to-purple-700/40 border-purple-400/60', text: 'text-purple-200', waveColor: 'text-purple-300' },
+    { name: 'Zeca Veloso · Todo Homem',                  color: 'from-orange-500/40 to-orange-700/40 border-orange-400/60', text: 'text-orange-200', waveColor: 'text-orange-300' },
+    { name: '01-mau_p-merther',                          color: 'from-green-500/40 to-green-700/40 border-green-400/60',   text: 'text-green-200',  waveColor: 'text-green-300' },
+  ]
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
-      <p className="text-2xl font-bold text-pink-400 uppercase tracking-widest mb-4 animate-fade-in-up">Mix Editor</p>
-      <h2 className="text-7xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
-        Previsualizá<br/>tu mix <span className="text-blue-400">antes<br/>de tocarlo</span>
-      </h2>
-      <p className="text-3xl text-gray-300 mb-10 animate-fade-in-up">crossfading auto · beatmatching</p>
-      {/* Vertical timeline mockup */}
-      <div className="w-full bg-slate-900/80 border border-white/10 rounded-3xl p-6 space-y-3 animate-demo-tag-pop">
-        {[
-          { t: 'Anyma · Eternity', c: 'from-blue-500 to-blue-700',     k: '8A' },
-          { t: 'Mau P · Tesla',    c: 'from-purple-500 to-purple-700', k: '8B' },
-          { t: 'Tinlicker · Fractal', c: 'from-orange-500 to-red-600', k: '9B' },
-          { t: 'RÜFÜS · Innerbloom', c: 'from-green-500 to-green-700', k: '10B' },
-        ].map((tr, i) => (
-          <div key={i} className={`bg-gradient-to-r ${tr.c} rounded-2xl px-6 py-5 flex items-center justify-between shadow-xl`}>
-            <span className="text-2xl font-black text-white truncate">{tr.t}</span>
-            <span className="text-2xl font-mono font-black text-white/90 ml-4">{tr.k}</span>
-          </div>
+    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <ReelHeader active="Mix" />
+      <div className="text-center">
+        <h2 className="text-5xl font-black text-white">Previsualizá tu mix <span className="text-blue-400">antes de tocarlo</span></h2>
+        <p className="text-xl text-gray-400 mt-2">Crossfading auto · beatmatching · fade 16s · export MP3 320k</p>
+      </div>
+      {/* Mix Editor toolbar */}
+      <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-900/60 border border-white/10 text-base flex-wrap">
+        <span className="text-gray-400">‹ Volver al Set</span>
+        <span className="text-white font-bold">Mix Editor</span>
+        <span className="text-gray-400">15 tracks · 83:52</span>
+        <button className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+        </button>
+        <span className="text-gray-300 font-mono">0:00 / 83:52</span>
+        <span className="text-gray-400">BPM</span>
+        <span className="px-2 py-1 rounded bg-slate-800 text-white font-bold font-mono">128</span>
+        <span className="px-2 py-1 rounded bg-purple-500/30 text-purple-200 font-bold">Snap</span>
+        <span className="flex-1" />
+        <span className="px-3 py-1 rounded-md bg-slate-800 text-gray-300 font-mono">Mix 9-5</span>
+        <span className="px-3 py-1 rounded-md bg-slate-800 text-blue-300 font-bold">MP3 320k ▾</span>
+        <button className="px-3 py-1 rounded-md bg-blue-500 text-white font-bold flex items-center gap-1">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+          Exportar Mix
+        </button>
+      </div>
+      {/* Timeline ruler */}
+      <div className="flex-shrink-0 flex border-b border-white/10 px-1 py-1 text-sm text-gray-500 font-mono">
+        {['11:00', '12:30', '14:00', '15:30', '17:00', '18:30', '20:00'].map(t => (
+          <span key={t} className="flex-1">{t}</span>
         ))}
       </div>
-      <p className="mt-8 text-3xl font-black text-white text-center">Export <span className="text-blue-400">MP3 320k</span> + <span className="text-orange-400">Rekordbox</span></p>
+      {/* Timeline track lanes — vertical stack instead of horizontal columns */}
+      <div className="flex-1 relative bg-slate-900/40 rounded-b-xl overflow-hidden">
+        <div className="absolute inset-0 flex">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="flex-1 border-r border-white/[0.04]" />
+          ))}
+        </div>
+        <div className="relative flex flex-col gap-2 p-3 h-full">
+          {blocks.map((b, i) => (
+            <div
+              key={i}
+              className={`relative bg-gradient-to-r ${b.color} border-2 rounded-xl flex-1 overflow-hidden animate-demo-tag-pop`}
+              style={{ animationDelay: `${i * 200}ms` }}
+            >
+              <div className="absolute inset-x-3 inset-y-3 flex items-end gap-px opacity-50">
+                {Array.from({ length: 60 }).map((_, j) => (
+                  <span
+                    key={j}
+                    className={`flex-1 ${b.waveColor} rounded-t bg-current`}
+                    style={{ height: `${30 + Math.abs(Math.sin(j * 0.5 + i) * 60)}%` }}
+                  />
+                ))}
+              </div>
+              <div className={`absolute inset-x-4 top-2 text-base font-bold ${b.text} truncate`}>{b.name}</div>
+              {/* Auto fade label between tracks */}
+              {i < blocks.length - 1 && (
+                <div className="absolute -bottom-1 right-6 z-10 flex flex-col items-center animate-demo-tag-pop" style={{ animationDelay: `${600 + i * 100}ms` }}>
+                  <span className="text-xs px-2 py-0.5 rounded bg-purple-600 text-white font-bold leading-none">Auto</span>
+                  <span className="text-xs text-purple-300 font-mono leading-none mt-0.5">16s</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {/* Playhead */}
+        <div className="absolute top-0 bottom-0 left-[15%] w-1 bg-red-500 z-20 shadow-[0_0_12px_rgba(239,68,68,0.7)]">
+          <div className="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-red-500" />
+        </div>
+      </div>
     </div>
   )
 }
