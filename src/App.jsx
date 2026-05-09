@@ -7356,7 +7356,7 @@ function App() {
             href="?reels=1"
             target="_blank"
             rel="noopener"
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0 border border-white/20 no-underline"
+            className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0 border border-white/20 no-underline"
             style={{ background: 'linear-gradient(135deg, #ec4899, #f59e0b)' }}
             title="Vista vertical 9:16 — temporal para testear"
           >
