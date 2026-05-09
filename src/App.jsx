@@ -5369,13 +5369,6 @@ function App() {
               Modo invitado — explorá, escuchá previews y marcá favoritos. Para bajar música, logueate.
             </span>
           </div>
-          <button
-            onClick={() => setLoginModalOpen(true)}
-            className="flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
-          >
-            Iniciar sesión
-          </button>
         </div>
       )}
 
