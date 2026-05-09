@@ -4358,15 +4358,24 @@ function DemoShowcase() {
   const SCENES = 7
   const D = [3000, 4500, 4500, 4500, 9500, 3500, 2500]
   const [scene, setScene] = useState(0)
-  const [muted, setMuted] = useState(true)
+  const [muted, setMuted] = useState(false)
   const audioRef = useRef(null)
   useEffect(() => {
     const t = setTimeout(() => setScene(s => (s + 1) % SCENES), D[scene])
     return () => clearTimeout(t)
   }, [scene])
-  // Try to autoplay (works after user clicks "Ver demo" — that gesture allows it).
+  // Try to autoplay unmuted on mount. The click on "Ver demo" counts as a
+  // user gesture so most browsers allow it. If blocked anyway, fall back to
+  // muted (and the user can click the speaker icon to enable sound).
   useEffect(() => {
-    audioRef.current?.play().catch(() => {})
+    const a = audioRef.current
+    if (!a) return
+    a.muted = false
+    a.volume = 0.7
+    a.play().catch(() => {
+      a.muted = true
+      setMuted(true)
+    })
   }, [])
   const toggleMute = () => {
     const next = !muted
@@ -6196,6 +6205,8 @@ function App() {
   // Trial config (editable in Settings). Default: 7 days, demo/123, MP link.
   const [trialDays, setTrialDays] = useState(() => parseInt(localStorage.getItem('trial_days') || '7', 10))
   const [trialMpUrl, setTrialMpUrl] = useState(() => localStorage.getItem('trial_mp_url') || 'https://www.mercadopago.com.ar/')
+  const [cafecitoUrl, setCafecitoUrl] = useState(() => localStorage.getItem('cafecito_url') || 'https://cafecito.app/djfreeapp')
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const [demoUser, setDemoUser] = useState(() => localStorage.getItem('demo_user') || 'demo')
   const [demoPass, setDemoPass] = useState(() => localStorage.getItem('demo_pass') || '123')
   // Absolute path to user's music library root (used for client-side m3u
