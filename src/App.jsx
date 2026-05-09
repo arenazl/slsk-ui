@@ -246,6 +246,61 @@ function killAudio(a) {
   try { a.src = '' } catch {}
 }
 
+// ScreenHint — modern dismissible mini-guide shown above each main screen.
+// Auto-rotates tips, gradient bg, animated icon, persisted-dismiss per screen.
+function ScreenHint({ id, title, tips }) {
+  const [dismissed, setDismissed] = useState(() => !!localStorage.getItem(`hint_${id}_dismissed`))
+  const [activeTip, setActiveTip] = useState(0)
+  useEffect(() => {
+    if (dismissed || !tips || tips.length <= 1) return
+    const t = setInterval(() => setActiveTip(i => (i + 1) % tips.length), 4500)
+    return () => clearInterval(t)
+  }, [dismissed, tips?.length])
+  if (dismissed || !tips || !tips.length) return null
+  const tip = tips[activeTip]
+  return (
+    <div className="flex-shrink-0 relative overflow-hidden border-b border-[var(--color-accent)]/30 animate-fade-in">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10" />
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute -top-10 -left-10 w-40 h-40 rounded-full bg-blue-500/30 blur-3xl animate-blob" />
+        <div className="absolute -bottom-10 right-1/4 w-32 h-32 rounded-full bg-purple-500/30 blur-3xl animate-blob animation-delay-2000" />
+      </div>
+      <div className="relative flex items-center gap-3 px-3 md:px-6 py-2.5">
+        <div className="flex-shrink-0 relative">
+          <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/30 blur-md animate-pulse" />
+          <span className="relative inline-flex w-8 h-8 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-purple-500 items-center justify-center text-base shadow-lg">{tip.icon || '✨'}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          {title && <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-0.5">{title}</div>}
+          <div key={activeTip} className="text-xs md:text-sm text-[var(--text-primary)] animate-fade-in-up">
+            {typeof tip === 'string' ? tip : tip.text}
+          </div>
+        </div>
+        {tips.length > 1 && (
+          <div className="hidden sm:flex flex-shrink-0 items-center gap-1">
+            {tips.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setActiveTip(i)}
+                className={`h-1 rounded-full transition-all duration-300 ${i === activeTip ? 'w-5 bg-[var(--color-accent)]' : 'w-1 bg-white/20 hover:bg-white/40'}`}
+                aria-label={`Tip ${i + 1}`}
+              />
+            ))}
+          </div>
+        )}
+        <button
+          onClick={() => { localStorage.setItem(`hint_${id}_dismissed`, '1'); setDismissed(true) }}
+          className="flex-shrink-0 p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+          title="No mostrar de nuevo"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
   const [dragOver, setDragOver] = useState(false)
 
@@ -1333,6 +1388,13 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <ScreenHint id="library" title="Tu biblioteca" tips={[
+        { icon: '⭐', text: <>Click <strong>derecho</strong> sobre un track para puntuar, mover de género, o renombrar. En mobile: deslizá lateral.</> },
+        { icon: '🎼', text: <>Botón <strong>Detectar Keys</strong> — la IA analiza cada tema y le pone tonalidad (C, Am, etc) para mezclar armónicamente después.</> },
+        { icon: '🤖', text: <>Botón <strong>Clasificar</strong> — IA detecta género (Tech House, Melodic, Trance...) y mueve a la subcarpeta correcta.</> },
+        { icon: '🔁', text: <>Vista <strong>Cards</strong>: agrupado por género · <strong>Tracks</strong>: lista plana ordenable · <strong>Join</strong>: tabla compacta para auditar.</> },
+        { icon: '🎯', text: <>Filtrá por <strong>estrellas + género + búsqueda</strong> en simultáneo. Lo que veas se respeta al armar Sets.</> },
+      ]} />
       {/* Toolbar - on mobile this wraps to 2 rows so the search stays usable;
           on desktop everything fits in one row. */}
       <div className="flex-shrink-0 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 px-3 md:px-5 py-2 md:py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
@@ -2350,22 +2412,13 @@ ${playlistEntries}
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Hint banner — guides first-time users, dismissible */}
-      {!hintDismissed && (
-        <div className="flex-shrink-0 bg-gradient-to-r from-[var(--color-accent)]/10 via-purple-500/10 to-pink-500/10 border-b border-[var(--color-accent)]/30 px-3 md:px-6 py-2.5 flex items-center gap-3">
-          <svg className="w-5 h-5 text-[var(--color-accent)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-          <div className="flex-1 min-w-0 text-xs md:text-sm text-[var(--text-primary)]">
-            <strong>Set generado automáticamente.</strong> Tocá <span className="font-semibold text-[var(--color-accent)]">estrellas</span>, <span className="font-semibold text-[var(--color-accent)]">duración</span>, <span className="font-semibold text-[var(--color-accent)]">método</span> (Camelot/Energy/Genre/Peak) o <span className="font-semibold text-[var(--color-accent)]">género</span> para regenerar.
-          </div>
-          <button
-            onClick={dismissHint}
-            className="flex-shrink-0 p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-            title="No mostrar de nuevo"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-      )}
+      <ScreenHint id="set" title="Armado de set" tips={[
+        { icon: '⭐', text: <>Tocá <strong>estrellas</strong> para subir/bajar el corte de calidad — el set se regenera al toque.</> },
+        { icon: '⏱️', text: <>Cambiá la <strong>duración</strong> (60'/90'/120') y el set se rearma con la cantidad de tracks justos.</> },
+        { icon: '🎯', text: <><strong>Camelot</strong>: encadena tracks por compatibilidad armónica. <strong>Energy</strong>: por curva de energía. <strong>Genre</strong>: por estilo. <strong>Peak</strong>: arma el momento alto.</> },
+        { icon: '🎵', text: <>Filtrá por <strong>género</strong> con las pills de abajo. Multi-select OK.</> },
+        { icon: '📤', text: <>Exportá como <strong>Rekordbox playlist</strong> (.m3u) o <strong>Rekordbox XML</strong> con rating + BPM + key.</> },
+      ]} />
       {/* Controls: single compact row - duration + algorithms + search */}
       <div className="flex-shrink-0 flex items-center gap-1.5 md:gap-3 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
         {/* Star filter - desktop only */}
@@ -2672,7 +2725,8 @@ ${playlistEntries}
             title="Playlist .m3u — File → Import → Import Playlist en Rekordbox"
           >
             {exporting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-4-4 1.41-1.41L11 14.17l5.59-5.59L18 10l-7 7z"/></svg>
+              // Vinyl record (Pioneer/Rekordbox vibe)
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
             )}
             Rekordbox playlist
           </button>
@@ -2683,18 +2737,23 @@ ${playlistEntries}
             style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
             title="Rekordbox XML — incluye rating, BPM, key, género (Preferences → Advanced → Database)"
           >
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.18l7.5 3.75-3.45 1.72L8.55 5.93 12 4.18zM4 8.66l7 3.5v7.84l-7-3.5V8.66zm9 11.34v-7.84l7-3.5v7.84l-7 3.5z"/></svg>
+            {/* Same vinyl mark for visual consistency */}
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
             Rekordbox XML
           </button>
           <button
             onClick={() => onEditMix(setTracks)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all duration-200 active:scale-95 bg-purple-600 hover:bg-purple-500 text-white flex-shrink-0"
-            title="Editar como mix con waveforms y fades"
+            title="Editor de mezcla con waveforms, fades y crossfade"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            {/* Crossfader / mixer sliders */}
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16"/>
+              <circle cx="15" cy="7" r="2.2" fill="currentColor"/>
+              <circle cx="9" cy="12" r="2.2" fill="currentColor"/>
+              <circle cx="13" cy="17" r="2.2" fill="currentColor"/>
             </svg>
-            Mix
+            Mezclar
           </button>
         </div>
       )}
@@ -3397,6 +3456,13 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <ScreenHint id="mix" title="Editor de mezcla" tips={[
+        { icon: '🎚️', text: <>Arrastrá los tracks horizontalmente para reordenar el momento de entrada. La superposición es el crossfade.</> },
+        { icon: '🌊', text: <>Los <strong>fades</strong> se ven en el waveform — arrastrá los bordes para ajustar duración del fade in/out.</> },
+        { icon: '🔢', text: <>Activá <strong>Snap a beats</strong> y poné el BPM master para que todo cuadre al grid musical.</> },
+        { icon: '🖱️', text: <>Click derecho en un track para <strong>tipo de transición</strong> (Smooth, Cut, Drop, EQ Mix, Long Blend).</> },
+        { icon: '📤', text: <>Exportá el mix bounceado como un solo .mp3/.wav para subirlo a SoundCloud o llevarlo a la fiesta.</> },
+      ]} />
       {/* Toolbar */}
       <div className="flex-shrink-0 flex items-center gap-3 px-5 py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
         <button
@@ -7402,6 +7468,13 @@ function App() {
 
       {/* Discover page */}
       <div className={`flex-1 flex flex-col min-h-0 ${page !== 'discover' ? 'hidden' : ''}`}>
+        <ScreenHint id="discover" title="Descubrí música nueva" tips={[
+          { icon: '🔍', text: <>Top 100 de <strong>Beatport</strong> + playlists curadas de <strong>Spotify</strong>. Filtrá por género en las pills de arriba.</> },
+          { icon: '▶️', text: <>Click en cualquier track para preview 30s desde iTunes/Beatport — sin descarga.</> },
+          { icon: '❤️', text: <>Marcá <strong>corazón</strong> para guardar como favorito (filtrable después en Biblioteca).</> },
+          { icon: '⬇️', text: <>Click <strong>Descargar</strong> y se baja vía SoulSeek con el agente — entra automático a tu biblioteca con metadata.</> },
+          { icon: '📻', text: <>Click derecho → <strong>Radio</strong>: arma una sesión de 1h con tracks similares al que tocaste. Para inspirarte.</> },
+        ]} />
         <DiscoverPage
           wsRef={wsRef}
           username={username}
