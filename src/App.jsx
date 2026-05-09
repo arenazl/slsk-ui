@@ -5079,15 +5079,26 @@ function DemoCTA() {
 // =====================================================================
 function DemoReels() {
   const SCENES = 7
-  const D = [3000, 4000, 4000, 4000, 5500, 4000, 3000]
+  // +1.5x slower per user feedback
+  const D = [5000, 7000, 7000, 7000, 10000, 7000, 5000]
   const [scene, setScene] = useState(0)
+  const audioRef = useRef(null)
   useEffect(() => {
-    const t = setTimeout(() => setScene(s => (s + 1) % SCENES), D[scene])
+    if (scene >= SCENES - 1) return // one-shot
+    const t = setTimeout(() => setScene(s => s + 1), D[scene])
     return () => clearTimeout(t)
   }, [scene])
+  useEffect(() => {
+    const a = audioRef.current
+    if (!a) return
+    a.muted = false
+    a.volume = 0.7
+    a.play().catch(() => {})
+  }, [])
 
   return (
     <div className="fixed inset-0 bg-slate-950 overflow-hidden">
+      <audio ref={audioRef} src="/demo/bg.mp3" loop autoPlay preload="auto" />
       {/* Background blobs (always visible) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-60 -left-60 w-[40rem] h-[40rem] rounded-full bg-blue-600/30 blur-3xl animate-blob" />
@@ -5116,11 +5127,11 @@ function ReelIntro() {
     <div className="absolute inset-0 flex flex-col items-center justify-center px-12 animate-fade-in z-10">
       <div className="relative animate-bounce-subtle">
         <div className="absolute inset-0 rounded-[3rem] bg-blue-500/60 blur-3xl scale-150" />
-        <img src="/logo.png" alt="" className="relative w-72 h-72 rounded-[3rem] ring-4 ring-white/20" />
+        <img src="/logo.png" alt="" className="relative w-48 h-48 rounded-[3rem] ring-4 ring-white/20" />
       </div>
-      <h1 className="mt-12 text-9xl font-black text-white tracking-tight text-center leading-none animate-fade-in-up">DJ Free<br/>App</h1>
-      <p className="mt-8 text-3xl text-gray-200 font-semibold text-center animate-fade-in-up">Tu workflow completo de DJ</p>
-      <p className="mt-2 text-2xl text-blue-400 font-bold text-center animate-fade-in-up">automatizado · gratis</p>
+      <h1 className="mt-8 text-6xl font-black text-white tracking-tight text-center leading-none animate-fade-in-up">DJ Free<br/>App</h1>
+      <p className="mt-6 text-2xl text-gray-200 font-semibold text-center animate-fade-in-up">Tu workflow completo de DJ</p>
+      <p className="mt-1 text-xl text-blue-400 font-bold text-center animate-fade-in-up">automatizado · gratis</p>
     </div>
   )
 }
@@ -5167,7 +5178,7 @@ function ReelDiscover() {
       {/* Hero header */}
       <div className="flex items-center gap-4">
         <div className="flex-1 min-w-0">
-          <h2 className="text-5xl font-black text-white leading-tight">Melodic House</h2>
+          <h2 className="text-4xl font-black text-white leading-tight">Melodic House</h2>
           <p className="text-xl text-gray-400 flex items-center gap-2">
             <span className="text-white font-bold">100</span> tracks · actualizado hoy 12:28
           </p>
@@ -5254,7 +5265,7 @@ function ReelDownload() {
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
       <ReelHeader active="Discover" />
       <div className="text-center">
-        <h2 className="text-5xl font-black text-white">Descarga directa · <span className="text-blue-400">calidad profesional</span></h2>
+        <h2 className="text-4xl font-black text-white">Descarga directa · <span className="text-blue-400">calidad profesional</span></h2>
         <p className="text-xl text-gray-400 mt-2">FLAC sin pérdida · MP3 320k · WAV — al instante, sin colas</p>
       </div>
       {/* Track list with context menu popup */}
@@ -5355,7 +5366,7 @@ function ReelLibrary() {
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
       <ReelHeader active="Biblioteca" />
       <div className="text-center">
-        <h2 className="text-5xl font-black text-white">Biblioteca clasificada <span className="text-purple-400">por IA</span></h2>
+        <h2 className="text-4xl font-black text-white">Biblioteca clasificada <span className="text-purple-400">por IA</span></h2>
         <p className="text-xl text-gray-400 mt-2"><span className="text-white font-bold">305 tracks</span> · BPM · Camelot Key · género — sin tocar nada</p>
       </div>
       {/* Stats bar */}
@@ -5445,7 +5456,7 @@ function ReelSet() {
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
       <ReelHeader active="Set" />
       <div className="text-center">
-        <h2 className="text-5xl font-black text-white">Asistente <span className="text-blue-400">IA</span> de playlists</h2>
+        <h2 className="text-4xl font-black text-white">Asistente <span className="text-blue-400">IA</span> de playlists</h2>
         <p className="text-xl text-gray-400 mt-2">Sets compatibles por <span className="text-purple-300 font-bold">Camelot · Energy</span> — 1 click</p>
       </div>
       {/* Filter chips */}
@@ -5522,7 +5533,7 @@ function ReelMix() {
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
       <ReelHeader active="Mix" />
       <div className="text-center">
-        <h2 className="text-5xl font-black text-white">Previsualizá tu mix <span className="text-blue-400">antes de tocarlo</span></h2>
+        <h2 className="text-4xl font-black text-white">Previsualizá tu mix <span className="text-blue-400">antes de tocarlo</span></h2>
         <p className="text-xl text-gray-400 mt-2">Crossfading auto · beatmatching · fade 16s · export MP3 320k</p>
       </div>
       {/* Mix Editor toolbar */}
@@ -5599,12 +5610,12 @@ function ReelCTA() {
     <div className="absolute inset-0 flex flex-col items-center justify-center px-12 animate-fade-in z-10">
       <div className="relative animate-bounce-subtle">
         <div className="absolute inset-0 rounded-[3rem] bg-blue-500/60 blur-3xl scale-150" />
-        <img src="/logo.png" alt="" className="relative w-56 h-56 rounded-[3rem] ring-4 ring-white/20" />
+        <img src="/logo.png" alt="" className="relative w-40 h-40 rounded-[3rem] ring-4 ring-white/20" />
       </div>
-      <h2 className="mt-12 text-8xl font-black text-white tracking-tight text-center leading-none">Probá<br/><span className="text-blue-400">gratis</span></h2>
-      <p className="mt-8 text-4xl text-gray-200 font-bold text-center">DJ Free App</p>
-      <p className="mt-3 text-2xl text-blue-400 font-mono font-bold">djfreeapp.ar</p>
-      <div className="mt-12 px-12 py-6 rounded-3xl text-3xl font-black text-white shadow-2xl shadow-blue-500/50 bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse">
+      <h2 className="mt-8 text-6xl font-black text-white tracking-tight text-center leading-none">Probá<br/><span className="text-blue-400">gratis</span></h2>
+      <p className="mt-6 text-3xl text-gray-200 font-bold text-center">DJ Free App</p>
+      <p className="mt-2 text-xl text-blue-400 font-mono font-bold">djfreeapp.ar</p>
+      <div className="mt-8 px-8 py-4 rounded-2xl text-2xl font-black text-white shadow-2xl shadow-blue-500/50 bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse">
         Empezá ahora →
       </div>
     </div>
