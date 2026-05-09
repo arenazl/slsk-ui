@@ -82,6 +82,44 @@ input[type="color"]::-webkit-color-swatch {
 }
 .animate-bounce-subtle { animation: bounce-subtle 2s ease-in-out infinite; }
 
+/* Demo showcase animations */
+@keyframes demo-progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+.animate-demo-progress { animation: demo-progress 2s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+@keyframes demo-scan {
+  0% { transform: translateY(0); opacity: 0; }
+  10%, 90% { opacity: 1; }
+  100% { transform: translateY(180px); opacity: 0; }
+}
+.animate-demo-scan { animation: demo-scan 3s ease-in-out forwards; }
+
+@keyframes demo-tag-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-demo-tag-pop { animation: demo-tag-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+
+@keyframes demo-energy-fill {
+  from { width: 10%; }
+  to { width: 95%; }
+}
+.animate-demo-energy-fill { animation: demo-energy-fill 4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+@keyframes demo-ping-slow {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.animate-demo-ping-slow { animation: demo-ping-slow 2s ease-out infinite; }
+
+@keyframes demo-arrow-slide {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(8px); }
+}
+.animate-demo-arrow { animation: demo-arrow-slide 1.4s ease-in-out infinite; }
+
 /* Invisible scrollbar utility */
 .scrollbar-none {
   -ms-overflow-style: none;

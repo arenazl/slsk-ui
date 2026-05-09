@@ -4179,6 +4179,314 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
   )
 }
 
+// =====================================================================
+// DemoShowcase — animated 7-scene demo of DJ Free App features.
+// Replaces a static video with real app concepts: Beatport/Spotify lists,
+// auto-download, dynamic library + BPM/Key analysis, set automation,
+// Rekordbox export, CTA. ~25s loop, all Tailwind + CSS keyframes.
+// =====================================================================
+function DemoShowcase() {
+  const SCENES = 7
+  const D = [3000, 4500, 4500, 4500, 5500, 3500, 2500]
+  const [scene, setScene] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setScene(s => (s + 1) % SCENES), D[scene])
+    return () => clearTimeout(t)
+  }, [scene])
+
+  return (
+    <div className="relative w-full aspect-video bg-slate-950 rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-2xl">
+      {/* Animated background blobs (shared across all scenes) */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-600/25 blur-3xl animate-blob" />
+        <div className="absolute top-1/2 -right-32 w-96 h-96 rounded-full bg-purple-600/25 blur-3xl animate-blob animation-delay-2000" />
+        <div className="absolute -bottom-32 left-1/3 w-80 h-80 rounded-full bg-pink-600/20 blur-3xl animate-blob animation-delay-4000" />
+      </div>
+
+      {scene === 0 && <DemoIntro />}
+      {scene === 1 && <DemoSources />}
+      {scene === 2 && <DemoDownload />}
+      {scene === 3 && <DemoLibrary />}
+      {scene === 4 && <DemoSetBuilder />}
+      {scene === 5 && <DemoExport />}
+      {scene === 6 && <DemoCTA />}
+
+      {/* Scene progress indicators */}
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
+        {Array.from({ length: SCENES }).map((_, i) => (
+          <button
+            key={i}
+            onClick={() => setScene(i)}
+            className={`h-1 rounded-full transition-all duration-300 ${i === scene ? 'w-8 bg-white' : 'w-1.5 bg-white/30 hover:bg-white/50'}`}
+            aria-label={`Escena ${i + 1}`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DemoIntro() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center animate-fade-in z-10">
+      <div className="relative animate-bounce-subtle">
+        <div className="absolute inset-0 rounded-3xl bg-blue-500/50 blur-3xl" />
+        <img src="/logo.png" alt="DJ Free App" className="relative w-28 h-28 rounded-3xl ring-2 ring-white/20" />
+      </div>
+      <h1 className="mt-6 text-5xl font-extrabold text-white tracking-tight animate-fade-in-up">DJ Free App</h1>
+      <p className="mt-3 text-base text-gray-300 animate-fade-in-up">Tu workflow completo de DJ — automatizado</p>
+      <div className="mt-5 flex gap-2 animate-fade-in-up">
+        {['Discover', 'Download', 'Analyze', 'Mix', 'Export'].map(t => (
+          <span key={t} className="text-xs px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 text-gray-300 font-semibold">{t}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DemoSources() {
+  const beatport = [
+    { title: 'Innerbloom', artist: 'RÜFÜS DU SOL', bpm: 122, k: '6B', g: 'Melodic House' },
+    { title: 'Tesla', artist: 'Mau P', bpm: 128, k: '4A', g: 'Tech House' },
+    { title: 'At Night', artist: 'Anyma', bpm: 124, k: '8A', g: 'Mel. Techno' },
+  ]
+  const spotify = [
+    { title: 'Mónaco', artist: 'Bad Bunny', bpm: 102, k: '5A', g: 'Reggaeton' },
+    { title: 'Pepas', artist: 'Farruko', bpm: 130, k: '6A', g: 'Latin House' },
+    { title: 'Tusa', artist: 'Karol G', bpm: 100, k: '7B', g: 'Latin Pop' },
+  ]
+  return (
+    <div className="absolute inset-0 flex flex-col p-6 md:p-8 animate-fade-in z-10">
+      <h2 className="text-xl md:text-2xl font-bold text-white text-center mb-1">Listas directas de <span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span></h2>
+      <p className="text-xs text-gray-400 text-center mb-5">EDM · POP · LATIN — top charts en vivo</p>
+      <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
+        <DemoTrackList title="BEATPORT · EDM" tracks={beatport} accent="blue" baseDelay={0} />
+        <DemoTrackList title="SPOTIFY · LATIN" tracks={spotify} accent="green" baseDelay={500} />
+      </div>
+    </div>
+  )
+}
+
+function DemoTrackList({ title, tracks, accent, baseDelay }) {
+  const dot = accent === 'blue' ? 'bg-blue-500' : 'bg-green-500'
+  const txt = accent === 'blue' ? 'text-blue-400' : 'text-green-400'
+  const tag = accent === 'blue' ? 'bg-blue-500/15 text-blue-300' : 'bg-green-500/15 text-green-300'
+  return (
+    <div className="flex flex-col gap-2 min-w-0">
+      <div className={`text-[10px] font-bold ${txt} uppercase tracking-widest flex items-center gap-1.5`}>
+        <span className={`w-2 h-2 rounded-full ${dot} animate-pulse`} />
+        {title}
+      </div>
+      {tracks.map((t, i) => (
+        <div
+          key={i}
+          className="bg-white/[0.05] border border-white/10 rounded-xl p-2.5 flex items-center gap-2.5 animate-demo-tag-pop"
+          style={{ animationDelay: `${baseDelay + i * 250}ms` }}
+        >
+          <div className={`w-9 h-9 rounded-lg ${tag} flex items-center justify-center text-[10px] font-bold flex-shrink-0`}>
+            {t.bpm}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold text-white truncate">{t.title}</div>
+            <div className="text-[10px] text-gray-400 truncate">{t.artist}</div>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-gray-300 font-mono flex-shrink-0">{t.k}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function DemoDownload() {
+  const tracks = [
+    { name: 'Anyma - Eternity (Extended Mix).flac', size: '67MB', fmt: 'FLAC', dur: '2.0s' },
+    { name: 'RÜFÜS DU SOL - Innerbloom.flac', size: '62MB', fmt: 'FLAC', dur: '2.4s' },
+    { name: 'Tinlicker - Fractal.mp3', size: '12MB', fmt: 'MP3', dur: '1.6s' },
+  ]
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 md:p-8 animate-fade-in z-10">
+      <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Descarga automática</h2>
+      <p className="text-xs text-gray-400 mb-5">Click → SoulSeek busca y baja en background · FLAC / MP3 / WAV</p>
+      <div className="w-full max-w-2xl space-y-2.5">
+        {tracks.map((t, i) => (
+          <div
+            key={i}
+            className="bg-white/[0.05] border border-white/10 rounded-xl p-3 animate-demo-tag-pop"
+            style={{ animationDelay: `${i * 250}ms` }}
+          >
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-white truncate">{t.name}</div>
+                <div className="text-[10px] text-gray-500">{t.size} · ~{t.dur}</div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-bold flex-shrink-0">{t.fmt}</span>
+            </div>
+            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-demo-progress"
+                style={{ animationDelay: `${i * 250}ms` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DemoLibrary() {
+  const tracks = [
+    { artist: 'Anyma', title: 'Eternity', bpm: 124, k: '8A', stars: 5 },
+    { artist: 'Mau P', title: 'Tesla', bpm: 128, k: '4A', stars: 5 },
+    { artist: 'Tinlicker', title: 'Fractal', bpm: 122, k: '6A', stars: 4 },
+    { artist: 'RÜFÜS DU SOL', title: 'Innerbloom', bpm: 122, k: '6B', stars: 5 },
+    { artist: 'Solomun', title: 'Customer Is King', bpm: 120, k: '7A', stars: 4 },
+  ]
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 md:p-8 animate-fade-in z-10">
+      <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Biblioteca dinámica</h2>
+      <p className="text-xs text-gray-400 mb-5">Análisis automático de BPM, Camelot Key y rating</p>
+      <div className="relative w-full max-w-2xl">
+        <div className="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent shadow-lg shadow-blue-400/60 z-10 animate-demo-scan" />
+        <div className="space-y-2 relative">
+          {tracks.map((t, i) => (
+            <div key={i} className="bg-white/[0.05] border border-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-white truncate">{t.artist} <span className="text-gray-500">·</span> {t.title}</div>
+              </div>
+              <span
+                className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 animate-demo-tag-pop"
+                style={{ animationDelay: `${300 + i * 500}ms` }}
+              >
+                {t.bpm}
+              </span>
+              <span
+                className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 animate-demo-tag-pop"
+                style={{ animationDelay: `${400 + i * 500}ms` }}
+              >
+                {t.k}
+              </span>
+              <div
+                className="flex text-xs animate-demo-tag-pop"
+                style={{ animationDelay: `${500 + i * 500}ms` }}
+              >
+                {[1, 2, 3, 4, 5].map(s => (
+                  <span key={s} className={s <= t.stars ? 'text-yellow-400' : 'text-white/10'}>★</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DemoSetBuilder() {
+  const tracks = [
+    { name: 'Velvet Avenue', k: '8A', bpm: 122 },
+    { name: 'At Night', k: '8B', bpm: 124 },
+    { name: 'Tesla', k: '9B', bpm: 126 },
+    { name: 'Eternity', k: '10B', bpm: 128 },
+    { name: 'Innerbloom', k: '9A', bpm: 130 },
+  ]
+  return (
+    <div className="absolute inset-0 flex flex-col p-5 md:p-7 animate-fade-in z-10">
+      <h2 className="text-xl md:text-2xl font-bold text-white text-center mb-1">Set automático</h2>
+      <p className="text-xs text-gray-400 text-center mb-3">Camelot · Energy · Genre · Peak — 4 estilos de mix</p>
+      <div className="flex justify-center gap-1.5 mb-3 flex-wrap">
+        <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 font-bold">60'</span>
+        <span className="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 font-bold">🎯 Camelot</span>
+        <span className="text-[11px] px-2.5 py-1 rounded-full bg-yellow-500/20 border border-yellow-400/40 text-yellow-300 font-bold">★★★★★</span>
+        <span className="text-[11px] px-2.5 py-1 rounded-full bg-pink-500/20 border border-pink-400/40 text-pink-300 font-bold">Tech House</span>
+      </div>
+      <div className="flex-1 grid grid-cols-5 gap-2 mb-3 min-h-0">
+        {tracks.map((t, i) => (
+          <div
+            key={i}
+            className="bg-white/[0.05] border border-white/10 rounded-xl p-2 flex flex-col items-center justify-between animate-demo-tag-pop"
+            style={{ animationDelay: `${i * 400}ms` }}
+          >
+            <div className="text-[10px] text-gray-300 text-center truncate w-full" title={t.name}>{t.name}</div>
+            <div className="my-1.5 w-11 h-11 rounded-full bg-gradient-to-br from-purple-500/40 to-blue-500/40 border border-purple-400/50 flex items-center justify-center shadow-lg shadow-purple-500/30">
+              <span className="text-xs font-extrabold text-white font-mono">{t.k}</span>
+            </div>
+            <div className="text-[10px] text-gray-400 font-mono">{t.bpm}</div>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-[11px] text-gray-300">
+          <span className="font-semibold">⚡ Energy curve</span>
+          <span className="text-yellow-400 font-bold font-mono">5 → 9</span>
+        </div>
+        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full animate-demo-energy-fill" />
+        </div>
+        <div className="flex justify-between text-[11px] text-gray-300">
+          <span className="font-semibold">🥁 BPM</span>
+          <span className="text-blue-400 font-bold font-mono">122 → 130</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DemoExport() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 md:p-8 animate-fade-in z-10">
+      <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Exportá a Rekordbox</h2>
+      <p className="text-xs text-gray-400 mb-7">Tu set listo para mezclar en cualquier setup</p>
+      <div className="flex items-center gap-5">
+        <div className="bg-white/[0.05] border border-white/10 rounded-xl p-3 w-44 animate-demo-tag-pop">
+          <div className="text-[10px] text-gray-400 mb-2 font-semibold uppercase tracking-wider">My Set · 60'</div>
+          {['8A · Velvet Avenue', '8B · At Night', '9B · Tesla', '10B · Eternity', '9A · Innerbloom'].map((t, i) => (
+            <div key={i} className="text-[11px] text-gray-200 py-0.5 truncate">{t}</div>
+          ))}
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <svg className="w-10 h-10 text-blue-400 animate-demo-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+          <span className="text-[10px] text-blue-400 font-mono font-bold tracking-wider">.xml</span>
+        </div>
+        <div
+          className="bg-white/[0.05] border border-white/10 rounded-xl p-4 w-44 flex flex-col items-center animate-demo-tag-pop"
+          style={{ animationDelay: '600ms' }}
+        >
+          <div className="relative">
+            <span className="absolute inset-0 rounded-2xl bg-orange-500/40 animate-demo-ping-slow" />
+            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-black text-xl shadow-xl">R</div>
+          </div>
+          <div className="mt-2 text-sm text-white font-semibold">Rekordbox</div>
+          <div className="text-[10px] text-green-400 font-bold mt-0.5">✓ Importado</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DemoCTA() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center p-8 animate-fade-in z-10">
+      <div className="relative animate-bounce-subtle">
+        <div className="absolute inset-0 rounded-3xl bg-blue-500/50 blur-3xl" />
+        <img src="/logo.png" alt="" className="relative w-20 h-20 rounded-2xl ring-2 ring-white/20" />
+      </div>
+      <h2 className="mt-4 text-3xl md:text-4xl font-extrabold text-white text-center">Tu set perfecto en minutos</h2>
+      <p className="mt-2 text-sm text-gray-300">DJ Free App</p>
+      <div className="mt-5 px-6 py-2.5 rounded-2xl text-base font-bold text-white shadow-2xl shadow-blue-500/40 bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse">
+        Probá gratis
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const toast = useToast()
   useEffect(() => {
@@ -5387,13 +5695,7 @@ function App() {
       {demoVideoOpen && (
         <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-3xl">
-            <video
-              src="/feature-video.webm"
-              controls
-              autoPlay
-              playsInline
-              className="w-full rounded-2xl shadow-2xl ring-1 ring-white/10"
-            />
+            <DemoShowcase />
             <button
               onClick={() => setDemoVideoOpen(false)}
               className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-slate-800 border border-white/10 text-white hover:bg-slate-700 transition-colors flex items-center justify-center"
