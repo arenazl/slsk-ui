@@ -2259,7 +2259,11 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
           else if (navigator.userAgent.includes('Mac')) root = '~/Music/groove-new'
         }
         root = root.replace(/[\\/]+$/, '')
-        const sep = root.includes('\\') ? '\\' : '/'
+        // Windows DJ software (Rekordbox/Serato) needs backslashes; if the
+        // root contains drive letter (C:) and forward slashes, normalize.
+        const isWindows = /^[A-Z]:/i.test(root) || navigator.userAgent.includes('Windows')
+        if (isWindows) root = root.replace(/\//g, '\\')
+        const sep = isWindows ? '\\' : '/'
         const lines = ['#EXTM3U']
         for (const t of setTracks) {
           const dur = t.duration_est ? Math.round(t.duration_est * 60) : -1
