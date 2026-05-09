@@ -4197,7 +4197,7 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
 // =====================================================================
 function DemoShowcase() {
   const SCENES = 7
-  const D = [3000, 4500, 4500, 4500, 5500, 3500, 2500]
+  const D = [3000, 4500, 4500, 4500, 9500, 3500, 2500]
   const [scene, setScene] = useState(0)
   useEffect(() => {
     const t = setTimeout(() => setScene(s => (s + 1) % SCENES), D[scene])
@@ -4236,6 +4236,36 @@ function DemoShowcase() {
   )
 }
 
+// Faux app-shell topbar — makes a scene feel like a real app screenshot.
+function DemoAppHeader({ active }) {
+  const tabs = ['Discover', 'Biblioteca', 'Set', 'Mix']
+  return (
+    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 mb-3 rounded-lg bg-slate-900/60 border border-white/10 backdrop-blur-sm">
+      <img src="/logo.png" alt="" className="w-4 h-4 rounded" />
+      <span className="text-[10px] text-white font-bold">DJ Free App</span>
+      <div className="flex-1 flex justify-center gap-0.5">
+        {tabs.map(t => (
+          <span
+            key={t}
+            className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-colors ${
+              t === active
+                ? 'bg-blue-500 text-white shadow-md shadow-blue-500/30'
+                : 'text-gray-500'
+            }`}
+          >
+            {t}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-500/70" />
+        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500/70" />
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500/70" />
+      </div>
+    </div>
+  )
+}
+
 function DemoIntro() {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center animate-fade-in z-10">
@@ -4266,7 +4296,8 @@ function DemoSources() {
     { title: 'Tusa', artist: 'Karol G', bpm: 100, k: '7B', g: 'Latin Pop' },
   ]
   return (
-    <div className="absolute inset-0 flex flex-col p-6 md:p-8 animate-fade-in z-10">
+    <div className="absolute inset-0 flex flex-col p-5 md:p-7 animate-fade-in z-10">
+      <DemoAppHeader active="Discover" />
       <h2 className="text-xl md:text-2xl font-bold text-white text-center mb-1">Listas directas de <span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span></h2>
       <p className="text-xs text-gray-400 text-center mb-5">EDM · POP · LATIN — top charts en vivo</p>
       <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
@@ -4314,7 +4345,9 @@ function DemoDownload() {
     { name: 'Tinlicker - Fractal.mp3', size: '12MB', fmt: 'MP3', dur: '1.6s' },
   ]
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 md:p-8 animate-fade-in z-10">
+    <div className="absolute inset-0 flex flex-col p-5 md:p-7 animate-fade-in z-10">
+      <DemoAppHeader active="Discover" />
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
       <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Descarga automática</h2>
       <p className="text-xs text-gray-400 mb-5">Click → SoulSeek busca y baja en background · FLAC / MP3 / WAV</p>
       <div className="w-full max-w-2xl space-y-2.5">
@@ -4345,6 +4378,7 @@ function DemoDownload() {
           </div>
         ))}
       </div>
+      </div>
     </div>
   )
 }
@@ -4358,7 +4392,9 @@ function DemoLibrary() {
     { artist: 'Solomun', title: 'Customer Is King', bpm: 120, k: '7A', stars: 4 },
   ]
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 md:p-8 animate-fade-in z-10">
+    <div className="absolute inset-0 flex flex-col p-5 md:p-7 animate-fade-in z-10">
+      <DemoAppHeader active="Biblioteca" />
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
       <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Biblioteca dinámica</h2>
       <p className="text-xs text-gray-400 mb-5">Análisis automático de BPM, Camelot Key y rating</p>
       <div className="relative w-full max-w-2xl">
@@ -4393,54 +4429,158 @@ function DemoLibrary() {
           ))}
         </div>
       </div>
+      </div>
     </div>
   )
 }
 
+// Set Builder — the killer feature scene. Cycles through 4 generation methods
+// (Camelot / Energy / Genre / Peak) showing how the same library produces
+// 4 different orderings. Each method ~2s on screen.
 function DemoSetBuilder() {
-  const tracks = [
-    { name: 'Velvet Avenue', k: '8A', bpm: 122 },
-    { name: 'At Night', k: '8B', bpm: 124 },
-    { name: 'Tesla', k: '9B', bpm: 126 },
-    { name: 'Eternity', k: '10B', bpm: 128 },
-    { name: 'Innerbloom', k: '9A', bpm: 130 },
+  const TRACKS = [
+    { name: 'Velvet Avenue', artist: 'Aname',     k: '8A',  bpm: 122, energy: 5, genre: 'Deep House' },
+    { name: 'At Night',      artist: 'Anyma',     k: '8B',  bpm: 124, energy: 7, genre: 'Mel. Techno' },
+    { name: 'Tesla',         artist: 'Mau P',     k: '9B',  bpm: 128, energy: 8, genre: 'Tech House' },
+    { name: 'Eternity',      artist: 'Anyma',     k: '10B', bpm: 128, energy: 9, genre: 'Mel. Techno' },
+    { name: 'Innerbloom',    artist: 'RÜFÜS',     k: '9A',  bpm: 122, energy: 6, genre: 'Mel. House' },
   ]
+  // Per-method ordering of TRACKS (indices)
+  const METHODS = [
+    {
+      id: 'camelot',
+      label: '🎯 Camelot',
+      desc: 'Mixing armónico — keys ±1 en la rueda',
+      order: [0, 1, 2, 3, 4],         // 8A → 8B → 9B → 10B → 9A
+      color: 'purple',
+    },
+    {
+      id: 'energy',
+      label: '⚡ Energy',
+      desc: 'Curva progresiva — energy 5 → 9',
+      order: [0, 4, 1, 2, 3],         // 5, 6, 7, 8, 9
+      color: 'yellow',
+    },
+    {
+      id: 'genre',
+      label: '🎭 Genre',
+      desc: 'Agrupado por género y subgéneros vecinos',
+      order: [0, 4, 1, 3, 2],         // Deep → MelHouse → MelTechno → MelTechno → Tech
+      color: 'pink',
+    },
+    {
+      id: 'peak',
+      label: '📈 Peak',
+      desc: 'Estructura DJ pro: warmup → peak → cooldown',
+      order: [0, 1, 3, 2, 4],         // 5, 7, 9, 8, 6
+      color: 'orange',
+    },
+  ]
+
+  const [stage, setStage] = useState(-1) // -1 = intro, 0..3 = method showcase
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setStage(s => (s >= METHODS.length - 1 ? s : s + 1))
+    }, stage === -1 ? 1500 : 2000)
+    return () => clearTimeout(t)
+  }, [stage])
+
+  const activeMethod = stage >= 0 ? METHODS[stage] : null
+  const orderedTracks = activeMethod ? activeMethod.order.map(i => TRACKS[i]) : TRACKS
+
+  const colorMap = {
+    purple: { chip: 'bg-purple-500/30 border-purple-400/60 text-purple-200 shadow-purple-500/30', ring: 'ring-purple-400/60', text: 'text-purple-300' },
+    yellow: { chip: 'bg-yellow-500/30 border-yellow-400/60 text-yellow-200 shadow-yellow-500/30', ring: 'ring-yellow-400/60', text: 'text-yellow-300' },
+    pink:   { chip: 'bg-pink-500/30 border-pink-400/60 text-pink-200 shadow-pink-500/30',         ring: 'ring-pink-400/60',   text: 'text-pink-300' },
+    orange: { chip: 'bg-orange-500/30 border-orange-400/60 text-orange-200 shadow-orange-500/30', ring: 'ring-orange-400/60', text: 'text-orange-300' },
+  }
+
   return (
-    <div className="absolute inset-0 flex flex-col p-5 md:p-7 animate-fade-in z-10">
-      <h2 className="text-xl md:text-2xl font-bold text-white text-center mb-1">Set automático</h2>
-      <p className="text-xs text-gray-400 text-center mb-3">Camelot · Energy · Genre · Peak — 4 estilos de mix</p>
-      <div className="flex justify-center gap-1.5 mb-3 flex-wrap">
-        <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 font-bold">60'</span>
-        <span className="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 font-bold">🎯 Camelot</span>
-        <span className="text-[11px] px-2.5 py-1 rounded-full bg-yellow-500/20 border border-yellow-400/40 text-yellow-300 font-bold">★★★★★</span>
-        <span className="text-[11px] px-2.5 py-1 rounded-full bg-pink-500/20 border border-pink-400/40 text-pink-300 font-bold">Tech House</span>
+    <div className="absolute inset-0 flex flex-col p-4 md:p-6 animate-fade-in z-10">
+      <DemoAppHeader active="Set" />
+      <div className="text-center mb-2">
+        <h2 className="text-lg md:text-xl font-extrabold text-white">Set generado <span className="text-blue-400">automáticamente</span></h2>
+        <p className="text-[11px] text-gray-400">4 estilos de mix · resultado en 1 click</p>
       </div>
-      <div className="flex-1 grid grid-cols-5 gap-2 mb-3 min-h-0">
-        {tracks.map((t, i) => (
-          <div
-            key={i}
-            className="bg-white/[0.05] border border-white/10 rounded-xl p-2 flex flex-col items-center justify-between animate-demo-tag-pop"
-            style={{ animationDelay: `${i * 400}ms` }}
-          >
-            <div className="text-[10px] text-gray-300 text-center truncate w-full" title={t.name}>{t.name}</div>
-            <div className="my-1.5 w-11 h-11 rounded-full bg-gradient-to-br from-purple-500/40 to-blue-500/40 border border-purple-400/50 flex items-center justify-center shadow-lg shadow-purple-500/30">
-              <span className="text-xs font-extrabold text-white font-mono">{t.k}</span>
+
+      {/* Filter row (always visible) */}
+      <div className="flex flex-wrap justify-center gap-1.5 mb-2">
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 font-bold">60'</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-400/40 text-yellow-300 font-bold">★★★★★</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 font-bold">Tech House</span>
+      </div>
+
+      {/* Method chips — active one highlighted */}
+      <div className="flex justify-center gap-1.5 mb-2">
+        {METHODS.map((m, i) => {
+          const isActive = stage === i
+          const c = colorMap[m.color]
+          return (
+            <span
+              key={m.id}
+              className={`text-[11px] px-2.5 py-1 rounded-full border font-bold transition-all duration-300 ${
+                isActive
+                  ? `${c.chip} shadow-lg scale-110`
+                  : 'bg-white/[0.04] border-white/10 text-gray-500'
+              }`}
+            >
+              {m.label}
+            </span>
+          )
+        })}
+      </div>
+
+      {/* Active method description */}
+      <div className="text-center min-h-4 mb-2">
+        {activeMethod ? (
+          <p key={activeMethod.id} className={`text-[11px] font-semibold animate-fade-in ${colorMap[activeMethod.color].text}`}>
+            {activeMethod.desc}
+          </p>
+        ) : (
+          <p className="text-[11px] text-gray-500 animate-fade-in">Generando set…</p>
+        )}
+      </div>
+
+      {/* Track sequence — re-keyed by method so cards re-animate on stage change */}
+      <div key={activeMethod?.id || 'intro'} className="flex-1 grid grid-cols-5 gap-1.5 mb-2 min-h-0">
+        {orderedTracks.map((t, i) => {
+          const c = activeMethod ? colorMap[activeMethod.color] : colorMap.purple
+          return (
+            <div
+              key={`${activeMethod?.id || 'intro'}-${i}`}
+              className={`bg-white/[0.05] border border-white/10 rounded-lg p-1.5 flex flex-col items-center justify-between animate-demo-tag-pop ring-1 ${c.ring}`}
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              <div className="text-[9px] text-gray-300 text-center truncate w-full font-semibold" title={t.name}>{t.name}</div>
+              <div className="text-[8px] text-gray-500 truncate w-full text-center">{t.artist}</div>
+              <div className="my-1 w-9 h-9 rounded-full bg-gradient-to-br from-purple-500/40 to-blue-500/40 border border-purple-400/50 flex items-center justify-center shadow-lg shadow-purple-500/30">
+                <span className="text-[10px] font-extrabold text-white font-mono">{t.k}</span>
+              </div>
+              <div className="flex gap-1.5 text-[8px] font-mono">
+                <span className="text-orange-300">{t.bpm}</span>
+                <span className="text-yellow-300">⚡{t.energy}</span>
+              </div>
             </div>
-            <div className="text-[10px] text-gray-400 font-mono">{t.bpm}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-[11px] text-gray-300">
-          <span className="font-semibold">⚡ Energy curve</span>
-          <span className="text-yellow-400 font-bold font-mono">5 → 9</span>
+
+      {/* Curve visualization — bars representing energy by position */}
+      <div className="space-y-1">
+        <div className="flex justify-between text-[10px] text-gray-300">
+          <span className="font-semibold">⚡ {activeMethod?.id === 'peak' ? 'Curva Peak' : 'Energy curve'}</span>
+          <span className="text-yellow-400 font-bold font-mono">
+            {orderedTracks.map(t => t.energy).join(' → ')}
+          </span>
         </div>
-        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full animate-demo-energy-fill" />
-        </div>
-        <div className="flex justify-between text-[11px] text-gray-300">
-          <span className="font-semibold">🥁 BPM</span>
-          <span className="text-blue-400 font-bold font-mono">122 → 130</span>
+        <div className="flex items-end gap-1 h-8">
+          {orderedTracks.map((t, i) => (
+            <div
+              key={`${activeMethod?.id || 'intro'}-bar-${i}`}
+              className="flex-1 rounded-t bg-gradient-to-t from-blue-500 via-purple-500 to-pink-500 transition-all duration-500 ease-out"
+              style={{ height: `${t.energy * 11}%` }}
+            />
+          ))}
         </div>
       </div>
     </div>
