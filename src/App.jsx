@@ -6202,9 +6202,11 @@ function App() {
     { key: 'error', label: 'Errores', count: errors },
   ].filter(t => t.key === 'all' || t.key === 'by_genre' || t.count > 0)
 
-  // Trial config (editable in Settings). Default: 7 days, demo/123, MP link.
-  const [trialDays, setTrialDays] = useState(() => parseInt(localStorage.getItem('trial_days') || '7', 10))
-  const [trialMpUrl, setTrialMpUrl] = useState(() => localStorage.getItem('trial_mp_url') || 'https://www.mercadopago.com.ar/')
+  // Trial config (editable in Settings, only by admin "look").
+  // Default: 2 days, demo/123, $4999 ARS/mes, MP + Cafecito links.
+  const [trialDays, setTrialDays] = useState(() => parseInt(localStorage.getItem('trial_days') || '2', 10))
+  const [trialAmount, setTrialAmount] = useState(() => parseInt(localStorage.getItem('trial_amount') || '4999', 10))
+  const [trialMpUrl, setTrialMpUrl] = useState(() => localStorage.getItem('trial_mp_url') || '')
   const [cafecitoUrl, setCafecitoUrl] = useState(() => localStorage.getItem('cafecito_url') || 'https://cafecito.app/djfreeapp')
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const [demoUser, setDemoUser] = useState(() => localStorage.getItem('demo_user') || 'demo')
@@ -6217,12 +6219,25 @@ function App() {
   const trialStart = parseInt(localStorage.getItem('trial_start') || '0', 10)
   const trialExpired = isDemo && trialStart > 0 && (Date.now() - trialStart) > trialDays * 86400000
 
-  // Trial expired → boot to MercadoPago
+  // Trial expired → open the upgrade modal (no redirect, user picks how to pay)
   useEffect(() => {
-    if (trialExpired) {
-      window.location.href = trialMpUrl
+    if (trialExpired) setUpgradeModalOpen(true)
+  }, [trialExpired])
+
+  // Every time a demo session starts, auto-show the upgrade prompt once.
+  // This nudges them toward subscribing on each login (per session, not per click).
+  useEffect(() => {
+    if (!isDemo) return
+    const key = `upgrade_shown_${authUser?.user || ''}_${trialStart || ''}`
+    if (!sessionStorage.getItem(key)) {
+      // Small delay so the app finishes loading before the modal pops.
+      const t = setTimeout(() => { setUpgradeModalOpen(true); sessionStorage.setItem(key, '1') }, 1500)
+      return () => clearTimeout(t)
     }
-  }, [trialExpired, trialMpUrl])
+  }, [isDemo, authUser?.user, trialStart])
+
+  // Admin can edit settings — only the "look" account.
+  const isAdmin = !!authUser && (authUser.user === 'look' || authUser.user === 'Look' || authUser.role === 'admin')
 
   // Tutorial state — triggered explicitly from LoginScreen "Entrar como invitado".
   const [showTutorial, setShowTutorial] = useState(false)
@@ -6289,6 +6304,125 @@ function App() {
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
+          </div>
+        </div>
+      )}
+      {upgradeModalOpen && (
+        <div className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => !trialExpired && setUpgradeModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl">
+            {/* Animated gradient bg */}
+            <div className="absolute inset-0 -m-8 overflow-hidden pointer-events-none">
+              <div className="absolute -top-20 -left-20 w-96 h-96 rounded-full bg-blue-600/30 blur-3xl animate-blob" />
+              <div className="absolute -bottom-20 -right-20 w-96 h-96 rounded-full bg-purple-600/30 blur-3xl animate-blob animation-delay-2000" />
+            </div>
+
+            <div className="relative bg-[var(--bg-panel)] border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8 animate-fade-in-up">
+              {!trialExpired && (
+                <button
+                  onClick={() => setUpgradeModalOpen(false)}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all"
+                  aria-label="Cerrar"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
+
+              <div className="text-center mb-6">
+                <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 items-center justify-center mb-3 shadow-lg shadow-blue-500/30 animate-bounce-subtle">
+                  <span className="text-3xl">⚡</span>
+                </div>
+                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
+                  {trialExpired ? 'Tu prueba terminó' : 'Subí a Premium'}
+                </h2>
+                <p className="text-sm text-[var(--text-muted)]">
+                  {trialExpired
+                    ? 'Para seguir usando DJ Free App, elegí cómo querés bancar el proyecto:'
+                    : 'Apoyá DJ Free App y desbloqueá todo sin límite de tiempo.'}
+                </p>
+              </div>
+
+              {/* Features list */}
+              <div className="grid grid-cols-2 gap-2 mb-6 text-xs md:text-sm">
+                {[
+                  { icon: '∞', text: 'Sin límite de tiempo' },
+                  { icon: '🎯', text: 'Sets ilimitados' },
+                  { icon: '🎚️', text: 'Mix Editor completo' },
+                  { icon: '☁️', text: 'Sync entre dispositivos' },
+                  { icon: '⬇️', text: 'Downloads ilimitados' },
+                  { icon: '💜', text: 'Bancás el proyecto' },
+                ].map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[var(--text-secondary)]">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] flex items-center justify-center text-sm">{f.icon}</span>
+                    {f.text}
+                  </div>
+                ))}
+              </div>
+
+              {/* Payment options — 2 cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* MercadoPago */}
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE}/api/mp/checkout`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user: authUser?.user || authUser?.name }),
+                      })
+                      const data = await res.json()
+                      if (data.init_point) window.location.href = data.init_point
+                      else if (trialMpUrl) window.location.href = trialMpUrl
+                      else toast('Error iniciando checkout', 'error', 3000)
+                    } catch (e) {
+                      console.error('MP checkout error', e)
+                      if (trialMpUrl) window.location.href = trialMpUrl
+                    }
+                  }}
+                  className="group relative overflow-hidden rounded-2xl p-5 text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
+                  style={{ background: 'linear-gradient(135deg, #00b1ea, #0080c9)' }}
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+                  <div className="relative">
+                    <div className="text-[10px] uppercase tracking-wider text-white/70 font-semibold mb-1">Suscripción mensual</div>
+                    <div className="text-2xl font-bold text-white mb-1">${trialAmount.toLocaleString('es-AR')} ARS<span className="text-sm font-normal text-white/70">/mes</span></div>
+                    <div className="text-xs text-white/80 mb-3">MercadoPago · cancelás cuando quieras</div>
+                    <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/15 backdrop-blur rounded-full px-3 py-1">
+                      Suscribirme
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M9 5l7 7-7 7"/></svg>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Cafecito */}
+                <a
+                  href={cafecitoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group relative overflow-hidden rounded-2xl p-5 text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl block"
+                  style={{ background: 'linear-gradient(135deg, #6c3ce0, #a855f7)' }}
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+                  <div className="relative">
+                    <div className="text-[10px] uppercase tracking-wider text-white/70 font-semibold mb-1">Tip único</div>
+                    <div className="text-2xl font-bold text-white mb-1">☕ Cafecito<span className="text-sm font-normal text-white/70"> · vos elegís</span></div>
+                    <div className="text-xs text-white/80 mb-3">Pago único $100 ARS o más · sin recurrencia</div>
+                    <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/15 backdrop-blur rounded-full px-3 py-1">
+                      Apoyar
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M9 5l7 7-7 7"/></svg>
+                    </div>
+                  </div>
+                </a>
+              </div>
+
+              {trialExpired && (
+                <button
+                  onClick={() => { localStorage.setItem('trial_start', String(Date.now() - (trialDays - 1) * 86400000)); setUpgradeModalOpen(false); window.location.reload() }}
+                  className="w-full mt-4 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  Probar 1 día más
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -6850,17 +6984,16 @@ function App() {
             </div>
           )}
           {isDemo && (
-            <a
-              href={trialMpUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all"
-              style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
-              title={trialStart > 0 ? `Trial: ${Math.max(0, Math.ceil((trialStart + trialDays * 86400000 - Date.now()) / 86400000))} días restantes` : 'Subscribirse'}
+            <button
+              onClick={() => setUpgradeModalOpen(true)}
+              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all overflow-hidden group"
+              style={{ background: 'linear-gradient(135deg, #3b82f6, #a855f7, #ec4899)' }}
+              title={trialStart > 0 ? `Trial: ${Math.max(0, Math.ceil((trialStart + trialDays * 86400000 - Date.now()) / 86400000))} días restantes` : 'Unite a la comunidad'}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              Subscribirse
-            </a>
+              <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+              <span className="relative animate-pulse">✨</span>
+              <span className="relative">Unite a la comunidad</span>
+            </button>
           )}
         </div>
       </header>
