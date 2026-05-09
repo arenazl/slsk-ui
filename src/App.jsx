@@ -190,7 +190,8 @@ async function agentFetch(path, opts = {}) {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(30000), ...opts })
     if (!res.ok) {
-      const msg = await res.text().catch(() => res.statusText)
+      // Clone before reading body so callers can still call res.json()/text()
+      const msg = await res.clone().text().catch(() => res.statusText)
       window.dispatchEvent(new CustomEvent('agent-error', { detail: `Agent ${res.status}: ${msg.slice(0, 120)}` }))
     }
     return res
