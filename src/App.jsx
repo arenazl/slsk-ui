@@ -4356,12 +4356,14 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
 // =====================================================================
 function DemoShowcase() {
   const SCENES = 7
-  const D = [3000, 4500, 4500, 4500, 9500, 3500, 2500]
+  // +3s per scene per user feedback ("no pases tan rapido")
+  const D = [6000, 7500, 7500, 7500, 12500, 6500, 5500]
   const [scene, setScene] = useState(0)
   const [muted, setMuted] = useState(false)
   const audioRef = useRef(null)
   useEffect(() => {
-    const t = setTimeout(() => setScene(s => (s + 1) % SCENES), D[scene])
+    if (scene >= SCENES - 1) return // one-shot: freeze on the CTA
+    const t = setTimeout(() => setScene(s => s + 1), D[scene])
     return () => clearTimeout(t)
   }, [scene])
   // Try to autoplay unmuted on mount. The click on "Ver demo" counts as a
@@ -4724,6 +4726,10 @@ function DemoLibrary() {
   return (
     <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
       <DemoAppHeader active="Biblioteca" />
+      <div className="text-center mb-2">
+        <h2 className="text-base md:text-lg font-extrabold text-white">Biblioteca clasificada automáticamente <span className="text-purple-400">por IA</span></h2>
+        <p className="text-[10px] text-gray-400"><span className="text-white font-bold">305 tracks</span> · BPM · Camelot Key · género — sin tocar nada</p>
+      </div>
       {/* Stats bar replicando el header real "305 tracks · Cards · Join · Tracks · All ★...★★★★★ · Organizar (3) · Keys (115) · Buscar..." */}
       <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 mb-2 rounded-lg bg-slate-900/60 border border-white/10 overflow-hidden">
         <span className="text-[10px] text-gray-400"><span className="text-white font-bold">305</span> tracks</span>
@@ -4784,14 +4790,6 @@ function DemoLibrary() {
             </div>
           </div>
         ))}
-      </div>
-      <div className="flex-shrink-0 mt-2 text-center">
-        <p className="text-[11px] text-white font-bold">
-          Biblioteca clasificada automáticamente <span className="text-purple-300">por IA</span>
-        </p>
-        <p className="text-[10px] text-gray-400">
-          <span className="text-white font-bold">305 tracks</span> · BPM · Camelot Key · género — sin tocar nada
-        </p>
       </div>
     </div>
   )
