@@ -4388,8 +4388,9 @@ function DemoShowcase() {
 
   return (
     <div className="relative w-full aspect-video bg-slate-950 rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-2xl">
-      {/* Background music — KREAM & Script · Turn Up The Dose (32s loop, demo only) */}
-      <audio ref={audioRef} src="/demo/bg.mp3" loop muted={muted} preload="auto" />
+      {/* Background music — KREAM & Script · Turn Up The Dose (32s loop, demo only).
+          autoPlay + JS .play() fallback maximize chances Chrome honors the user-gesture from "Ver demo" click. */}
+      <audio ref={audioRef} src="/demo/bg.mp3" loop autoPlay muted={muted} preload="auto" />
       {/* Mute toggle */}
       <button
         onClick={toggleMute}
@@ -5068,7 +5069,261 @@ function DemoCTA() {
   )
 }
 
+// =====================================================================
+// DemoReels — VERTICAL 9:16 (1080×1920) demo for Instagram/TikTok reels.
+// NOT exposed via UI. Activated by `?reels=1` query param so playwright
+// can record it natively at 1080×1920 (no upscale, no letterbox crop).
+// 7 scenes designed for portrait: full-screen, huge text, single focus.
+// =====================================================================
+function DemoReels() {
+  const SCENES = 7
+  const D = [3000, 4000, 4000, 4000, 5500, 4000, 3000]
+  const [scene, setScene] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setScene(s => (s + 1) % SCENES), D[scene])
+    return () => clearTimeout(t)
+  }, [scene])
+
+  return (
+    <div className="fixed inset-0 bg-slate-950 overflow-hidden">
+      {/* Background blobs (always visible) */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-60 -left-60 w-[40rem] h-[40rem] rounded-full bg-blue-600/30 blur-3xl animate-blob" />
+        <div className="absolute top-1/3 -right-60 w-[40rem] h-[40rem] rounded-full bg-purple-600/30 blur-3xl animate-blob animation-delay-2000" />
+        <div className="absolute -bottom-60 left-1/4 w-[36rem] h-[36rem] rounded-full bg-pink-600/25 blur-3xl animate-blob animation-delay-4000" />
+      </div>
+      {scene === 0 && <ReelIntro />}
+      {scene === 1 && <ReelDiscover />}
+      {scene === 2 && <ReelDownload />}
+      {scene === 3 && <ReelLibrary />}
+      {scene === 4 && <ReelSet />}
+      {scene === 5 && <ReelMix />}
+      {scene === 6 && <ReelCTA />}
+      {/* Bottom progress dots */}
+      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+        {Array.from({ length: SCENES }).map((_, i) => (
+          <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === scene ? 'w-12 bg-white' : 'w-2 bg-white/30'}`} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ReelIntro() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center px-12 animate-fade-in z-10">
+      <div className="relative animate-bounce-subtle">
+        <div className="absolute inset-0 rounded-[3rem] bg-blue-500/60 blur-3xl scale-150" />
+        <img src="/logo.png" alt="" className="relative w-72 h-72 rounded-[3rem] ring-4 ring-white/20" />
+      </div>
+      <h1 className="mt-12 text-9xl font-black text-white tracking-tight text-center leading-none animate-fade-in-up">DJ Free<br/>App</h1>
+      <p className="mt-8 text-3xl text-gray-200 font-semibold text-center animate-fade-in-up">Tu workflow completo de DJ</p>
+      <p className="mt-2 text-2xl text-blue-400 font-bold text-center animate-fade-in-up">automatizado · gratis</p>
+    </div>
+  )
+}
+
+function ReelDiscover() {
+  const tracks = [
+    { n: 'Innerbloom',    a: 'RÜFÜS DU SOL', bpm: 122, k: '6B' },
+    { n: 'Tesla',         a: 'Mau P',         bpm: 128, k: '4A' },
+    { n: 'At Night',      a: 'Anyma',         bpm: 124, k: '8A' },
+  ]
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
+      <p className="text-2xl font-bold text-blue-400 uppercase tracking-widest mb-4 animate-fade-in-up">Discover</p>
+      <h2 className="text-7xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
+        Catálogo<br/><span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span>
+      </h2>
+      <p className="text-3xl text-gray-300 mb-12 animate-fade-in-up">renovado <span className="text-purple-300 font-bold">cada semana</span></p>
+      <div className="w-full space-y-4">
+        {tracks.map((t, i) => (
+          <div
+            key={i}
+            className="bg-white/[0.06] border border-white/10 rounded-3xl px-6 py-5 flex items-center gap-5 animate-demo-tag-pop"
+            style={{ animationDelay: `${i * 250}ms` }}
+          >
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-black text-2xl shadow-xl flex-shrink-0">{t.bpm}</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-3xl font-bold text-white truncate">{t.n}</div>
+              <div className="text-xl text-gray-400 truncate">{t.a}</div>
+            </div>
+            <span className="text-2xl px-4 py-2 rounded-xl bg-orange-500/20 text-orange-300 font-bold font-mono flex-shrink-0">{t.k}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ReelDownload() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
+      <p className="text-2xl font-bold text-green-400 uppercase tracking-widest mb-4 animate-fade-in-up">Download</p>
+      <h2 className="text-7xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
+        Descarga<br/><span className="text-blue-400">directa</span>
+      </h2>
+      <p className="text-3xl text-gray-300 mb-12 animate-fade-in-up">calidad <span className="text-green-300 font-bold">profesional</span></p>
+      <div className="w-full space-y-5">
+        {[
+          { n: 'Anyma · Eternity.flac', s: '67MB', f: 'FLAC' },
+          { n: 'RÜFÜS · Innerbloom.flac', s: '62MB', f: 'FLAC' },
+          { n: 'Tinlicker · Fractal.mp3', s: '12MB', f: 'MP3' },
+        ].map((t, i) => (
+          <div
+            key={i}
+            className="bg-white/[0.06] border border-white/10 rounded-3xl p-6 animate-demo-tag-pop"
+            style={{ animationDelay: `${i * 250}ms` }}
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-blue-500/30 flex items-center justify-center flex-shrink-0">
+                <svg className="w-7 h-7 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-2xl text-white font-semibold truncate">{t.n}</div>
+                <div className="text-lg text-gray-500">{t.s}</div>
+              </div>
+              <span className="text-xl px-4 py-1.5 rounded-xl bg-green-500/30 text-green-300 font-black flex-shrink-0">{t.f}</span>
+            </div>
+            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-demo-progress" style={{ animationDelay: `${i * 250}ms` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-10 text-2xl text-white font-bold text-center">FLAC · MP3 320k · WAV — al instante</p>
+    </div>
+  )
+}
+
+function ReelLibrary() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
+      <p className="text-2xl font-bold text-purple-400 uppercase tracking-widest mb-4 animate-fade-in-up">Library</p>
+      <h2 className="text-7xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
+        Biblioteca<br/>clasificada<br/><span className="text-purple-400">por IA</span>
+      </h2>
+      <p className="text-3xl text-gray-300 mb-12 animate-fade-in-up">BPM · Camelot · género — <span className="text-white font-bold">automático</span></p>
+      <div className="grid grid-cols-2 gap-4 w-full">
+        {[
+          { g: 'Tech House',     n: 92, color: 'from-blue-500 to-blue-700' },
+          { g: 'Deep House',     n: 47, color: 'from-green-500 to-green-700' },
+          { g: 'Melodic House',  n: 41, color: 'from-purple-500 to-purple-700' },
+          { g: 'Progressive',    n: 20, color: 'from-orange-500 to-orange-700' },
+          { g: 'Afro House',     n: 18, color: 'from-pink-500 to-pink-700' },
+          { g: 'Mel. Techno',    n: 17, color: 'from-cyan-500 to-cyan-700' },
+        ].map((g, i) => (
+          <div
+            key={g.g}
+            className={`bg-gradient-to-br ${g.color} rounded-2xl p-5 animate-demo-tag-pop shadow-xl`}
+            style={{ animationDelay: `${i * 150}ms` }}
+          >
+            <div className="text-4xl font-black text-white">{g.n}</div>
+            <div className="text-lg text-white/90 font-bold">{g.g}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-12 text-3xl font-black text-white text-center">305 tracks · sin tocar nada</p>
+    </div>
+  )
+}
+
+function ReelSet() {
+  const METHODS = [
+    { id: 0, label: '🎯 Camelot', desc: 'Mixing armónico', color: 'purple' },
+    { id: 1, label: '⚡ Energy',   desc: 'Curva 5 → 9',     color: 'yellow' },
+    { id: 2, label: '🎭 Genre',    desc: 'Por género',      color: 'pink'   },
+    { id: 3, label: '📈 Peak',     desc: 'Warmup → Peak',   color: 'orange' },
+  ]
+  const [active, setActive] = useState(0)
+  useEffect(() => {
+    if (active >= METHODS.length - 1) return
+    const t = setTimeout(() => setActive(a => a + 1), 1100)
+    return () => clearTimeout(t)
+  }, [active])
+  const colorMap = {
+    purple: 'from-purple-500 to-purple-700 shadow-purple-500/50',
+    yellow: 'from-yellow-500 to-orange-500 shadow-yellow-500/50',
+    pink:   'from-pink-500 to-pink-700 shadow-pink-500/50',
+    orange: 'from-orange-500 to-red-600 shadow-orange-500/50',
+  }
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
+      <p className="text-2xl font-bold text-yellow-400 uppercase tracking-widest mb-4 animate-fade-in-up">Killer feature</p>
+      <h2 className="text-8xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
+        Asistente <span className="text-blue-400">IA</span><br/>de playlists
+      </h2>
+      <p className="text-3xl text-gray-300 mb-12 animate-fade-in-up">4 estilos · resultado en <span className="text-yellow-300 font-bold">1 click</span></p>
+      <div className="grid grid-cols-2 gap-5 w-full">
+        {METHODS.map((m, i) => (
+          <div
+            key={m.id}
+            className={`rounded-3xl p-8 transition-all duration-500 ${
+              active === i
+                ? `bg-gradient-to-br ${colorMap[m.color]} shadow-2xl scale-105`
+                : 'bg-white/[0.04] border border-white/10'
+            }`}
+          >
+            <div className="text-4xl font-black text-white mb-2">{m.label}</div>
+            <div className={`text-2xl font-bold ${active === i ? 'text-white/90' : 'text-gray-400'}`}>{m.desc}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-12 text-3xl font-black text-white text-center">sets compatibles · sin pensar</p>
+    </div>
+  )
+}
+
+function ReelMix() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center px-10 animate-fade-in z-10">
+      <p className="text-2xl font-bold text-pink-400 uppercase tracking-widest mb-4 animate-fade-in-up">Mix Editor</p>
+      <h2 className="text-7xl font-black text-white text-center leading-tight mb-3 animate-fade-in-up">
+        Previsualizá<br/>tu mix <span className="text-blue-400">antes<br/>de tocarlo</span>
+      </h2>
+      <p className="text-3xl text-gray-300 mb-10 animate-fade-in-up">crossfading auto · beatmatching</p>
+      {/* Vertical timeline mockup */}
+      <div className="w-full bg-slate-900/80 border border-white/10 rounded-3xl p-6 space-y-3 animate-demo-tag-pop">
+        {[
+          { t: 'Anyma · Eternity', c: 'from-blue-500 to-blue-700',     k: '8A' },
+          { t: 'Mau P · Tesla',    c: 'from-purple-500 to-purple-700', k: '8B' },
+          { t: 'Tinlicker · Fractal', c: 'from-orange-500 to-red-600', k: '9B' },
+          { t: 'RÜFÜS · Innerbloom', c: 'from-green-500 to-green-700', k: '10B' },
+        ].map((tr, i) => (
+          <div key={i} className={`bg-gradient-to-r ${tr.c} rounded-2xl px-6 py-5 flex items-center justify-between shadow-xl`}>
+            <span className="text-2xl font-black text-white truncate">{tr.t}</span>
+            <span className="text-2xl font-mono font-black text-white/90 ml-4">{tr.k}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-8 text-3xl font-black text-white text-center">Export <span className="text-blue-400">MP3 320k</span> + <span className="text-orange-400">Rekordbox</span></p>
+    </div>
+  )
+}
+
+function ReelCTA() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center px-12 animate-fade-in z-10">
+      <div className="relative animate-bounce-subtle">
+        <div className="absolute inset-0 rounded-[3rem] bg-blue-500/60 blur-3xl scale-150" />
+        <img src="/logo.png" alt="" className="relative w-56 h-56 rounded-[3rem] ring-4 ring-white/20" />
+      </div>
+      <h2 className="mt-12 text-8xl font-black text-white tracking-tight text-center leading-none">Probá<br/><span className="text-blue-400">gratis</span></h2>
+      <p className="mt-8 text-4xl text-gray-200 font-bold text-center">DJ Free App</p>
+      <p className="mt-3 text-2xl text-blue-400 font-mono font-bold">djfreeapp.ar</p>
+      <div className="mt-12 px-12 py-6 rounded-3xl text-3xl font-black text-white shadow-2xl shadow-blue-500/50 bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse">
+        Empezá ahora →
+      </div>
+    </div>
+  )
+}
+
 function App() {
+  // Hidden recording route — bypasses auth so playwright can capture the
+  // vertical reels demo at 1080×1920. Not exposed in UI.
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('reels') === '1') {
+    return <DemoReels />
+  }
   const toast = useToast()
   useEffect(() => {
     const handler = (e) => toast(e.detail, 'error', 4000)
@@ -6294,15 +6549,15 @@ function App() {
         />
       )}
       {demoVideoOpen && (
-        <div className="fixed inset-0 z-[80] bg-black backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl">
+        <div className="fixed inset-0 z-[80] bg-black flex items-center justify-center animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full h-full flex items-center justify-center">
             <DemoShowcase />
             <button
               onClick={() => setDemoVideoOpen(false)}
-              className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-slate-800 border border-white/10 text-white hover:bg-slate-700 transition-colors flex items-center justify-center"
+              className="absolute top-4 right-4 z-40 w-10 h-10 rounded-full bg-slate-800/90 border border-white/10 text-white hover:bg-slate-700 transition-colors flex items-center justify-center backdrop-blur"
               aria-label="Cerrar"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         </div>
@@ -6746,7 +7001,7 @@ function App() {
             </div>
           )}
           <a
-            href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
+            href="https://djfreeapp.ar/GrooveSyncAgent.exe"
             className="hidden lg:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows)'}
           >
@@ -6962,7 +7217,7 @@ function App() {
                       Reportar bug
                     </a>
                     <a
-                      href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
+                      href="https://djfreeapp.ar/GrooveSyncAgent.exe"
                       onClick={() => setUserMenuOpen(false)}
                       className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3"
                     >
@@ -7066,7 +7321,7 @@ function App() {
               <div>
                 <div className="text-[10px] text-gray-500 uppercase font-bold mb-2">Agente</div>
                 <div className="flex items-center gap-2">
-                  <a href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
+                  <a href="https://djfreeapp.ar/GrooveSyncAgent.exe"
                     className="flex items-center gap-2 flex-1 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.98]">
                     <svg className="w-5 h-5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
                     <span className="text-xs text-[var(--text-secondary)]">Windows</span>
