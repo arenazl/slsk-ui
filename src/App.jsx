@@ -4377,100 +4377,216 @@ function DemoIntro() {
   )
 }
 
+// Discover — replica de la página "Melodic House" de Beatport: header grande
+// con track count + refresh + 3 album thumbs, tabs de género, "Preview
+// continuo" + chips de duración, lista de tracks con label + BPM + Key.
 function DemoSources() {
-  const beatport = [
-    { title: 'Innerbloom', artist: 'RÜFÜS DU SOL', bpm: 122, k: '6B', g: 'Melodic House' },
-    { title: 'Tesla', artist: 'Mau P', bpm: 128, k: '4A', g: 'Tech House' },
-    { title: 'At Night', artist: 'Anyma', bpm: 124, k: '8A', g: 'Mel. Techno' },
-  ]
-  const spotify = [
-    { title: 'Mónaco', artist: 'Bad Bunny', bpm: 102, k: '5A', g: 'Reggaeton' },
-    { title: 'Pepas', artist: 'Farruko', bpm: 130, k: '6A', g: 'Latin House' },
-    { title: 'Tusa', artist: 'Karol G', bpm: 100, k: '7B', g: 'Latin Pop' },
-  ]
-  return (
-    <div className="absolute inset-0 flex flex-col p-5 md:p-7 animate-fade-in z-10">
-      <DemoAppHeader active="Discover" />
-      <h2 className="text-xl md:text-2xl font-bold text-white text-center mb-1">Listas directas de <span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span></h2>
-      <p className="text-xs text-gray-400 text-center mb-5">EDM · POP · LATIN — top charts en vivo</p>
-      <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
-        <DemoTrackList title="BEATPORT · EDM" tracks={beatport} accent="blue" baseDelay={0} />
-        <DemoTrackList title="SPOTIFY · LATIN" tracks={spotify} accent="green" baseDelay={500} />
-      </div>
-    </div>
-  )
-}
-
-function DemoTrackList({ title, tracks, accent, baseDelay }) {
-  const dot = accent === 'blue' ? 'bg-blue-500' : 'bg-green-500'
-  const txt = accent === 'blue' ? 'text-blue-400' : 'text-green-400'
-  const tag = accent === 'blue' ? 'bg-blue-500/15 text-blue-300' : 'bg-green-500/15 text-green-300'
-  return (
-    <div className="flex flex-col gap-2 min-w-0">
-      <div className={`text-[10px] font-bold ${txt} uppercase tracking-widest flex items-center gap-1.5`}>
-        <span className={`w-2 h-2 rounded-full ${dot} animate-pulse`} />
-        {title}
-      </div>
-      {tracks.map((t, i) => (
-        <div
-          key={i}
-          className="bg-white/[0.05] border border-white/10 rounded-xl p-2.5 flex items-center gap-2.5 animate-demo-tag-pop"
-          style={{ animationDelay: `${baseDelay + i * 250}ms` }}
-        >
-          <div className={`w-9 h-9 rounded-lg ${tag} flex items-center justify-center text-[10px] font-bold flex-shrink-0`}>
-            {t.bpm}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white truncate">{t.title}</div>
-            <div className="text-[10px] text-gray-400 truncate">{t.artist}</div>
-          </div>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-gray-300 font-mono flex-shrink-0">{t.k}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function DemoDownload() {
   const tracks = [
-    { name: 'Anyma - Eternity (Extended Mix).flac', size: '67MB', fmt: 'FLAC', dur: '2.0s' },
-    { name: 'RÜFÜS DU SOL - Innerbloom.flac', size: '62MB', fmt: 'FLAC', dur: '2.4s' },
-    { name: 'Tinlicker - Fractal.mp3', size: '12MB', fmt: 'MP3', dur: '1.6s' },
+    { n: 'Hot Sauce (Extended)',    a: 'Kapuchon, Miss Monique',    label: 'AETERNA',  bpm: 129, k: 'Gb · 11A',  d: '5:36', state: 'dl',                           thumb: 'from-orange-500 to-red-700' },
+    { n: 'Be The One (Extended)',   a: 'Adam Port, Keinemusik',     label: 'Keinemusik', bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                           thumb: 'from-cyan-400 to-blue-600' },
+    { n: 'Recall (Extended Mix)',   a: 'HotLap',                    label: 'One Seven', bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done',  dot: true,             thumb: 'from-red-500 to-pink-700' },
+    { n: "Didn't Miss You (OG)",    a: 'Liva K',                    label: 'Magnifik',  bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',    highlight: true,       thumb: 'from-purple-500 to-blue-700' },
   ]
   return (
-    <div className="absolute inset-0 flex flex-col p-5 md:p-7 animate-fade-in z-10">
+    <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
       <DemoAppHeader active="Discover" />
-      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
-      <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Descarga automática</h2>
-      <p className="text-xs text-gray-400 mb-5">Click → SoulSeek busca y baja en background · FLAC / MP3 / WAV</p>
-      <div className="w-full max-w-2xl space-y-2.5">
+      {/* Hero header: "Melodic House" big + track count + refresh + album thumbs */}
+      <div className="flex-shrink-0 flex items-center gap-3 mb-2 px-1">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg md:text-xl font-extrabold text-white leading-tight">Melodic House</h2>
+          <p className="text-[10px] text-gray-400 flex items-center gap-1">
+            <span className="text-white font-bold">100</span> tracks · actualizado hoy 12:28
+            <svg className="w-2.5 h-2.5 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          </p>
+        </div>
+        <div className="flex gap-1 flex-shrink-0">
+          <div className="w-7 h-7 rounded bg-gradient-to-br from-orange-500 to-red-700 ring-1 ring-white/20" />
+          <div className="w-7 h-7 rounded bg-gradient-to-br from-cyan-400 to-blue-600 ring-1 ring-white/20" />
+          <div className="w-7 h-7 rounded bg-gradient-to-br from-red-500 to-pink-700 ring-1 ring-white/20" />
+        </div>
+      </div>
+
+      {/* Genre tabs */}
+      <div className="flex-shrink-0 flex items-center gap-2 mb-2 px-1 overflow-hidden text-[10px]">
+        <span className="text-gray-500">All</span>
+        <span className="text-blue-300 border-b-2 border-blue-400 pb-0.5 font-semibold">Melodic House</span>
+        <span className="text-gray-500">Mel. Techno</span>
+        <span className="text-gray-500">Tech House</span>
+        <span className="text-gray-500">Afro House</span>
+        <span className="text-gray-500">Deep House</span>
+        <span className="text-gray-500">Hip Hop</span>
+        <span className="text-gray-500">Nu Disco</span>
+      </div>
+
+      {/* Preview continuo + duration chips + Stop */}
+      <div className="flex-shrink-0 flex items-center gap-1.5 mb-2 px-1">
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/30 border border-purple-400/50 text-purple-200 font-bold flex items-center gap-1">
+          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          Preview continuo
+        </span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-blue-500/30 text-blue-200 font-bold">30s</span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded text-gray-400">60s</span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded text-gray-400">90s</span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded text-gray-400">120s</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/30 border border-red-400/50 text-red-200 font-bold flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+          Stop
+        </span>
+        <span className="text-[10px] text-gray-500 ml-1">100 tracks</span>
+      </div>
+
+      {/* Track list */}
+      <div className="flex-1 min-h-0 space-y-1 overflow-hidden">
         {tracks.map((t, i) => (
           <div
             key={i}
-            className="bg-white/[0.05] border border-white/10 rounded-xl p-3 animate-demo-tag-pop"
-            style={{ animationDelay: `${i * 250}ms` }}
+            className={`flex items-center gap-2 px-1.5 py-1 rounded animate-demo-tag-pop ${
+              t.highlight ? 'bg-green-500/[0.08] ring-1 ring-green-500/40' : ''
+            }`}
+            style={{ animationDelay: `${i * 200}ms` }}
           >
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
+            <span className="text-[9px] text-gray-500 font-mono w-3 flex-shrink-0">{i + 1}</span>
+            <div className={`w-7 h-7 rounded flex-shrink-0 bg-gradient-to-br ${t.thumb}`} />
+            <div className="flex-1 min-w-0">
+              <div className={`text-[10px] font-bold truncate flex items-center gap-1 ${t.highlight ? 'text-green-300' : 'text-white'}`}>
+                {t.n}
+                {t.dot && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs text-white truncate">{t.name}</div>
-                <div className="text-[10px] text-gray-500">{t.size} · ~{t.dur}</div>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-bold flex-shrink-0">{t.fmt}</span>
+              <div className="text-[9px] text-gray-400 truncate">{t.a}</div>
             </div>
-            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-demo-progress"
-                style={{ animationDelay: `${i * 250}ms` }}
-              />
-            </div>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.06] text-gray-300 font-semibold flex-shrink-0 hidden md:inline">Mel. H&T</span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.06] text-gray-400 flex-shrink-0 hidden md:inline">{t.label}</span>
+            <span className="text-[9px] text-gray-500 font-mono flex-shrink-0">{t.bpm}</span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 font-bold font-mono flex-shrink-0">{t.k}</span>
+            <span className="text-[9px] text-gray-500 font-mono flex-shrink-0 hidden md:inline">{t.d}</span>
+            <button
+              className={`text-[9px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                t.state === 'done'
+                  ? 'bg-green-500/30 text-green-300 border border-green-500/40'
+                  : 'bg-blue-500 text-white shadow-md shadow-blue-500/30'
+              }`}
+            >
+              {t.state === 'done' ? '✓ Descargado' : '↓ Descargar'}
+            </button>
           </div>
         ))}
       </div>
+
+      <div className="flex-shrink-0 mt-1 text-center">
+        <p className="text-[10px] text-gray-400">
+          Listas <span className="text-blue-400 font-bold">Beatport</span> + <span className="text-green-400 font-bold">Spotify</span> ·
+          <span className="text-purple-300 font-bold"> EDM · POP · LATIN</span> · top charts en vivo
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// Download — replica de la lista Discover + context menu popup mostrando
+// las opciones Autoplay 30s/60s/90s/120s + Radio + Compartir, mientras
+// las descargas avanzan en background con progress bars.
+function DemoDownload() {
+  const listRows = [
+    { n: 'Recall (Extended Mix)',     a: 'HotLap',  fmt: 'FLAC', state: 'done',  thumb: 'from-red-500 to-pink-700' },
+    { n: "Didn't Miss You (OG)",      a: 'Liva K',  fmt: 'FLAC', state: 'menu',  thumb: 'from-purple-500 to-blue-700', highlight: true },
+    { n: 'Spotlight (Original Mix)',  a: 'Andrea Oliva',           fmt: 'FLAC', state: 'dl', thumb: 'from-yellow-400 to-orange-600' },
+    { n: 'Pa Ca (Original Mix)',      a: 'Massano, Silver Panda',  fmt: 'FLAC', state: 'dl', thumb: 'from-cyan-400 to-blue-600' },
+  ]
+  const downloads = [
+    { name: 'Liva K - Didn\'t Miss You.flac',     size: '40MB', fmt: 'FLAC', progress: 88 },
+    { name: 'Andrea Oliva - Spotlight.flac',     size: '46MB', fmt: 'FLAC', progress: 54 },
+    { name: 'Massano - Pa Ca.flac',              size: '32MB', fmt: 'FLAC', progress: 22 },
+  ]
+  return (
+    <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
+      <DemoAppHeader active="Discover" />
+      <div className="text-center mb-2">
+        <h2 className="text-base md:text-lg font-extrabold text-white">Descarga automática <span className="text-blue-400">+ Preview Continuo</span></h2>
+        <p className="text-[10px] text-gray-400">Click derecho → opciones · descarga en background · FLAC / MP3 / WAV</p>
+      </div>
+
+      <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
+        {/* Left: track list with context menu popup */}
+        <div className="relative min-w-0">
+          <div className="space-y-1">
+            {listRows.map((t, i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-1.5 px-1.5 py-1 rounded animate-demo-tag-pop ${
+                  t.highlight ? 'bg-green-500/[0.08] ring-1 ring-green-500/40' : ''
+                }`}
+                style={{ animationDelay: `${i * 150}ms` }}
+              >
+                <span className="text-[9px] text-gray-500 font-mono w-3 flex-shrink-0">{i + 3}</span>
+                <div className={`w-6 h-6 rounded flex-shrink-0 bg-gradient-to-br ${t.thumb}`} />
+                <div className="flex-1 min-w-0">
+                  <div className={`text-[10px] font-bold truncate ${t.highlight ? 'text-green-300' : 'text-white'}`}>{t.n}</div>
+                  <div className="text-[9px] text-gray-400 truncate">{t.a}</div>
+                </div>
+                <span className="text-[8px] text-green-400 font-bold flex-shrink-0">{t.fmt}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Context menu popup overlay */}
+          <div className="absolute right-0 top-7 w-44 rounded-lg bg-slate-900 border border-white/15 shadow-2xl shadow-black/60 z-30 overflow-hidden animate-demo-tag-pop" style={{ animationDelay: '600ms' }}>
+            <div className="px-2.5 py-1.5 border-b border-white/10 text-[9px] text-white font-bold truncate">Liva K · Didn't Miss You</div>
+            <div className="px-2.5 py-1.5 flex items-center gap-1.5 hover:bg-white/5 text-[10px] text-white">
+              <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Descargar
+            </div>
+            <div className="px-2.5 pt-2 pb-0.5 text-[8px] uppercase tracking-wider text-gray-500 font-semibold">Preview continuo</div>
+            <div className="px-2.5 py-1 flex items-center gap-1.5 bg-purple-500/10 text-[10px] text-purple-200">
+              <svg className="w-2.5 h-2.5 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              Autoplay 30s por tema
+            </div>
+            <div className="px-2.5 py-1 flex items-center gap-1.5 text-[10px] text-gray-300">
+              <svg className="w-2.5 h-2.5 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              Autoplay 60s por tema
+            </div>
+            <div className="px-2.5 py-1 flex items-center gap-1.5 text-[10px] text-gray-300">
+              <svg className="w-2.5 h-2.5 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              Autoplay 90s · 120s
+            </div>
+            <div className="border-t border-white/10 px-2.5 py-1 flex items-center gap-1.5 text-[10px] text-gray-300">
+              📻 Radio
+            </div>
+            <div className="px-2.5 py-1 flex items-center gap-1.5 text-[10px] text-gray-300">
+              🔗 Compartir link
+            </div>
+          </div>
+        </div>
+
+        {/* Right: live downloads with progress */}
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <div className="text-[9px] font-bold text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+            Descargas activas · 3/3
+          </div>
+          {downloads.map((d, i) => (
+            <div key={i} className="bg-white/[0.04] border border-white/10 rounded-lg p-1.5 animate-demo-tag-pop" style={{ animationDelay: `${300 + i * 200}ms` }}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-5 h-5 rounded bg-blue-500/30 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-2.5 h-2.5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[9px] text-white truncate">{d.name}</div>
+                  <div className="text-[8px] text-gray-500">{d.size} · {d.progress}%</div>
+                </div>
+                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-green-500/30 text-green-300 font-bold flex-shrink-0">{d.fmt}</span>
+              </div>
+              <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-demo-progress"
+                  style={{ animationDelay: `${i * 250}ms` }}
+                />
+              </div>
+            </div>
+          ))}
+          <div className="mt-1 px-2 py-1 rounded-md bg-green-500/10 border border-green-500/30 text-[9px] text-green-300 font-bold flex items-center gap-1">
+            ✓ SoulSeek · análisis BPM/Key automático al terminar
+          </div>
+        </div>
       </div>
     </div>
   )
