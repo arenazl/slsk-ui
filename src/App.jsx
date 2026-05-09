@@ -8706,24 +8706,40 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     const url = `https://djfreeapp.ar/?${params.toString()}`
     const shareText = `🎵 ${track.artist || ''} - ${track.title || ''}`.trim()
 
+    console.log('[Share] url=', url)
+    setDiscoverCtx(null)
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
-    // On mobile, Web Share gives the OS-native sheet (WhatsApp, IG, etc).
-    // On desktop, that often fails silently → go straight to clipboard.
     if (isMobile && navigator.share) {
       try {
         await navigator.share({ title: shareText, text: shareText, url })
-        setDiscoverCtx(null)
         return
-      } catch { /* fall through */ }
+      } catch (e) { console.log('[Share] navigator.share failed:', e?.message) }
     }
+    // Try modern Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(url)
+        toast('Link copiado al portapapeles ✓', 'success', 2500)
+        return
+      } catch (e) { console.log('[Share] clipboard.writeText failed:', e?.message) }
+    }
+    // Legacy execCommand path (works without focus / permissions in older browsers)
     try {
-      await navigator.clipboard.writeText(url)
-      toast('Link copiado al portapapeles', 'success', 2500)
-    } catch {
-      // Last resort: prompt so user can copy manually
-      window.prompt('Copiá el link para compartir:', url)
-    }
-    setDiscoverCtx(null)
+      const ta = document.createElement('textarea')
+      ta.value = url
+      ta.style.position = 'fixed'
+      ta.style.left = '-9999px'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      if (ok) {
+        toast('Link copiado ✓', 'success', 2500)
+        return
+      }
+    } catch (e) { console.log('[Share] execCommand failed:', e?.message) }
+    // Last resort: native prompt
+    window.prompt('Copiá el link para compartir:', url)
   }
 
   const cleanTrackState = (t) => {
