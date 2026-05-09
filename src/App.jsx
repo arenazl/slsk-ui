@@ -5926,17 +5926,18 @@ function App() {
               </>)}
             </div>
           )}
-          {isGuest && (
-            <button
-              onClick={() => setLoginModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all active:scale-95"
-              style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+          {isDemo && (
+            <a
+              href={trialMpUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all"
+              style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
+              title={trialStart > 0 ? `Trial: ${Math.max(0, Math.ceil((trialStart + trialDays * 86400000 - Date.now()) / 86400000))} días restantes` : 'Subscribirse'}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-              </svg>
-              Login
-            </button>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              Subscribirse
+            </a>
           )}
         </div>
       </header>
