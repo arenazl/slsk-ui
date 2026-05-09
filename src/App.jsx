@@ -2219,93 +2219,132 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const handleStop = () => onStop()
 
   const [exportWithTracks, setExportWithTracks] = useState(false)
-  const exportSet = async () => {
-    // Default name: genre-method-month (e.g. "tech-house-camelot-mayo")
+  // Default name: genre-method-month (e.g. "tech-house-camelot-mayo")
+  const computeSetName = () => {
     const slug = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
     const genrePart = slug(selectedGenres[0] || setTracks[0]?.genre || 'set')
     const methodPart = slug(method || 'mix')
-    const monthPart = months[new Date().getMonth()]
-    const name = setName.trim() || `${genrePart}-${methodPart}-${monthPart}`
+    return setName.trim() || `${genrePart}-${methodPart}-${months[new Date().getMonth()]}`
+  }
+
+  // Resolve library root via fallback chain (settings → agent → cache → guess)
+  const resolveLibraryRoot = async () => {
+    let root = (libraryRoot || '').trim()
+    if (!root && agentConnected) {
+      try {
+        const r = await agentFetch('status', { signal: AbortSignal.timeout(5000) })
+        if (r.ok) {
+          const s = await r.json()
+          if (s?.folder) {
+            root = s.folder
+            try { localStorage.setItem('library_root_cached', root) } catch {}
+          }
+        }
+      } catch {}
+    }
+    if (!root) {
+      try { root = localStorage.getItem('library_root_cached') || '' } catch {}
+    }
+    if (!root) {
+      if (navigator.userAgent.includes('Windows')) root = 'C:\\Users\\Public\\Music\\groove-new'
+      else if (navigator.userAgent.includes('Mac')) root = '~/Music/groove-new'
+    }
+    root = root.replace(/[\\/]+$/, '')
+    const isWindows = /^[A-Z]:/i.test(root) || navigator.userAgent.includes('Windows')
+    if (isWindows) root = root.replace(/\//g, '\\')
+    return { root, sep: isWindows ? '\\' : '/' }
+  }
+
+  const downloadFile = (filename, content, mime) => {
+    const blob = new Blob([content], { type: mime })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Export 1: Rekordbox-compatible M3U playlist (paths only, no metadata)
+  const exportM3U = async () => {
+    const name = computeSetName()
     setExporting(true)
     try {
-      // M3U-only path: build the playlist text in the browser. No agent
-      // needed → works for any user/domain regardless of agent CORS state.
-      if (!exportWithTracks) {
-        // Resolve root via fallback chain so user gets absolute paths even
-        // if they didn't fill the Settings field. Order:
-        //  1. Settings (libraryRoot prop)
-        //  2. Agent's actual download folder via /api/status (live)
-        //  3. Cached value from previous agent fetch
-        //  4. Platform default guess
-        let root = (libraryRoot || '').trim()
-        if (!root && agentConnected) {
-          try {
-            const r = await agentFetch('status', { signal: AbortSignal.timeout(5000) })
-            if (r.ok) {
-              const s = await r.json()
-              if (s?.folder) {
-                root = s.folder
-                try { localStorage.setItem('library_root_cached', root) } catch {}
-              }
-            }
-          } catch {}
-        }
-        if (!root) {
-          try { root = localStorage.getItem('library_root_cached') || '' } catch {}
-        }
-        if (!root) {
-          if (navigator.userAgent.includes('Windows')) root = 'C:\\Users\\Public\\Music\\groove-new'
-          else if (navigator.userAgent.includes('Mac')) root = '~/Music/groove-new'
-        }
-        root = root.replace(/[\\/]+$/, '')
-        // Windows DJ software (Rekordbox/Serato) needs backslashes; if the
-        // root contains drive letter (C:) and forward slashes, normalize.
-        const isWindows = /^[A-Z]:/i.test(root) || navigator.userAgent.includes('Windows')
-        if (isWindows) root = root.replace(/\//g, '\\')
-        const sep = isWindows ? '\\' : '/'
-        const lines = ['#EXTM3U']
-        for (const t of setTracks) {
-          const dur = t.duration_est ? Math.round(t.duration_est * 60) : -1
-          const label = t.artist ? `${t.artist} - ${t.title || t.filename}` : (t.title || t.filename)
-          lines.push(`#EXTINF:${dur},${label}`)
-          const path = root
-            ? (t.subfolder ? `${root}${sep}${t.subfolder}${sep}${t.filename}` : `${root}${sep}${t.filename}`)
-            : t.filename
-          lines.push(path)
-        }
-        const m3uContent = lines.join('\n')
-        const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${name}.m3u`
-        a.click()
-        URL.revokeObjectURL(url)
-        toast(`Playlist ${name}.m3u exportada`)
-        return
+      const { root, sep } = await resolveLibraryRoot()
+      const lines = ['#EXTM3U']
+      for (const t of setTracks) {
+        const dur = t.duration_est ? Math.round(t.duration_est * 60) : -1
+        const label = t.artist ? `${t.artist} - ${t.title || t.filename}` : (t.title || t.filename)
+        lines.push(`#EXTINF:${dur},${label}`)
+        const path = root
+          ? (t.subfolder ? `${root}${sep}${t.subfolder}${sep}${t.filename}` : `${root}${sep}${t.filename}`)
+          : t.filename
+        lines.push(path)
       }
-      // Include-tracks path: needs the agent to copy files locally.
-      const metadata = {}
-      setTracks.forEach(t => { metadata[t.filename] = { genre: t.genre, key: t.key, bpm: t.bpm, rating: t.rating, artist: t.artist, title: t.title } })
-      const res = await agentFetch('export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, files: setTracks.map(t => t.filename), include_tracks: true, metadata }),
-      })
-      if (!res.ok) {
-        toast('Error exportando con tracks (¿agente conectado?)', 'error', 4000)
-        return
-      }
-      const data = await res.json()
-      toast(`${data.copied} archivos + playlist exportados`)
+      downloadFile(`${name}.m3u`, lines.join('\n'), 'audio/x-mpegurl')
+      toast(`${name}.m3u exportada`)
     } catch (e) {
-      console.error('Failed to export set', e)
-      toast('Error exportando set', 'error', 3000)
+      console.error('Failed to export m3u', e)
+      toast('Error exportando playlist', 'error', 3000)
     } finally {
       setExporting(false)
     }
   }
+
+  // Export 2: Rekordbox XML (full metadata: rating, BPM, key, genre)
+  const exportRekordboxXML = async () => {
+    const name = computeSetName()
+    setExporting(true)
+    try {
+      const { root, sep } = await resolveLibraryRoot()
+      const xmlEscape = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+      // Rekordbox rating: 0=none, 51=★, 102=★★, 153=★★★, 204=★★★★, 255=★★★★★
+      const rbRating = (r) => [0, 51, 102, 153, 204, 255][Math.max(0, Math.min(5, r || 0))]
+      // Path → file:// URL with forward slashes (Rekordbox XML spec)
+      const fileUrl = (t) => {
+        const localPath = root
+          ? (t.subfolder ? `${root}${sep}${t.subfolder}${sep}${t.filename}` : `${root}${sep}${t.filename}`)
+          : t.filename
+        const fwd = localPath.replace(/\\/g, '/')
+        // file://localhost/C:/path... — encode each segment
+        const encoded = fwd.split('/').map(p => encodeURIComponent(p).replace(/'/g, '%27')).join('/')
+        return `file://localhost/${encoded.replace(/^\//, '')}`
+      }
+
+      const tracksXml = setTracks.map((t, i) => {
+        const ext = (t.format || (t.filename.split('.').pop() || '')).toUpperCase()
+        const kind = ext === 'MP3' ? 'MP3 File' : ext === 'WAV' ? 'WAV File' : ext === 'M4A' ? 'M4A File' : 'FLAC File'
+        return `    <TRACK TrackID="${i + 1}" Name="${xmlEscape(t.title || t.filename.replace(/\.[^.]+$/, ''))}" Artist="${xmlEscape(t.artist || '')}" Genre="${xmlEscape(t.genre || '')}" Kind="${kind}" TotalTime="${Math.round((t.duration_est || 6) * 60)}" AverageBpm="${t.bpm ? t.bpm.toFixed(2) : '0.00'}" Tonality="${xmlEscape(t.key || '')}" Rating="${rbRating(t.rating)}" Location="${fileUrl(t)}"/>`
+      }).join('\n')
+
+      const playlistEntries = setTracks.map((_, i) => `      <TRACK Key="${i + 1}"/>`).join('\n')
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<DJ_PLAYLISTS Version="1.0.0">
+  <PRODUCT Name="rekordbox" Version="6.0.0" Company="Pioneer DJ"/>
+  <COLLECTION Entries="${setTracks.length}">
+${tracksXml}
+  </COLLECTION>
+  <PLAYLISTS>
+    <NODE Type="0" Name="ROOT" Count="1">
+      <NODE Name="${xmlEscape(name)}" Type="1" KeyType="0" Entries="${setTracks.length}">
+${playlistEntries}
+      </NODE>
+    </NODE>
+  </PLAYLISTS>
+</DJ_PLAYLISTS>`
+      downloadFile(`${name}.xml`, xml, 'application/xml')
+      toast(`${name}.xml — Rekordbox XML exportado (rating + BPM + key)`)
+    } catch (e) {
+      console.error('Failed to export xml', e)
+      toast('Error exportando XML', 'error', 3000)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const exportSet = exportM3U  // legacy alias for any other caller
 
   if (page !== 'set') return null
 
@@ -2626,17 +2665,26 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
             className="flex-1 min-w-0 max-w-xs px-2 md:px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
           />
           <button
-            onClick={exportSet}
+            onClick={exportM3U}
             disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-xs md:text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
-            style={{ background: 'var(--color-accent)' }}
+            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-xs md:text-sm font-medium text-white transition-all duration-200 active:scale-95 flex-shrink-0 shadow-md hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
+            title="Playlist .m3u — File → Import → Import Playlist en Rekordbox"
           >
             {exporting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-4-4 1.41-1.41L11 14.17l5.59-5.59L18 10l-7 7z"/></svg>
             )}
-            Exportar
+            Rekordbox playlist
+          </button>
+          <button
+            onClick={exportRekordboxXML}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-xs md:text-sm font-medium text-white transition-all duration-200 active:scale-95 flex-shrink-0 shadow-md hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
+            title="Rekordbox XML — incluye rating, BPM, key, género (Preferences → Advanced → Database)"
+          >
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.18l7.5 3.75-3.45 1.72L8.55 5.93 12 4.18zM4 8.66l7 3.5v7.84l-7-3.5V8.66zm9 11.34v-7.84l7-3.5v7.84l-7 3.5z"/></svg>
+            Rekordbox XML
           </button>
           <button
             onClick={() => onEditMix(setTracks)}
@@ -2648,6 +2696,23 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
             </svg>
             Mix
           </button>
+        </div>
+      )}
+      {/* Hint: how to import */}
+      {setTracks.length > 0 && (
+        <div className="flex-shrink-0 px-3 md:px-6 py-2 bg-gradient-to-r from-orange-500/5 via-pink-500/5 to-orange-500/5 border-t border-[var(--border-color)] flex flex-col sm:flex-row gap-2 sm:gap-6 text-[11px] md:text-xs text-[var(--text-muted)]">
+          <div className="flex items-start gap-2">
+            <span className="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">P</span>
+            <div>
+              <span className="text-[var(--text-secondary)] font-semibold">Playlist:</span> en Rekordbox <code className="px-1 py-0.5 rounded bg-white/5 text-orange-400">File → Import → Import Playlist</code> y elegí el .m3u
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full bg-pink-500/20 text-pink-400 flex items-center justify-center text-[10px] font-bold">X</span>
+            <div>
+              <span className="text-[var(--text-secondary)] font-semibold">XML (con rating + BPM + key):</span> <code className="px-1 py-0.5 rounded bg-white/5 text-pink-400">Preferences → Advanced → Database → rekordbox xml</code> → seteás el path
+            </div>
+          </div>
         </div>
       )}
 
