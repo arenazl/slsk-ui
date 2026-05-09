@@ -4902,25 +4902,48 @@ function DemoSetBuilder() {
         )}
       </div>
 
-      {/* Track sequence — re-keyed by method so cards re-animate on stage change */}
-      <div key={activeMethod?.id || 'intro'} className="flex-1 grid grid-cols-5 gap-1.5 mb-2 min-h-0">
+      {/* Track sequence — vertical stack with gradient that intensifies by track energy.
+          Visualizes the set's intensity progression: cool blue (low energy) → hot pink/red (peak). */}
+      <div key={activeMethod?.id || 'intro'} className="flex-1 space-y-1.5 mb-2 min-h-0 overflow-hidden">
         {orderedTracks.map((t, i) => {
-          const c = activeMethod ? colorMap[activeMethod.color] : colorMap.purple
+          // Energy → gradient. Each level intensifies the warmth.
+          const intensityByEnergy = {
+            5: 'from-blue-600/30 via-blue-700/30 to-blue-800/30 border-blue-500/40',
+            6: 'from-cyan-500/35 via-blue-600/35 to-blue-800/35 border-cyan-400/40',
+            7: 'from-purple-500/40 via-blue-600/40 to-purple-700/40 border-purple-400/50',
+            8: 'from-pink-500/55 via-purple-500/55 to-purple-700/55 border-pink-400/60',
+            9: 'from-red-500/65 via-pink-500/60 to-pink-700/55 border-red-400/70',
+          }
+          const grad = intensityByEnergy[t.energy] || 'from-slate-600/30 to-slate-800/30 border-white/10'
           return (
             <div
               key={`${activeMethod?.id || 'intro'}-${i}`}
-              className={`bg-white/[0.05] border border-white/10 rounded-lg p-1.5 flex flex-col items-center justify-between animate-demo-tag-pop ring-1 ${c.ring}`}
-              style={{ animationDelay: `${i * 80}ms` }}
+              className={`bg-gradient-to-r ${grad} border rounded-xl px-3 py-2 flex items-center gap-3 animate-demo-tag-pop`}
+              style={{ animationDelay: `${i * 100}ms` }}
             >
-              <div className="text-[9px] text-gray-300 text-center truncate w-full font-semibold" title={t.name}>{t.name}</div>
-              <div className="text-[8px] text-gray-500 truncate w-full text-center">{t.artist}</div>
-              <div className="my-1 w-9 h-9 rounded-full bg-gradient-to-br from-purple-500/40 to-blue-500/40 border border-purple-400/50 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                <span className="text-[10px] font-extrabold text-white font-mono">{t.k}</span>
+              <span className="text-[10px] text-white/60 font-mono font-bold w-3 flex-shrink-0">{i + 1}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs md:text-sm font-bold text-white truncate">{t.name}</div>
+                <div className="text-[10px] text-white/70 truncate">{t.artist}</div>
               </div>
-              <div className="flex gap-1.5 text-[8px] font-mono">
-                <span className="text-orange-300">{t.bpm}</span>
-                <span className="text-yellow-300">⚡{t.energy}</span>
+              {/* Energy bar visualizer */}
+              <div className="flex items-end gap-0.5 h-4 flex-shrink-0">
+                {Array.from({ length: 10 }).map((_, j) => (
+                  <span
+                    key={j}
+                    className={`w-1 rounded-sm ${
+                      j < t.energy
+                        ? t.energy >= 9 ? 'bg-red-400' : t.energy >= 7 ? 'bg-pink-400' : t.energy >= 6 ? 'bg-purple-400' : 'bg-cyan-400'
+                        : 'bg-white/10'
+                    }`}
+                    style={{ height: `${(j + 1) * 10}%` }}
+                  />
+                ))}
               </div>
+              {/* Camelot key — emphasized */}
+              <span className="text-sm font-extrabold font-mono px-2.5 py-1 rounded-lg bg-white/15 text-white shadow-md flex-shrink-0">{t.k}</span>
+              {/* BPM */}
+              <span className="text-[10px] font-mono text-white/80 flex-shrink-0 hidden md:inline">{t.bpm} BPM</span>
             </div>
           )
         })}
