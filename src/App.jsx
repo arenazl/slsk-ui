@@ -5173,9 +5173,9 @@ function ReelDiscover() {
           </p>
         </div>
         <div className="flex gap-2">
-          <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-orange-500 to-red-700 ring-2 ring-white/20" />
-          <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 ring-2 ring-white/20" />
-          <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-red-500 to-pink-700 ring-2 ring-white/20" />
+          <img src="/demo/covers/hot-sauce.jpg" alt="" className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/20" />
+          <img src="/demo/covers/be-the-one.jpg" alt="" className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/20" />
+          <img src="/demo/covers/recall.jpg" alt="" className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/20" />
         </div>
       </div>
       {/* Genre tabs */}
@@ -5208,7 +5208,7 @@ function ReelDiscover() {
             style={{ animationDelay: `${i * 250}ms` }}
           >
             <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 1}</span>
-            <div className={`w-14 h-14 rounded-xl flex-shrink-0 bg-gradient-to-br ${t.thumb}`} />
+            <img src={t.cover} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10" />
             <div className="flex-1 min-w-0">
               <div className={`text-xl font-bold truncate flex items-center gap-2 ${t.highlight ? 'text-green-300' : 'text-white'}`}>
                 {t.n}
@@ -5240,15 +5240,15 @@ function ReelDiscover() {
 // Mirrors DemoDownload — track list + context menu popup + active downloads.
 function ReelDownload() {
   const listRows = [
-    { n: 'Recall (Extended Mix)',     a: 'HotLap',                 fmt: 'FLAC', state: 'done', thumb: 'from-red-500 to-pink-700' },
-    { n: "Didn't Miss You (OG)",      a: 'Liva K',                 fmt: 'FLAC', state: 'menu', thumb: 'from-purple-500 to-blue-700', highlight: true },
-    { n: 'Spotlight (Original Mix)',  a: 'Andrea Oliva',           fmt: 'FLAC', state: 'dl',   thumb: 'from-yellow-400 to-orange-600' },
-    { n: 'Pa Ca (Original Mix)',      a: 'Massano, Silver Panda',  fmt: 'FLAC', state: 'dl',   thumb: 'from-cyan-400 to-blue-600' },
+    { n: 'Recall (Extended Mix)',     a: 'HotLap',                 fmt: 'FLAC', state: 'done', cover: '/demo/covers/recall.jpg' },
+    { n: "Didn't Miss You (OG)",      a: 'Liva K',                 fmt: 'FLAC', state: 'menu', cover: '/demo/covers/didnt-miss.jpg', highlight: true },
+    { n: 'Spotlight (Original Mix)',  a: 'Andrea Oliva',           fmt: 'FLAC', state: 'dl',   cover: '/demo/covers/spotlight.jpg' },
+    { n: 'Pa Ca (Original Mix)',      a: 'Massano, Silver Panda',  fmt: 'FLAC', state: 'dl',   cover: '/demo/covers/paca.jpg' },
   ]
   const downloads = [
-    { name: "Liva K - Didn't Miss You.flac", size: '40MB', fmt: 'FLAC' },
-    { name: 'Andrea Oliva - Spotlight.flac', size: '46MB', fmt: 'FLAC' },
-    { name: 'Massano - Pa Ca.flac',          size: '32MB', fmt: 'FLAC' },
+    { name: "Liva K - Didn't Miss You.flac", size: '40MB', fmt: 'FLAC', cover: '/demo/covers/didnt-miss.jpg' },
+    { name: 'Andrea Oliva - Spotlight.flac', size: '46MB', fmt: 'FLAC', cover: '/demo/covers/spotlight.jpg' },
+    { name: 'Massano - Pa Ca.flac',          size: '32MB', fmt: 'FLAC', cover: '/demo/covers/paca.jpg' },
   ]
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
@@ -5267,7 +5267,7 @@ function ReelDownload() {
               style={{ animationDelay: `${i * 200}ms` }}
             >
               <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 3}</span>
-              <div className={`w-12 h-12 rounded-xl flex-shrink-0 bg-gradient-to-br ${t.thumb}`} />
+              <img src={t.cover} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10" />
               <div className="flex-1 min-w-0">
                 <div className={`text-xl font-bold truncate ${t.highlight ? 'text-green-300' : 'text-white'}`}>{t.n}</div>
                 <div className="text-base text-gray-400 truncate">{t.a}</div>
@@ -5309,9 +5309,7 @@ function ReelDownload() {
         {downloads.map((d, i) => (
           <div key={i} className="bg-white/[0.04] border border-white/10 rounded-xl p-3 animate-demo-tag-pop" style={{ animationDelay: `${500 + i * 200}ms` }}>
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-blue-500/30 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              </div>
+              <img src={d.cover} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0 ring-1 ring-white/10" />
               <div className="flex-1 min-w-0">
                 <div className="text-base text-white truncate">{d.name}</div>
                 <div className="text-sm text-gray-500">{d.size}</div>
@@ -5423,11 +5421,11 @@ function ReelLibrary() {
 // with intensity-graded accent.
 function ReelSet() {
   const TRACKS = [
-    { name: "Prospa - Don't Stop (Extended Mix)",        k: 'D# · 5B', bpm: 124, energy: 5, genre: 'Indie Dance',   fmt: 'FLAC', size: '27.82MB', stars: 3 },
-    { name: 'Chico Rose (NL) - Pom (Original Mix) 130',  k: 'D# · 5B', bpm: 130, energy: 6, genre: 'Tech House',    fmt: 'FLAC', size: '49.8MB',  stars: 4 },
-    { name: '22 - Deeper Purpose - Operate (Extended)',  k: 'Gm · 6A', bpm: 128, energy: 7, genre: 'Tech House',    fmt: 'FLAC', size: '40.39MB', stars: 5 },
-    { name: 'Polovich - Sweet Dreams (Original Mix)',    k: 'B · 1B',  bpm: 130, energy: 8, genre: 'Melodic House', fmt: 'MP3',  size: '10.73MB', stars: 5 },
-    { name: 'Biscits - Crush (Extended Mix)',            k: 'Fm · 4A', bpm: 128, energy: 9, genre: 'Tech House',    fmt: 'FLAC', size: '43.18MB', stars: 5 },
+    { name: "Prospa - Don't Stop (Extended Mix)",        k: 'D# · 5B', bpm: 124, energy: 5, genre: 'Indie Dance',   fmt: 'FLAC', size: '27.82MB', stars: 3, cover: '/demo/covers/prospa.jpg' },
+    { name: 'Chico Rose (NL) - Pom (Original Mix) 130',  k: 'D# · 5B', bpm: 130, energy: 6, genre: 'Tech House',    fmt: 'FLAC', size: '49.8MB',  stars: 4, cover: '/demo/covers/chico-rose.jpg' },
+    { name: '22 - Deeper Purpose - Operate (Extended)',  k: 'Gm · 6A', bpm: 128, energy: 7, genre: 'Tech House',    fmt: 'FLAC', size: '40.39MB', stars: 5, cover: '/demo/covers/deeper-purpose.jpg' },
+    { name: 'Polovich - Sweet Dreams (Original Mix)',    k: 'B · 1B',  bpm: 130, energy: 8, genre: 'Melodic House', fmt: 'MP3',  size: '10.73MB', stars: 5, cover: '/demo/covers/polovich.jpg' },
+    { name: 'Biscits - Crush (Extended Mix)',            k: 'Fm · 4A', bpm: 128, energy: 9, genre: 'Tech House',    fmt: 'FLAC', size: '43.18MB', stars: 5, cover: '/demo/covers/biscits-crush.jpg' },
   ]
   const METHODS = [
     { id: 'camelot', label: '🎯 Camelot', desc: 'Encadena tracks por compatibilidad armónica', color: 'purple' },
@@ -5494,7 +5492,7 @@ function ReelSet() {
             >
               <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-10 rounded-r ${accent}`} />
               <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 1}</span>
-              <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              <img src={t.cover} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 ring-1 ring-white/10" />
               <div className="flex-1 min-w-0">
                 <div className="text-lg font-bold text-white truncate">{t.name}</div>
               </div>
