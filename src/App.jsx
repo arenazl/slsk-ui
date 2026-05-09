@@ -7351,18 +7351,6 @@ function App() {
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
             Ver demo
           </button>
-          {/* TEMPORAL — preview de la versión vertical 9:16 para reels (no persistente) */}
-          <a
-            href="?reels=1"
-            target="_blank"
-            rel="noopener"
-            className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0 border border-white/20 no-underline"
-            style={{ background: 'linear-gradient(135deg, #ec4899, #f59e0b)' }}
-            title="Vista vertical 9:16 — temporal para testear"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-            Demo Reel
-          </a>
           <div className="hidden md:flex gap-1">
             {[
               { id: 'discover', label: 'Discover' },
