@@ -1791,15 +1791,6 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               className="flex-1 min-w-0 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
               onKeyDown={e => e.key === 'Enter' && handleExport()}
             />
-            <label className="hidden sm:flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos">
-              <div
-                onClick={() => setExportWithTracks(v => !v)}
-                className={`w-8 h-4 rounded-full transition-colors duration-200 ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
-              >
-                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
-              </div>
-              <span className="text-xs text-gray-400">+ Tracks</span>
-            </label>
             <button
               onClick={handleExport}
               disabled={!exportName.trim() || exporting || finalList.length === 0}
@@ -2229,7 +2220,13 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
 
   const [exportWithTracks, setExportWithTracks] = useState(false)
   const exportSet = async () => {
-    const name = setName.trim() || `Set ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}`
+    // Default name: genre-method-month (e.g. "tech-house-camelot-mayo")
+    const slug = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+    const genrePart = slug(selectedGenres[0] || setTracks[0]?.genre || 'set')
+    const methodPart = slug(method || 'mix')
+    const monthPart = months[new Date().getMonth()]
+    const name = setName.trim() || `${genrePart}-${methodPart}-${monthPart}`
     setExporting(true)
     try {
       // M3U-only path: build the playlist text in the browser. No agent
@@ -2600,15 +2597,6 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
             placeholder="Nombre del set..."
             className="flex-1 min-w-0 max-w-xs px-2 md:px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
           />
-          <label className="hidden sm:flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos + metadata">
-            <div
-              onClick={() => setExportWithTracks(v => !v)}
-              className={`w-8 h-4 rounded-full transition-colors duration-200 cursor-pointer ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
-            >
-              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
-            </div>
-            <span className="text-xs text-gray-400">+ Tracks</span>
-          </label>
           <button
             onClick={exportSet}
             disabled={exporting}
