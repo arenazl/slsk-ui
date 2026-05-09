@@ -4411,52 +4411,98 @@ function DemoDownload() {
   )
 }
 
+// Library — replica fiel del Cards layout: header con stats (305 tracks, ★, Keys, Buscar)
+// + grupos por género en columnas (Tech House 92, Deep House 47, ...).
 function DemoLibrary() {
-  const tracks = [
-    { artist: 'Anyma', title: 'Eternity', bpm: 124, k: '8A', stars: 5 },
-    { artist: 'Mau P', title: 'Tesla', bpm: 128, k: '4A', stars: 5 },
-    { artist: 'Tinlicker', title: 'Fractal', bpm: 122, k: '6A', stars: 4 },
-    { artist: 'RÜFÜS DU SOL', title: 'Innerbloom', bpm: 122, k: '6B', stars: 5 },
-    { artist: 'Solomun', title: 'Customer Is King', bpm: 120, k: '7A', stars: 4 },
+  const groups = [
+    { name: 'Tech House', count: 92, dot: 'bg-blue-500', tracks: [
+      { t: '04 - 05 - Biscits - 2C2 (Extended Mix)', f: 'FLAC' },
+      { t: '06 - 04 - Corrupt (Uk) - Trippin (Extended)', f: 'FLAC' },
+      { t: '08 - Biscits - Freak (Extended Mix)', f: 'FLAC' },
+      { t: '01-mau_p-merther_(extended_mix)', f: 'FLAC' },
+    ]},
+    { name: 'Deep House', count: 47, dot: 'bg-green-500', tracks: [
+      { t: 'For The Soul', f: 'FLAC' },
+      { t: '01. Feels Like Us (Extended Mix)', f: 'FLAC' },
+      { t: '02-zehv-leland.mp3', f: 'MP3' },
+      { t: 'dreams (Extended Mix)', f: 'FLAC' },
+    ]},
+    { name: 'Melodic House', count: 41, dot: 'bg-purple-500', tracks: [
+      { t: '07 - 02 - 03-nordfold-forever_(extended_mix)', f: 'MP3' },
+      { t: '01 - Rainy (Devault Remix)', f: 'FLAC' },
+      { t: '01 RÜFÜS DU SOL - On My Knees', f: 'M4A' },
+      { t: '01 Somebody (2024)', f: 'FLAC' },
+    ]},
   ]
   return (
-    <div className="absolute inset-0 flex flex-col p-5 md:p-7 animate-fade-in z-10">
+    <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
       <DemoAppHeader active="Biblioteca" />
-      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
-      <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Biblioteca dinámica</h2>
-      <p className="text-xs text-gray-400 mb-5">Análisis automático de BPM, Camelot Key y rating</p>
-      <div className="relative w-full max-w-2xl">
-        <div className="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent shadow-lg shadow-blue-400/60 z-10 animate-demo-scan" />
-        <div className="space-y-2 relative">
-          {tracks.map((t, i) => (
-            <div key={i} className="bg-white/[0.05] border border-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-white truncate">{t.artist} <span className="text-gray-500">·</span> {t.title}</div>
-              </div>
-              <span
-                className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 animate-demo-tag-pop"
-                style={{ animationDelay: `${300 + i * 500}ms` }}
-              >
-                {t.bpm}
-              </span>
-              <span
-                className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 animate-demo-tag-pop"
-                style={{ animationDelay: `${400 + i * 500}ms` }}
-              >
-                {t.k}
-              </span>
-              <div
-                className="flex text-xs animate-demo-tag-pop"
-                style={{ animationDelay: `${500 + i * 500}ms` }}
-              >
-                {[1, 2, 3, 4, 5].map(s => (
-                  <span key={s} className={s <= t.stars ? 'text-yellow-400' : 'text-white/10'}>★</span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Stats bar replicando el header real "305 tracks · Cards · Join · Tracks · All ★...★★★★★ · Organizar (3) · Keys (115) · Buscar..." */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 mb-2 rounded-lg bg-slate-900/60 border border-white/10 overflow-hidden">
+        <span className="text-[10px] text-gray-400"><span className="text-white font-bold">305</span> tracks</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/30 text-blue-200 font-bold">Cards</span>
+        <span className="text-[10px] text-gray-500">Tracks</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold">All</span>
+        <span className="text-[10px] text-yellow-400 tracking-wider">★★★★★</span>
+        <span className="flex-1" />
+        <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-bold">📁 Organizar (3)</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-bold">🎵 Keys (115)</span>
       </div>
+      {/* Genre filter pills */}
+      <div className="flex-shrink-0 flex items-center gap-1 mb-2 overflow-hidden">
+        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/30 border border-blue-400/40 text-blue-200 font-bold">All</span>
+        {[
+          { n: 'Tech House', c: 92, color: 'text-blue-400' },
+          { n: 'Deep House', c: 47, color: 'text-green-400' },
+          { n: 'Melodic House', c: 41, color: 'text-purple-400' },
+          { n: 'Progressive', c: 20, color: 'text-orange-400' },
+          { n: 'Afro House', c: 18, color: 'text-pink-400' },
+          { n: 'Mel. Techno', c: 17, color: 'text-cyan-400' },
+        ].map(g => (
+          <span key={g.n} className={`text-[9px] px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/10 ${g.color} font-semibold flex items-center gap-1 flex-shrink-0`}>
+            <span className="w-1 h-1 rounded-full bg-current" />
+            {g.n} ({g.c})
+          </span>
+        ))}
+      </div>
+      {/* Cards grid — 3 genre cards visible */}
+      <div className="flex-1 grid grid-cols-3 gap-2 min-h-0">
+        {groups.map((g, gi) => (
+          <div
+            key={g.name}
+            className="bg-slate-900/80 border border-white/10 rounded-lg overflow-hidden animate-demo-tag-pop flex flex-col"
+            style={{ animationDelay: `${gi * 200}ms` }}
+          >
+            <div className="flex-shrink-0 flex items-center justify-between px-2.5 py-1.5 border-b border-white/10">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className={`w-1.5 h-1.5 rounded-full ${g.dot} flex-shrink-0`} />
+                <span className="text-[10px] font-bold text-white truncate">{g.name}</span>
+              </div>
+              <span className="text-[9px] font-bold text-gray-300 bg-white/10 px-1.5 py-0.5 rounded">{g.count}</span>
+            </div>
+            <div className="flex-1 px-2 py-1 space-y-0.5 overflow-hidden">
+              {g.tracks.map((tr, ti) => (
+                <div
+                  key={ti}
+                  className="flex items-center gap-1.5 py-0.5 animate-demo-tag-pop"
+                  style={{ animationDelay: `${gi * 200 + 300 + ti * 100}ms` }}
+                >
+                  <svg className="w-2.5 h-2.5 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  <span className="text-[9px] text-gray-300 truncate flex-1">{tr.t}</span>
+                  <span className={`text-[8px] font-bold flex-shrink-0 ${
+                    tr.f === 'FLAC' ? 'text-green-400' : tr.f === 'MP3' ? 'text-blue-400' : 'text-purple-400'
+                  }`}>{tr.f}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex-shrink-0 mt-2 text-center">
+        <p className="text-[10px] text-gray-400">
+          <span className="text-white font-bold">305 tracks</span> organizados por género ·
+          <span className="text-purple-300 font-bold"> análisis BPM + Camelot Key</span> automático
+        </p>
       </div>
     </div>
   )
@@ -4615,34 +4661,103 @@ function DemoSetBuilder() {
   )
 }
 
+// Mix Editor — replica del timeline real con tracks crossfading, etiquetas
+// "Auto 16s" indicando fade automático, BPM 128, Snap, "Exportar Mix" → MP3.
 function DemoExport() {
+  // Track positions on timeline (start% / width% / color)
+  const blocks = [
+    { name: 'Nick Curly · Attention',                    left: 2,  width: 22, color: 'bg-blue-500/40 border-blue-400/60',   text: 'text-blue-200'   },
+    { name: 'Adriatique · Miracle (RÜFÜS Remix)',        left: 20, width: 30, color: 'bg-purple-500/40 border-purple-400/60', text: 'text-purple-200' },
+    { name: 'Zeca Veloso · Todo Homem',                  left: 46, width: 24, color: 'bg-orange-500/40 border-orange-400/60', text: 'text-orange-200' },
+    { name: '01-mau_p-merther',                          left: 67, width: 26, color: 'bg-green-500/40 border-green-400/60',  text: 'text-green-200'  },
+  ]
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 md:p-8 animate-fade-in z-10">
-      <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Exportá a Rekordbox</h2>
-      <p className="text-xs text-gray-400 mb-7">Tu set listo para mezclar en cualquier setup</p>
-      <div className="flex items-center gap-5">
-        <div className="bg-white/[0.05] border border-white/10 rounded-xl p-3 w-44 animate-demo-tag-pop">
-          <div className="text-[10px] text-gray-400 mb-2 font-semibold uppercase tracking-wider">My Set · 60'</div>
-          {['8A · Velvet Avenue', '8B · At Night', '9B · Tesla', '10B · Eternity', '9A · Innerbloom'].map((t, i) => (
-            <div key={i} className="text-[11px] text-gray-200 py-0.5 truncate">{t}</div>
+    <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
+      <DemoAppHeader active="Mix" />
+      {/* Toolbar replicando "Volver al Set | Mix Editor 15 tracks · 83:52 | ▶ | 0:00/83:52 | BPM 128 | Snap | Zoom" */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 mb-1 rounded-lg bg-slate-900/60 border border-white/10 text-[10px]">
+        <span className="text-gray-400 hover:text-white">‹ Volver al Set</span>
+        <span className="text-white font-bold">Mix Editor</span>
+        <span className="text-gray-400">15 tracks · 83:52</span>
+        <button className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white">
+          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+        </button>
+        <span className="text-gray-300 font-mono text-[9px]">0:00 / 83:52</span>
+        <span className="text-gray-400">BPM</span>
+        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-white font-bold font-mono">128</span>
+        <span className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-200 font-bold">Snap</span>
+        <span className="text-gray-400">Zoom <span className="text-gray-500">- 2x +</span></span>
+        <span className="flex-1" />
+        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-gray-300 font-mono">Mix 9-5</span>
+        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-blue-300 font-bold">MP3 320k ▾</span>
+        <button className="px-2 py-0.5 rounded-md bg-blue-500 text-white font-bold flex items-center gap-1">
+          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+          Exportar Mix
+        </button>
+      </div>
+
+      {/* Title */}
+      <div className="text-center mt-1 mb-1">
+        <h2 className="text-base md:text-lg font-extrabold text-white">Mix Editor con <span className="text-blue-400">crossfading automático</span></h2>
+        <p className="text-[10px] text-gray-400">Beatmatching · BPM lock · Fade 16s · Export MP3 320k</p>
+      </div>
+
+      {/* Timeline ruler */}
+      <div className="flex-shrink-0 flex border-b border-white/10 px-1 py-0.5 text-[8px] text-gray-500 font-mono">
+        {['11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'].map(t => (
+          <span key={t} className="flex-1">{t}</span>
+        ))}
+      </div>
+
+      {/* Timeline track lanes */}
+      <div className="flex-1 relative bg-slate-900/40 rounded-b-lg overflow-hidden min-h-0">
+        {/* Vertical grid lines */}
+        <div className="absolute inset-0 flex">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="flex-1 border-r border-white/[0.04]" />
           ))}
         </div>
-        <div className="flex flex-col items-center gap-1">
-          <svg className="w-10 h-10 text-blue-400 animate-demo-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-          </svg>
-          <span className="text-[10px] text-blue-400 font-mono font-bold tracking-wider">.xml</span>
+
+        {/* Track blocks */}
+        <div className="absolute inset-y-2 left-0 right-0">
+          {blocks.map((b, i) => (
+            <div
+              key={i}
+              className={`absolute top-0 bottom-0 ${b.color} border-2 rounded animate-demo-tag-pop overflow-hidden`}
+              style={{ left: `${b.left}%`, width: `${b.width}%`, animationDelay: `${i * 200}ms` }}
+            >
+              {/* Fake waveform bars */}
+              <div className="absolute inset-x-1 inset-y-2 flex items-end gap-px opacity-60">
+                {Array.from({ length: 32 }).map((_, j) => (
+                  <span
+                    key={j}
+                    className="flex-1 bg-current rounded-t"
+                    style={{ height: `${30 + Math.abs(Math.sin(j * 0.7 + i) * 60)}%` }}
+                  />
+                ))}
+              </div>
+              <div className={`absolute inset-x-1.5 top-1 text-[8px] font-bold ${b.text} truncate`}>{b.name}</div>
+            </div>
+          ))}
         </div>
-        <div
-          className="bg-white/[0.05] border border-white/10 rounded-xl p-4 w-44 flex flex-col items-center animate-demo-tag-pop"
-          style={{ animationDelay: '600ms' }}
-        >
-          <div className="relative">
-            <span className="absolute inset-0 rounded-2xl bg-orange-500/40 animate-demo-ping-slow" />
-            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-black text-xl shadow-xl">R</div>
-          </div>
-          <div className="mt-2 text-sm text-white font-semibold">Rekordbox</div>
-          <div className="text-[10px] text-green-400 font-bold mt-0.5">✓ Importado</div>
+
+        {/* Crossfade "Auto 16s" labels at overlap points */}
+        <div className="absolute -top-1 left-[19%] flex flex-col items-center animate-demo-tag-pop" style={{ animationDelay: '800ms' }}>
+          <span className="text-[8px] px-1 py-0.5 rounded bg-purple-600 text-white font-bold leading-none">Auto</span>
+          <span className="text-[8px] text-purple-300 font-mono leading-none mt-0.5">16s</span>
+        </div>
+        <div className="absolute -top-1 left-[45%] flex flex-col items-center animate-demo-tag-pop" style={{ animationDelay: '900ms' }}>
+          <span className="text-[8px] px-1 py-0.5 rounded bg-orange-600 text-white font-bold leading-none">Auto</span>
+          <span className="text-[8px] text-orange-300 font-mono leading-none mt-0.5">16s</span>
+        </div>
+        <div className="absolute -top-1 left-[66%] flex flex-col items-center animate-demo-tag-pop" style={{ animationDelay: '1000ms' }}>
+          <span className="text-[8px] px-1 py-0.5 rounded bg-green-600 text-white font-bold leading-none">Auto</span>
+          <span className="text-[8px] text-green-300 font-mono leading-none mt-0.5">16s</span>
+        </div>
+
+        {/* Playhead */}
+        <div className="absolute top-0 bottom-0 left-[12%] w-0.5 bg-red-500 z-10 shadow-[0_0_8px_rgba(239,68,68,0.6)]">
+          <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />
         </div>
       </div>
     </div>
