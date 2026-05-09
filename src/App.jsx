@@ -7344,7 +7344,7 @@ function App() {
           </div>
           <button
             onClick={() => setDemoVideoOpen(true)}
-            className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0"
             style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
             title="Ver features en video"
           >
