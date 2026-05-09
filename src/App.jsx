@@ -3897,40 +3897,47 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-[#0f172a]">
-      <div className="w-80">
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>S</div>
-          <span className="text-2xl font-bold text-white">SoulSeek</span>
+    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.15),transparent_50%),radial-gradient(circle_at_70%_80%,rgba(139,92,246,0.12),transparent_50%)]" />
+      <div className="relative w-[22rem] max-w-[90vw]">
+        <div className="flex flex-col items-center gap-3 mb-10">
+          <img src="/logo.png" alt="DJ Free App" className="w-20 h-20 rounded-2xl shadow-2xl shadow-blue-500/20 ring-1 ring-white/10" />
+          <span className="text-3xl font-bold text-white tracking-tight">DJ Free App</span>
+          <span className="text-xs text-gray-400">Tu música, tus sets, en cualquier lugar</span>
         </div>
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-3">
           <input
             value={username}
             onChange={e => setUsername(e.target.value)}
             placeholder="Usuario"
             autoFocus
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+            className="w-full px-4 py-3.5 bg-white/[0.06] backdrop-blur-sm border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.08] transition-all"
           />
           <input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="Contraseña"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+            className="w-full px-4 py-3.5 bg-white/[0.06] backdrop-blur-sm border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.08] transition-all"
           />
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
           <button
             type="submit"
             disabled={loading || !username || !password}
-            className="w-full py-3 disabled:opacity-50 rounded-xl font-semibold transition-all duration-200 active:scale-98"
+            className="w-full py-3.5 disabled:opacity-50 rounded-2xl font-semibold transition-all duration-200 active:scale-[0.98] shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
             style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
           >
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[10px] uppercase tracking-wider text-gray-500">o</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
           <button
             type="button"
             onClick={() => { window.location.href = `${window.location.pathname}?guest=1` }}
-            className="w-full py-2 rounded-xl text-sm text-gray-300 hover:text-white border border-white/10 hover:border-white/20 transition-all duration-200 active:scale-98"
+            className="w-full py-3 rounded-2xl text-sm text-gray-300 hover:text-white border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-200 active:scale-[0.98]"
           >
             Entrar como invitado
           </button>
