@@ -5372,6 +5372,7 @@ function App() {
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [demoVideoOpen, setDemoVideoOpen] = useState(false)
   const requireLogin = () => { if (!authUser) { setLoginModalOpen(true); return false } return true }
   useEffect(() => { window.requireLogin = requireLogin }, [authUser])
 
@@ -5398,6 +5399,26 @@ function App() {
           onClose={() => setLoginModalOpen(false)}
           onLogin={(data) => { setAuthUser(data); setLoginModalOpen(false) }}
         />
+      )}
+      {demoVideoOpen && (
+        <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-3xl">
+            <video
+              src="/feature-video.webm"
+              controls
+              autoPlay
+              playsInline
+              className="w-full rounded-2xl shadow-2xl ring-1 ring-white/10"
+            />
+            <button
+              onClick={() => setDemoVideoOpen(false)}
+              className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-slate-800 border border-white/10 text-white hover:bg-slate-700 transition-colors flex items-center justify-center"
+              aria-label="Cerrar"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
       )}
       {settingsOpen && (
         <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setSettingsOpen(false)}>
@@ -5645,6 +5666,15 @@ function App() {
             <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain" />
             <span className="font-semibold text-base text-[var(--text-primary)] hidden sm:inline">DJ Free App</span>
           </div>
+          <button
+            onClick={() => setDemoVideoOpen(true)}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
+            title="Ver features en video"
+          >
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            Ver demo
+          </button>
           <div className="hidden md:flex gap-1">
             {(isGuest ? [{ id: 'discover', label: 'Discover' }] : [
               { id: 'discover', label: 'Discover' },
