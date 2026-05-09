@@ -6294,8 +6294,8 @@ function App() {
         />
       )}
       {demoVideoOpen && (
-        <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-3xl">
+        <div className="fixed inset-0 z-[80] bg-black backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl">
             <DemoShowcase />
             <button
               onClick={() => setDemoVideoOpen(false)}
@@ -6686,7 +6686,7 @@ function App() {
           </div>
           <button
             onClick={() => setDemoVideoOpen(true)}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0"
+            className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0"
             style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
             title="Ver features en video"
           >
@@ -6747,7 +6747,7 @@ function App() {
           )}
           <a
             href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent.exe"
-            className="hidden md:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden lg:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows)'}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -6757,7 +6757,7 @@ function App() {
           </a>
           <a
             href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
-            className="hidden md:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden lg:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Mac) - Click derecho para Mac viejo'}
             onContextMenu={(e) => { e.preventDefault(); window.prompt('Copiá este comando y pegalo en Terminal:', 'curl -sL https://bootstrap.pypa.io/get-pip.py | python3 && python3 -m pip install pystray pillow aiohttp cloudinary && curl -sL https://raw.githubusercontent.com/arenazl/slsk-agent/master/agent.py -o /tmp/agent.py && python3 /tmp/agent.py') }}
           >
@@ -6772,14 +6772,14 @@ function App() {
                 connectWs()
               } catch (e) { console.error('Restart failed', e) }
             }}
-            className="hidden md:flex p-1.5 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden lg:flex p-1.5 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title="Reiniciar conexión SoulSeek"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-          <div className="hidden md:flex items-center gap-1 flex-shrink-0" title="Color de acento">
+          <div className="hidden xl:flex items-center gap-1 flex-shrink-0" title="Color de acento">
             {[
               { color: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
               { color: '#8b5cf6', gradient: 'from-violet-500 to-purple-600' },
@@ -6839,7 +6839,7 @@ function App() {
           )}
           {!IS_MOBILE_DEVICE && (
             <div
-              className="hidden md:flex items-center rounded-full bg-[var(--bg-input)] p-0.5 flex-shrink-0"
+              className="hidden lg:flex items-center rounded-full bg-[var(--bg-input)] p-0.5 flex-shrink-0"
               title="Modo de reproducción: Local (archivos reales) / Preview (30s desde iTunes)"
             >
               {[
