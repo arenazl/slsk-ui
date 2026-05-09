@@ -4356,9 +4356,10 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
 // =====================================================================
 function DemoShowcase() {
   const SCENES = 7
-  // +3s per scene per user feedback. Discover bumped further to allow
-  // the genre catalog to cycle Melodic House → Tech House (5.5s × 2 = 11s + buffer).
-  const D = [6000, 12000, 7500, 7500, 12500, 6500, 5500]
+  // Per user: pace slower, dwell longer on Set Builder (Export) where the
+  // playlist-assistant features need to be enumerated. Total ~70s, fits
+  // inside the 75s bg.mp3 so the music never restarts.
+  const D = [6000, 13000, 9000, 9000, 18000, 9000, 5000]
   const [scene, setScene] = useState(0)
   const [muted, setMuted] = useState(false)
   const audioRef = useRef(null)
@@ -4934,9 +4935,30 @@ function DemoSetBuilder() {
         )}
       </div>
 
-      {/* Track sequence — compact rows like the real Set page:
-          # | name | genre | format | size | key | stars | ×
-          With a left-edge accent bar whose intensity tracks the energy. */}
+      {/* Track sequence — only visible during method cycling stages. After
+          the cycle finishes, swap for a Features enumeration. */}
+      {showFeatures ? (
+        <div className="flex-1 flex flex-col justify-center min-h-0 px-3 py-2 space-y-2.5">
+          <div className="text-center mb-2 animate-fade-in-up">
+            <p className="text-[11px] uppercase tracking-widest text-purple-400 font-bold">Editor de playlists con IA</p>
+            <h3 className="text-base md:text-lg font-extrabold text-white">Integración nativa con <span className="text-orange-400">Rekordbox</span></h3>
+          </div>
+          {FEATURES.map((f, i) => (
+            <div
+              key={f.label}
+              className="flex items-start gap-3 px-3 py-2 rounded-xl bg-gradient-to-r from-white/[0.06] to-transparent border-l-2 border-purple-400/60 animate-demo-tag-pop"
+              style={{ animationDelay: `${i * 250}ms` }}
+            >
+              <span className="text-2xl flex-shrink-0">{f.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-extrabold text-white leading-tight">{f.label}</div>
+                <div className="text-[11px] text-gray-400 leading-tight mt-0.5">{f.desc}</div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 font-bold flex-shrink-0">✓</span>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div key={activeMethod?.id || 'intro'} className="flex-1 space-y-0.5 mb-2 min-h-0 overflow-hidden">
         {orderedTracks.map((t, i) => {
           const accent = {
@@ -4975,25 +4997,28 @@ function DemoSetBuilder() {
           )
         })}
       </div>
+      )}
 
-      {/* Curve visualization — bars representing energy by position */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-[10px] text-gray-300">
-          <span className="font-semibold">⚡ {activeMethod?.id === 'peak' ? 'Curva Peak' : 'Energy curve'}</span>
-          <span className="text-yellow-400 font-bold font-mono">
-            {orderedTracks.map(t => t.energy).join(' → ')}
-          </span>
+      {/* Curve visualization — bars representing energy by position. Hidden when showing features list. */}
+      {!showFeatures && (
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] text-gray-300">
+            <span className="font-semibold">⚡ {activeMethod?.id === 'peak' ? 'Curva Peak' : 'Energy curve'}</span>
+            <span className="text-yellow-400 font-bold font-mono">
+              {orderedTracks.map(t => t.energy).join(' → ')}
+            </span>
+          </div>
+          <div className="flex items-end gap-1 h-8">
+            {orderedTracks.map((t, i) => (
+              <div
+                key={`${activeMethod?.id || 'intro'}-bar-${i}`}
+                className="flex-1 rounded-t bg-gradient-to-t from-blue-500 via-purple-500 to-pink-500 transition-all duration-500 ease-out"
+                style={{ height: `${t.energy * 11}%` }}
+              />
+            ))}
+          </div>
         </div>
-        <div className="flex items-end gap-1 h-8">
-          {orderedTracks.map((t, i) => (
-            <div
-              key={`${activeMethod?.id || 'intro'}-bar-${i}`}
-              className="flex-1 rounded-t bg-gradient-to-t from-blue-500 via-purple-500 to-pink-500 transition-all duration-500 ease-out"
-              style={{ height: `${t.energy * 11}%` }}
-            />
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -5485,14 +5510,26 @@ function ReelSet() {
     { name: 'Biscits - Crush (Extended Mix)',            k: 'Fm · 4A', bpm: 128, energy: 9, genre: 'Tech House',    fmt: 'FLAC', size: '43.18MB', stars: 5, cover: '/demo/covers/biscits-crush.jpg' },
   ]
   const METHODS = [
-    { id: 'camelot', label: '🎯 Camelot', desc: 'Encadena tracks por compatibilidad armónica', color: 'purple' },
-    { id: 'energy',  label: '⚡ Energy',   desc: 'Por curva de energía — sube progresivamente',  color: 'yellow' },
+    { id: 'camelot', label: '🎯 Camelot', desc: 'Encadena tracks por compatibilidad armónica (Mixed in Key)', color: 'purple' },
+    { id: 'energy',  label: '⚡ Energy',   desc: 'Por curva de energía — sube progresivamente sin saltos',     color: 'yellow' },
   ]
+  // Features enumeration shown after the method cycling — one bullet per second.
+  const FEATURES = [
+    { icon: '🎯', label: 'Mixed in Key',     desc: 'Compatibilidad armónica por nota — rueda Camelot' },
+    { icon: '⚡', label: 'Energy progresiva', desc: 'Curva de intensidad sin saltos · 1 → 10' },
+    { icon: '🎭', label: 'Genre matching',   desc: 'Mismo género o subgéneros vecinos' },
+    { icon: '📈', label: 'Peak Time',        desc: 'Warmup → Peak → Cooldown automático' },
+    { icon: '💾', label: 'Export Rekordbox', desc: 'XML con rating · BPM · Camelot Key + M3U' },
+  ]
+  // Stage flow: -1 (intro) → 0 (Camelot) → 1 (Energy) → 2 (Features list)
+  const TOTAL_STAGES = METHODS.length + 1 // methods + features
   const [stage, setStage] = useState(-1)
   useEffect(() => {
-    const t = setTimeout(() => setStage(s => (s >= METHODS.length - 1 ? s : s + 1)), stage === -1 ? 1500 : 3500)
+    if (stage >= TOTAL_STAGES - 1) return // freeze on features list
+    const t = setTimeout(() => setStage(s => s + 1), stage === -1 ? 1500 : 3500)
     return () => clearTimeout(t)
   }, [stage])
+  const showFeatures = stage >= METHODS.length
   const activeMethod = stage >= 0 ? METHODS[stage] : null
   const colorMap = {
     purple: { chip: 'bg-purple-500/30 border-purple-400/60 text-purple-200 shadow-purple-500/40', text: 'text-purple-300' },
