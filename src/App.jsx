@@ -4042,35 +4042,27 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
     }
   }
 
-  // 64 waveform bars with random heights + animation delays
-  const bars = Array.from({ length: 64 }, (_, i) => ({
+  // 64 waveform bars with random heights + animation delays — memoized so keystrokes don't restart the animation
+  const bars = useMemo(() => Array.from({ length: 64 }, () => ({
     h: 20 + Math.random() * 70,
     delay: -(Math.random() * 1.6).toFixed(2),
     dur: (0.6 + Math.random() * 0.8).toFixed(2),
-  }))
+  })), [])
 
-  const Wrapper = ({ children }) => isModal ? (
-    <div className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-md flex items-center justify-center animate-fade-in p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="relative">{children}</div>
-    </div>
-  ) : (
-    <div className="h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden">{children}</div>
-  )
-
-  return (
-    <Wrapper>
-      {!isModal && (<>
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        className="absolute inset-0 w-full h-full object-cover opacity-40"
-        onError={(e) => { e.currentTarget.style.display = 'none' }}
-      >
-        <source src="/bg.mp4" type="video/mp4" />
-      </video></>)}
-      {!isModal && (<></>)}
+  const inner = (
+    <>
+      {!isModal && (
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover opacity-40"
+          onError={(e) => { e.currentTarget.style.display = 'none' }}
+        >
+          <source src="/bg.mp4" type="video/mp4" />
+        </video>
+      )}
 
       {/* Animated mesh gradient blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -4109,6 +4101,10 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
 
         <form onSubmit={handleLogin} className="space-y-3">
           <input
+            type="text"
+            name="username"
+            id="login-username"
+            autoComplete="username"
             value={username}
             onChange={e => setUsername(e.target.value)}
             placeholder="Usuario"
@@ -4117,6 +4113,9 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
           />
           <input
             type="password"
+            name="password"
+            id="login-password"
+            autoComplete="current-password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="Contraseña"
@@ -4169,7 +4168,15 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
           </button>
         )}
       </div>
-    </Wrapper>
+    </>
+  )
+
+  return isModal ? (
+    <div className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-md flex items-center justify-center animate-fade-in p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="relative">{inner}</div>
+    </div>
+  ) : (
+    <div className="h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden">{inner}</div>
   )
 }
 
