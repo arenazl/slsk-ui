@@ -4356,8 +4356,9 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
 // =====================================================================
 function DemoShowcase() {
   const SCENES = 7
-  // +3s per scene per user feedback ("no pases tan rapido")
-  const D = [6000, 7500, 7500, 7500, 12500, 6500, 5500]
+  // +3s per scene per user feedback. Discover bumped further to allow
+  // the genre catalog to cycle Melodic House → Tech House (5.5s × 2 = 11s + buffer).
+  const D = [6000, 12000, 7500, 7500, 12500, 6500, 5500]
   const [scene, setScene] = useState(0)
   const [muted, setMuted] = useState(false)
   const audioRef = useRef(null)
@@ -4488,41 +4489,64 @@ function DemoIntro() {
 // con track count + refresh + 3 album thumbs, tabs de género, "Preview
 // continuo" + chips de duración, lista de tracks con label + BPM + Key.
 function DemoSources() {
-  const tracks = [
-    { n: 'Hot Sauce (Extended)',    a: 'Kapuchon, Miss Monique',    label: 'AETERNA',  bpm: 129, k: 'Gb · 11A',  d: '5:36', state: 'dl',                           thumb: 'from-orange-500 to-red-700' },
-    { n: 'Be The One (Extended)',   a: 'Adam Port, Keinemusik',     label: 'Keinemusik', bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                           thumb: 'from-cyan-400 to-blue-600' },
-    { n: 'Recall (Extended Mix)',   a: 'HotLap',                    label: 'One Seven', bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done',  dot: true,             thumb: 'from-red-500 to-pink-700' },
-    { n: "Didn't Miss You (OG)",    a: 'Liva K',                    label: 'Magnifik',  bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',    highlight: true,       thumb: 'from-purple-500 to-blue-700' },
+  // Two genre catalogs that cycle, showing the user that Discover walks through
+  // multiple Beatport/Spotify charts.
+  const CATALOGS = [
+    {
+      genre: 'Melodic House',
+      count: 100,
+      tracks: [
+        { n: 'Hot Sauce (Extended)',    a: 'Kapuchon, Miss Monique', label: 'AETERNA',    bpm: 129, k: 'Gb · 11A', d: '5:36', state: 'dl',                       cover: '/demo/covers/hot-sauce.jpg' },
+        { n: 'Be The One (Extended)',   a: 'Adam Port, Keinemusik',  label: 'Keinemusik', bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                       cover: '/demo/covers/be-the-one.jpg' },
+        { n: 'Recall (Extended Mix)',   a: 'HotLap',                 label: 'One Seven',  bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done', dot: true,          cover: '/demo/covers/recall.jpg' },
+        { n: "Didn't Miss You (OG)",    a: 'Liva K',                 label: 'Magnifik',   bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',   highlight: true,    cover: '/demo/covers/didnt-miss.jpg' },
+      ],
+    },
+    {
+      genre: 'Tech House',
+      count: 88,
+      tracks: [
+        { n: 'Tesla (Extended Mix)',    a: 'Mau P',                  label: 'Repopulate', bpm: 128, k: '4A',       d: '6:12', state: 'dl',                       cover: '/demo/covers/tesla.jpg' },
+        { n: 'Crush (Extended Mix)',    a: 'Biscits',                label: 'Solid Grooves', bpm: 128, k: 'Fm · 4A', d: '5:48', state: 'dl',                     cover: '/demo/covers/biscits-crush.jpg' },
+        { n: 'Operate (Extended)',      a: 'Deeper Purpose',         label: 'Drumcode',   bpm: 128, k: 'Gm · 6A',  d: '5:32', state: 'done', dot: true,          cover: '/demo/covers/deeper-purpose.jpg' },
+        { n: 'Pom (Original Mix) 130',  a: 'Chico Rose (NL)',        label: 'Toolroom',   bpm: 130, k: 'D# · 5B',  d: '5:11', state: 'dl',                       cover: '/demo/covers/chico-rose.jpg' },
+      ],
+    },
   ]
+  const [catIdx, setCatIdx] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setCatIdx(i => (i + 1) % CATALOGS.length), 5500)
+    return () => clearTimeout(t)
+  }, [catIdx])
+  const cat = CATALOGS[catIdx]
+  const tracks = cat.tracks
   return (
     <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
       <DemoAppHeader active="Discover" />
-      {/* Hero header: "Melodic House" big + track count + refresh + album thumbs */}
+      {/* Hero header: dynamic genre + track count + refresh + album thumbs */}
       <div className="flex-shrink-0 flex items-center gap-3 mb-2 px-1">
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg md:text-xl font-extrabold text-white leading-tight">Melodic House</h2>
+          <h2 key={`title-${catIdx}`} className="text-lg md:text-xl font-extrabold text-white leading-tight animate-fade-in">{cat.genre}</h2>
           <p className="text-[10px] text-gray-400 flex items-center gap-1">
-            <span className="text-white font-bold">100</span> tracks · actualizado hoy 12:28
+            <span className="text-white font-bold">{cat.count}</span> tracks · actualizado hoy 12:28
             <svg className="w-2.5 h-2.5 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           </p>
         </div>
-        <div className="flex gap-1 flex-shrink-0">
-          <div className="w-7 h-7 rounded bg-gradient-to-br from-orange-500 to-red-700 ring-1 ring-white/20" />
-          <div className="w-7 h-7 rounded bg-gradient-to-br from-cyan-400 to-blue-600 ring-1 ring-white/20" />
-          <div className="w-7 h-7 rounded bg-gradient-to-br from-red-500 to-pink-700 ring-1 ring-white/20" />
+        <div key={`thumbs-${catIdx}`} className="flex gap-1 flex-shrink-0 animate-fade-in">
+          {tracks.slice(0, 3).map((t, i) => (
+            <img key={i} src={t.cover} alt="" className="w-7 h-7 rounded object-cover ring-1 ring-white/20" />
+          ))}
         </div>
       </div>
 
-      {/* Genre tabs */}
+      {/* Genre tabs — active tab highlights based on the cycling catalog */}
       <div className="flex-shrink-0 flex items-center gap-2 mb-2 px-1 overflow-hidden text-[10px]">
-        <span className="text-gray-500">All</span>
-        <span className="text-blue-300 border-b-2 border-blue-400 pb-0.5 font-semibold">Melodic House</span>
-        <span className="text-gray-500">Mel. Techno</span>
-        <span className="text-gray-500">Tech House</span>
-        <span className="text-gray-500">Afro House</span>
-        <span className="text-gray-500">Deep House</span>
-        <span className="text-gray-500">Hip Hop</span>
-        <span className="text-gray-500">Nu Disco</span>
+        {['All', 'Melodic House', 'Mel. Techno', 'Tech House', 'Afro House', 'Deep House', 'Hip Hop', 'Nu Disco'].map(t => {
+          const isActive = (cat.genre === 'Melodic House' && t === 'Melodic House') || (cat.genre === 'Tech House' && t === 'Tech House')
+          return (
+            <span key={t} className={isActive ? 'text-blue-300 border-b-2 border-blue-400 pb-0.5 font-semibold transition-colors' : 'text-gray-500 transition-colors'}>{t}</span>
+          )
+        })}
       </div>
 
       {/* Preview continuo + duration chips + Stop */}
@@ -4539,21 +4563,21 @@ function DemoSources() {
           <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
           Stop
         </span>
-        <span className="text-[10px] text-gray-500 ml-1">100 tracks</span>
+        <span className="text-[10px] text-gray-500 ml-1">{cat.count} tracks</span>
       </div>
 
       {/* Track list */}
-      <div className="flex-1 min-h-0 space-y-1 overflow-hidden">
+      <div key={`list-${catIdx}`} className="flex-1 min-h-0 space-y-1 overflow-hidden">
         {tracks.map((t, i) => (
           <div
-            key={i}
+            key={`${catIdx}-${i}`}
             className={`flex items-center gap-2 px-1.5 py-1 rounded animate-demo-tag-pop ${
               t.highlight ? 'bg-green-500/[0.08] ring-1 ring-green-500/40' : ''
             }`}
             style={{ animationDelay: `${i * 200}ms` }}
           >
             <span className="text-[9px] text-gray-500 font-mono w-3 flex-shrink-0">{i + 1}</span>
-            <div className={`w-7 h-7 rounded flex-shrink-0 bg-gradient-to-br ${t.thumb}`} />
+            <img src={t.cover} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 ring-1 ring-white/10" />
             <div className="flex-1 min-w-0">
               <div className={`text-[10px] font-bold truncate flex items-center gap-1 ${t.highlight ? 'text-green-300' : 'text-white'}`}>
                 {t.n}
@@ -4581,10 +4605,9 @@ function DemoSources() {
 
       <div className="flex-shrink-0 mt-1 text-center">
         <p className="text-[11px] text-white font-bold">
-          Catálogo <span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span>
-          <span className="text-gray-400"> · renovado </span>
-          <span className="text-purple-300">cada semana</span>
+          Recorré los catálogos de <span className="text-blue-400">Beatport</span> y <span className="text-green-400">Spotify</span>
         </p>
+        <p className="text-[10px] text-gray-400">top charts <span className="text-purple-300 font-bold">renovados cada semana</span></p>
       </div>
     </div>
   )
@@ -4595,15 +4618,15 @@ function DemoSources() {
 // las descargas avanzan en background con progress bars.
 function DemoDownload() {
   const listRows = [
-    { n: 'Recall (Extended Mix)',     a: 'HotLap',  fmt: 'FLAC', state: 'done',  thumb: 'from-red-500 to-pink-700' },
-    { n: "Didn't Miss You (OG)",      a: 'Liva K',  fmt: 'FLAC', state: 'menu',  thumb: 'from-purple-500 to-blue-700', highlight: true },
-    { n: 'Spotlight (Original Mix)',  a: 'Andrea Oliva',           fmt: 'FLAC', state: 'dl', thumb: 'from-yellow-400 to-orange-600' },
-    { n: 'Pa Ca (Original Mix)',      a: 'Massano, Silver Panda',  fmt: 'FLAC', state: 'dl', thumb: 'from-cyan-400 to-blue-600' },
+    { n: 'Recall (Extended Mix)',     a: 'HotLap',                fmt: 'FLAC', state: 'done', cover: '/demo/covers/recall.jpg' },
+    { n: "Didn't Miss You (OG)",      a: 'Liva K',                fmt: 'FLAC', state: 'menu', cover: '/demo/covers/didnt-miss.jpg', highlight: true },
+    { n: 'Spotlight (Original Mix)',  a: 'Andrea Oliva',          fmt: 'FLAC', state: 'dl',   cover: '/demo/covers/spotlight.jpg' },
+    { n: 'Pa Ca (Original Mix)',      a: 'Massano, Silver Panda', fmt: 'FLAC', state: 'dl',   cover: '/demo/covers/paca.jpg' },
   ]
   const downloads = [
-    { name: 'Liva K - Didn\'t Miss You.flac',     size: '40MB', fmt: 'FLAC', progress: 88 },
-    { name: 'Andrea Oliva - Spotlight.flac',     size: '46MB', fmt: 'FLAC', progress: 54 },
-    { name: 'Massano - Pa Ca.flac',              size: '32MB', fmt: 'FLAC', progress: 22 },
+    { name: 'Liva K - Didn\'t Miss You.flac',     size: '40MB', fmt: 'FLAC', progress: 88, cover: '/demo/covers/didnt-miss.jpg' },
+    { name: 'Andrea Oliva - Spotlight.flac',     size: '46MB', fmt: 'FLAC', progress: 54, cover: '/demo/covers/spotlight.jpg' },
+    { name: 'Massano - Pa Ca.flac',              size: '32MB', fmt: 'FLAC', progress: 22, cover: '/demo/covers/paca.jpg' },
   ]
   return (
     <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
@@ -4626,7 +4649,7 @@ function DemoDownload() {
                 style={{ animationDelay: `${i * 150}ms` }}
               >
                 <span className="text-[9px] text-gray-500 font-mono w-3 flex-shrink-0">{i + 3}</span>
-                <div className={`w-6 h-6 rounded flex-shrink-0 bg-gradient-to-br ${t.thumb}`} />
+                <img src={t.cover} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0 ring-1 ring-white/10" />
                 <div className="flex-1 min-w-0">
                   <div className={`text-[10px] font-bold truncate ${t.highlight ? 'text-green-300' : 'text-white'}`}>{t.n}</div>
                   <div className="text-[9px] text-gray-400 truncate">{t.a}</div>
@@ -4674,9 +4697,7 @@ function DemoDownload() {
           {downloads.map((d, i) => (
             <div key={i} className="bg-white/[0.04] border border-white/10 rounded-lg p-1.5 animate-demo-tag-pop" style={{ animationDelay: `${300 + i * 200}ms` }}>
               <div className="flex items-center gap-1.5 mb-1">
-                <div className="w-5 h-5 rounded bg-blue-500/30 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-2.5 h-2.5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                </div>
+                <img src={d.cover} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0 ring-1 ring-white/10" />
                 <div className="flex-1 min-w-0">
                   <div className="text-[9px] text-white truncate">{d.name}</div>
                   <div className="text-[8px] text-gray-500">{d.size} · {d.progress}%</div>
