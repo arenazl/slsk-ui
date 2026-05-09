@@ -4605,8 +4605,8 @@ function DemoSources() {
             }`}
             style={{ animationDelay: `${i * 200}ms` }}
           >
-            <span className="text-[9px] text-gray-500 font-mono w-3 flex-shrink-0">{i + 1}</span>
-            <img src={t.cover} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 ring-1 ring-white/10" />
+            <span className="text-[10px] text-gray-500 font-mono w-3 flex-shrink-0">{i + 1}</span>
+            <img src={t.cover} alt="" className="w-10 h-10 rounded-md object-cover flex-shrink-0 ring-1 ring-white/15" />
             <div className="flex-1 min-w-0">
               <div className={`text-[10px] font-bold truncate flex items-center gap-1 ${t.highlight ? 'text-green-300' : 'text-white'}`}>
                 {t.n}
@@ -4672,8 +4672,8 @@ function DemoDownload() {
                 }`}
                 style={{ animationDelay: `${i * 150}ms` }}
               >
-                <span className="text-[9px] text-gray-500 font-mono w-3 flex-shrink-0">{i + 3}</span>
-                <img src={t.cover} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0 ring-1 ring-white/10" />
+                <span className="text-[10px] text-gray-500 font-mono w-3 flex-shrink-0">{i + 3}</span>
+                <img src={t.cover} alt="" className="w-9 h-9 rounded-md object-cover flex-shrink-0 ring-1 ring-white/15" />
                 <div className="flex-1 min-w-0">
                   <div className={`text-[10px] font-bold truncate ${t.highlight ? 'text-green-300' : 'text-white'}`}>{t.n}</div>
                   <div className="text-[9px] text-gray-400 truncate">{t.a}</div>
@@ -4720,8 +4720,8 @@ function DemoDownload() {
           </div>
           {downloads.map((d, i) => (
             <div key={i} className="bg-white/[0.04] border border-white/10 rounded-lg p-1.5 animate-demo-tag-pop" style={{ animationDelay: `${300 + i * 200}ms` }}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <img src={d.cover} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0 ring-1 ring-white/10" />
+              <div className="flex items-center gap-2 mb-1">
+                <img src={d.cover} alt="" className="w-8 h-8 rounded-md object-cover flex-shrink-0 ring-1 ring-white/15" />
                 <div className="flex-1 min-w-0">
                   <div className="text-[9px] text-white truncate">{d.name}</div>
                   <div className="text-[8px] text-gray-500">{d.size} · {d.progress}%</div>
@@ -4750,22 +4750,31 @@ function DemoDownload() {
 function DemoLibrary() {
   const groups = [
     { name: 'Tech House', count: 92, dot: 'bg-blue-500', tracks: [
-      { t: '04 - 05 - Biscits - 2C2 (Extended Mix)', f: 'FLAC' },
-      { t: '06 - 04 - Corrupt (Uk) - Trippin (Extended)', f: 'FLAC' },
+      { t: '04 - Biscits - 2C2 (Extended Mix)', f: 'FLAC' },
+      { t: '06 - Corrupt (Uk) - Trippin (Extended)', f: 'FLAC' },
       { t: '08 - Biscits - Freak (Extended Mix)', f: 'FLAC' },
-      { t: '01-mau_p-merther_(extended_mix)', f: 'FLAC' },
+      { t: '01 - Mau P - Merther (Extended)', f: 'FLAC' },
+      { t: '11 - Mau P - Tesla (Extended)', f: 'FLAC' },
+      { t: '03 - Solomun - Customer Is King', f: 'FLAC' },
+      { t: '07 - Andrea Oliva - Spotlight', f: 'FLAC' },
     ]},
     { name: 'Deep House', count: 47, dot: 'bg-green-500', tracks: [
-      { t: 'For The Soul', f: 'FLAC' },
-      { t: '01. Feels Like Us (Extended Mix)', f: 'FLAC' },
-      { t: '02-zehv-leland.mp3', f: 'MP3' },
-      { t: 'dreams (Extended Mix)', f: 'FLAC' },
+      { t: 'For The Soul (Original Mix)', f: 'FLAC' },
+      { t: '01 - Feels Like Us (Extended Mix)', f: 'FLAC' },
+      { t: '02 - Zehv - Leland', f: 'MP3' },
+      { t: 'Dreams (Extended Mix)', f: 'FLAC' },
+      { t: '14 - Jeff Sorkowitz - How Does It Feel', f: 'FLAC' },
+      { t: '04 - Sebastián Václava - A Beautiful Thing', f: 'FLAC' },
+      { t: '12 - Kim - Ready To Go (Original Mix)', f: 'WAV' },
     ]},
     { name: 'Melodic House', count: 41, dot: 'bg-purple-500', tracks: [
-      { t: '07 - 02 - 03-nordfold-forever_(extended_mix)', f: 'MP3' },
+      { t: '07 - Nordfold - Forever (Extended Mix)', f: 'MP3' },
       { t: '01 - Rainy (Devault Remix)', f: 'FLAC' },
-      { t: '01 RÜFÜS DU SOL - On My Knees', f: 'M4A' },
-      { t: '01 Somebody (2024)', f: 'FLAC' },
+      { t: '01 - RÜFÜS DU SOL - On My Knees', f: 'M4A' },
+      { t: '01 - Somebody (2024)', f: 'FLAC' },
+      { t: '03 - Hot Sauce - Kapuchon, Miss Monique', f: 'FLAC' },
+      { t: '02 - Be The One - Adam Port (Extended)', f: 'FLAC' },
+      { t: '04 - Recall - HotLap (Extended Mix)', f: 'FLAC' },
     ]},
   ]
   return (
@@ -4846,11 +4855,14 @@ function DemoLibrary() {
 // 4 different orderings. Each method ~2s on screen.
 function DemoSetBuilder() {
   const TRACKS = [
-    { name: 'Prospa - Don\'t Stop (Extended Mix)',           k: 'D# · 5B', bpm: 124, energy: 5, genre: 'Indie Dance',  fmt: 'FLAC', size: '27.82MB', stars: 3 },
-    { name: 'Chico Rose (NL) - Pom (Original Mix) 130',      k: 'D# · 5B', bpm: 130, energy: 6, genre: 'Tech House',   fmt: 'FLAC', size: '49.8MB',  stars: 4 },
-    { name: '22 - Deeper Purpose - Operate (Extended)',      k: 'Gm · 6A', bpm: 128, energy: 7, genre: 'Tech House',   fmt: 'FLAC', size: '40.39MB', stars: 5 },
-    { name: 'Polovich - Sweet Dreams (Original Mix)',        k: 'B · 1B',  bpm: 130, energy: 8, genre: 'Melodic House',fmt: 'MP3',  size: '10.73MB', stars: 5 },
-    { name: 'Biscits - Crush (Extended Mix)',                k: 'Fm · 4A', bpm: 128, energy: 9, genre: 'Tech House',   fmt: 'FLAC', size: '43.18MB', stars: 5 },
+    { name: "Prospa - Don't Stop (Extended Mix)",           k: 'D# · 5B', bpm: 124, energy: 5, genre: 'Indie Dance',   fmt: 'FLAC', size: '27.82MB', stars: 3 },
+    { name: 'Chico Rose (NL) - Pom (Original Mix) 130',     k: 'D# · 5B', bpm: 130, energy: 5, genre: 'Tech House',    fmt: 'FLAC', size: '49.8MB',  stars: 4 },
+    { name: 'Velvet Avenue (Extended)',                     k: 'Fm · 4A', bpm: 122, energy: 6, genre: 'Deep House',    fmt: 'FLAC', size: '38.4MB',  stars: 4 },
+    { name: '22 - Deeper Purpose - Operate (Extended)',     k: 'Gm · 6A', bpm: 128, energy: 7, genre: 'Tech House',    fmt: 'FLAC', size: '40.39MB', stars: 5 },
+    { name: 'At Night (Anyma · Layton Giordani)',           k: '8A',      bpm: 124, energy: 7, genre: 'Mel. Techno',   fmt: 'FLAC', size: '44.2MB',  stars: 5 },
+    { name: 'Polovich - Sweet Dreams (Original Mix)',       k: 'B · 1B',  bpm: 130, energy: 8, genre: 'Melodic House', fmt: 'MP3',  size: '10.73MB', stars: 5 },
+    { name: 'Tesla - Mau P (Extended Mix)',                 k: '4A',      bpm: 128, energy: 8, genre: 'Tech House',    fmt: 'FLAC', size: '40.0MB',  stars: 5 },
+    { name: 'Biscits - Crush (Extended Mix)',               k: 'Fm · 4A', bpm: 128, energy: 9, genre: 'Tech House',    fmt: 'FLAC', size: '43.18MB', stars: 5 },
   ]
   // Only Camelot + Energy methods (per user feedback — Genre/Peak removed)
   const METHODS = [
@@ -4947,23 +4959,23 @@ function DemoSetBuilder() {
       {/* Track sequence — only visible during method cycling stages. After
           the cycle finishes, swap for a Features enumeration. */}
       {showFeatures ? (
-        <div className="flex-1 flex flex-col justify-center min-h-0 px-3 py-2 space-y-2.5">
-          <div className="text-center mb-2 animate-fade-in-up">
-            <p className="text-[11px] uppercase tracking-widest text-purple-400 font-bold">Editor de playlists con IA</p>
-            <h3 className="text-base md:text-lg font-extrabold text-white">Integración nativa con <span className="text-orange-400">Rekordbox</span></h3>
+        <div className="flex-1 flex flex-col justify-center min-h-0 px-4 py-3 space-y-3">
+          <div className="text-center mb-3 animate-fade-in-up">
+            <p className="text-sm uppercase tracking-widest text-purple-400 font-bold mb-1">Editor de playlists con IA</p>
+            <h3 className="text-2xl md:text-3xl font-black text-white leading-tight">Integración nativa con <span className="text-orange-400">Rekordbox</span></h3>
           </div>
           {FEATURES.map((f, i) => (
             <div
               key={f.label}
-              className="flex items-start gap-3 px-3 py-2 rounded-xl bg-gradient-to-r from-white/[0.06] to-transparent border-l-2 border-purple-400/60 animate-demo-tag-pop"
-              style={{ animationDelay: `${i * 250}ms` }}
+              className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-gradient-to-r from-white/[0.08] to-transparent border-l-4 border-purple-400/70 animate-demo-tag-pop"
+              style={{ animationDelay: `${i * 280}ms` }}
             >
-              <span className="text-2xl flex-shrink-0">{f.icon}</span>
+              <span className="text-4xl flex-shrink-0">{f.icon}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-extrabold text-white leading-tight">{f.label}</div>
-                <div className="text-[11px] text-gray-400 leading-tight mt-0.5">{f.desc}</div>
+                <div className="text-lg md:text-xl font-extrabold text-white leading-tight">{f.label}</div>
+                <div className="text-sm text-gray-300 leading-tight mt-0.5">{f.desc}</div>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 font-bold flex-shrink-0">✓</span>
+              <span className="text-sm px-3 py-1 rounded-full bg-green-500/25 text-green-300 font-extrabold flex-shrink-0">✓</span>
             </div>
           ))}
         </div>
