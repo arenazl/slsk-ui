@@ -4413,33 +4413,18 @@ function App() {
       }
       const configBody = JSON.stringify({ username: authUser.name })
       const configHeaders = { 'Content-Type': 'application/json' }
+      // Direct attempts (localhost, Funnel) hit the agent's CORS check and fail
+      // for users on domains the agent doesn't whitelist (anything other than
+      // groovesyncdj.netlify.app on v2.8.0). They also trigger Chrome's PNA
+      // permission prompt on HTTPS pages. Going via Heroku proxy avoids both:
+      // server-to-server, no CORS, no PNA. Slightly higher latency but seamless.
       try {
-        // Try localhost first (desktop / same machine)
-        if (await connectAgent('local',
-          'http://localhost:9900/api/status',
-          () => fetch('http://localhost:9900/api/config', { method: 'POST', headers: configHeaders, body: configBody })
-        )) { AGENT_BASE = 'http://localhost:9900'; return }
-      } catch { /* localhost failed */ }
-      try {
-        // Ask server for agent's public host (Tailscale Funnel HTTPS or LAN IP)
-        const lookupRes = await fetch(`${API_BASE}/api/agent/lookup?username=${encodeURIComponent(authUser.name)}`, { signal: AbortSignal.timeout(3000) })
-        const lookupData = await lookupRes.json()
-        if (lookupData.agent_host) {
-          // If agent has HTTPS URL (Tailscale Funnel), connect directly — no mixed content
-          if (lookupData.agent_host.startsWith('https://')) {
-            if (await connectAgent('local',
-              `${lookupData.agent_host}/api/status`,
-              () => fetch(`${lookupData.agent_host}/api/config`, { method: 'POST', headers: configHeaders, body: configBody })
-            )) { AGENT_BASE = lookupData.agent_host; return }
-          }
-          // Otherwise use server proxy (avoids mixed content for HTTP agents)
-          const proxyStatus = `${API_BASE}/api/agent/proxy/status?u=${encodeURIComponent(authUser.name)}`
-          if (await connectAgent('proxy',
-            proxyStatus,
-            () => agentFetch('config', { method: 'POST', headers: configHeaders, body: configBody })
-          )) return
-        }
-      } catch { /* remote also failed */ }
+        const proxyStatus = `${API_BASE}/api/agent/proxy/status?u=${encodeURIComponent(authUser.name)}`
+        if (await connectAgent('proxy',
+          proxyStatus,
+          () => agentFetch('config', { method: 'POST', headers: configHeaders, body: configBody })
+        )) return
+      } catch { /* proxy failed */ }
       setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
     }
     checkAgent()
