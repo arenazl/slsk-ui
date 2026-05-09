@@ -4358,13 +4358,42 @@ function DemoShowcase() {
   const SCENES = 7
   const D = [3000, 4500, 4500, 4500, 9500, 3500, 2500]
   const [scene, setScene] = useState(0)
+  const [muted, setMuted] = useState(true)
+  const audioRef = useRef(null)
   useEffect(() => {
     const t = setTimeout(() => setScene(s => (s + 1) % SCENES), D[scene])
     return () => clearTimeout(t)
   }, [scene])
+  // Try to autoplay (works after user clicks "Ver demo" — that gesture allows it).
+  useEffect(() => {
+    audioRef.current?.play().catch(() => {})
+  }, [])
+  const toggleMute = () => {
+    const next = !muted
+    setMuted(next)
+    if (audioRef.current) {
+      audioRef.current.muted = next
+      if (!next) audioRef.current.play().catch(() => {})
+    }
+  }
 
   return (
     <div className="relative w-full aspect-video bg-slate-950 rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-2xl">
+      {/* Background music — KREAM & Script · Turn Up The Dose (32s loop, demo only) */}
+      <audio ref={audioRef} src="/demo/bg.mp3" loop muted={muted} preload="auto" />
+      {/* Mute toggle */}
+      <button
+        onClick={toggleMute}
+        className="absolute top-3 right-3 z-30 w-9 h-9 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/10 flex items-center justify-center text-white transition-all active:scale-95"
+        aria-label={muted ? 'Activar audio' : 'Silenciar'}
+        title={muted ? 'Activar audio' : 'Silenciar'}
+      >
+        {muted ? (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+        ) : (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+        )}
+      </button>
       {/* Animated background blobs (shared across all scenes) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-600/25 blur-3xl animate-blob" />
@@ -4539,9 +4568,10 @@ function DemoSources() {
       </div>
 
       <div className="flex-shrink-0 mt-1 text-center">
-        <p className="text-[10px] text-gray-400">
-          Listas <span className="text-blue-400 font-bold">Beatport</span> + <span className="text-green-400 font-bold">Spotify</span> ·
-          <span className="text-purple-300 font-bold"> EDM · POP · LATIN</span> · top charts en vivo
+        <p className="text-[11px] text-white font-bold">
+          Catálogo <span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span>
+          <span className="text-gray-400"> · renovado </span>
+          <span className="text-purple-300">cada semana</span>
         </p>
       </div>
     </div>
@@ -4567,8 +4597,8 @@ function DemoDownload() {
     <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
       <DemoAppHeader active="Discover" />
       <div className="text-center mb-2">
-        <h2 className="text-base md:text-lg font-extrabold text-white">Descarga automática <span className="text-blue-400">+ Preview Continuo</span></h2>
-        <p className="text-[10px] text-gray-400">Click derecho → opciones · descarga en background · FLAC / MP3 / WAV</p>
+        <h2 className="text-base md:text-lg font-extrabold text-white">Descarga directa · <span className="text-blue-400">calidad profesional</span></h2>
+        <p className="text-[10px] text-gray-400">FLAC sin pérdida · MP3 320k · WAV — al instante, sin colas ni intermediarios</p>
       </div>
 
       <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
@@ -4746,9 +4776,11 @@ function DemoLibrary() {
         ))}
       </div>
       <div className="flex-shrink-0 mt-2 text-center">
+        <p className="text-[11px] text-white font-bold">
+          Biblioteca clasificada automáticamente <span className="text-purple-300">por IA</span>
+        </p>
         <p className="text-[10px] text-gray-400">
-          <span className="text-white font-bold">305 tracks</span> organizados por género ·
-          <span className="text-purple-300 font-bold"> análisis BPM + Camelot Key</span> automático
+          <span className="text-white font-bold">305 tracks</span> · BPM · Camelot Key · género — sin tocar nada
         </p>
       </div>
     </div>
@@ -4820,8 +4852,8 @@ function DemoSetBuilder() {
     <div className="absolute inset-0 flex flex-col p-4 md:p-6 animate-fade-in z-10">
       <DemoAppHeader active="Set" />
       <div className="text-center mb-2">
-        <h2 className="text-lg md:text-xl font-extrabold text-white">Set generado <span className="text-blue-400">automáticamente</span></h2>
-        <p className="text-[11px] text-gray-400">4 estilos de mix · resultado en 1 click</p>
+        <h2 className="text-lg md:text-xl font-extrabold text-white">Asistente <span className="text-blue-400">IA</span> de playlists</h2>
+        <p className="text-[11px] text-gray-400">Sets compatibles por <span className="text-purple-300 font-bold">Camelot · Energy · Genre · Peak</span> — 1 click</p>
       </div>
 
       {/* Filter row (always visible) */}
@@ -4945,8 +4977,8 @@ function DemoExport() {
 
       {/* Title */}
       <div className="text-center mt-1 mb-1">
-        <h2 className="text-base md:text-lg font-extrabold text-white">Mix Editor con <span className="text-blue-400">crossfading automático</span></h2>
-        <p className="text-[10px] text-gray-400">Beatmatching · BPM lock · Fade 16s · Export MP3 320k</p>
+        <h2 className="text-base md:text-lg font-extrabold text-white">Previsualizá tu mix <span className="text-blue-400">antes de tocarlo</span></h2>
+        <p className="text-[10px] text-gray-400">Crossfading auto · beatmatching · fade 16s · export MP3 320k</p>
       </div>
 
       {/* Timeline ruler */}
