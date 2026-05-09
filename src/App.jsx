@@ -10432,14 +10432,60 @@ function ShareView() {
 }
 
 
+function ReelsView() {
+  // Public reels/promo view — full-screen demo video + CTA. Shareable on IG.
+  return (
+    <div className="h-screen w-screen bg-black flex items-center justify-center relative overflow-hidden">
+      {/* Animated bg blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-blue-600/30 blur-3xl animate-blob" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-purple-600/30 blur-3xl animate-blob animation-delay-2000" />
+        <div className="absolute top-1/2 left-1/2 w-80 h-80 rounded-full bg-pink-600/20 blur-3xl animate-blob animation-delay-4000" />
+      </div>
+
+      <div className="relative w-full max-w-md mx-auto px-4 py-6 flex flex-col items-center gap-5">
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="DJ Free App" className="w-12 h-12 rounded-2xl shadow-lg shadow-blue-500/30" />
+          <span className="text-2xl font-bold text-white tracking-tight">DJ Free App</span>
+        </div>
+
+        <video
+          src="/feature-video.webm"
+          controls
+          autoPlay
+          loop
+          playsInline
+          className="w-full rounded-3xl shadow-2xl ring-1 ring-white/10 aspect-[9/16] bg-black object-cover"
+        />
+
+        <div className="text-center">
+          <div className="text-xs uppercase tracking-wider text-pink-300 font-bold mb-1">DJs argentos</div>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Set armado en 30 segundos</h1>
+          <p className="text-sm text-gray-400 mt-1">Discover · Sets armónicos · Mix Editor · Sync</p>
+        </div>
+
+        <a
+          href="/?guest=1"
+          className="w-full py-4 rounded-2xl text-center font-bold text-white shadow-xl shadow-blue-500/40 hover:brightness-110 active:scale-[0.98] transition-all"
+          style={{ background: 'linear-gradient(135deg, #3b82f6, #a855f7, #ec4899)' }}
+        >
+          Probalo gratis →
+        </a>
+        <a href="/" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Ya tengo cuenta</a>
+      </div>
+    </div>
+  )
+}
+
 function AppWithToast() {
-  // Public shared-track view — no auth, no websocket, no library. Just the preview.
-  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('share') === '1') {
-    return (
-      <ToastProvider>
-        <ShareView />
-      </ToastProvider>
-    )
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('reels') === '1') {
+      return <ToastProvider><ReelsView /></ToastProvider>
+    }
+    if (params.get('share') === '1') {
+      return <ToastProvider><ShareView /></ToastProvider>
+    }
   }
   return (
     <ToastProvider>
