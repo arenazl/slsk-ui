@@ -6855,7 +6855,7 @@ function App() {
       )}
       {demoVideoOpen && (
         <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl">
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-7xl">
             <DemoShowcase />
             <button
               onClick={() => setDemoVideoOpen(false)}
