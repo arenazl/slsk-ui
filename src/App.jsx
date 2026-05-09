@@ -3976,7 +3976,7 @@ function Tutorial({ onDone }) {
   )
 }
 
-function LoginScreen({ onLogin, isModal = false, onClose }) {
+function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -4105,7 +4105,7 @@ function LoginScreen({ onLogin, isModal = false, onClose }) {
           </div>
           <button
             type="button"
-            onClick={() => { window.location.href = `${window.location.pathname}?guest=1` }}
+            onClick={() => { if (onGuestStart) onGuestStart(); else window.location.href = `${window.location.pathname}?guest=1` }}
             className="w-full py-3 rounded-2xl text-sm text-gray-300 hover:text-white border border-white/10 hover:border-white/30 hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98]"
           >
             Entrar como invitado
@@ -5284,40 +5284,138 @@ function App() {
     { key: 'error', label: 'Errores', count: errors },
   ].filter(t => t.key === 'all' || t.key === 'by_genre' || t.count > 0)
 
-  // Guest by default: anyone without auth can browse, preview, etc. The
-  // LoginScreen only shows up as a modal when the user attempts an action
-  // that requires login (like Download).
-  const isGuest = !authUser
+  // Trial config (editable in Settings). Default: 7 days, demo/123, MP link.
+  const [trialDays, setTrialDays] = useState(() => parseInt(localStorage.getItem('trial_days') || '7', 10))
+  const [trialMpUrl, setTrialMpUrl] = useState(() => localStorage.getItem('trial_mp_url') || 'https://www.mercadopago.com.ar/')
+  const [demoUser, setDemoUser] = useState(() => localStorage.getItem('demo_user') || 'demo')
+  const [demoPass, setDemoPass] = useState(() => localStorage.getItem('demo_pass') || '123')
 
-  // First-visit tutorial: shown once, dismissed via localStorage.
-  const [showTutorial, setShowTutorial] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return !localStorage.getItem('tutorial_seen') && !authUser
-  })
-  const dismissTutorial = () => {
-    localStorage.setItem('tutorial_seen', '1')
+  const isDemo = !!authUser && authUser.user === demoUser
+  const trialStart = parseInt(localStorage.getItem('trial_start') || '0', 10)
+  const trialExpired = isDemo && trialStart > 0 && (Date.now() - trialStart) > trialDays * 86400000
+
+  // Trial expired → boot to MercadoPago
+  useEffect(() => {
+    if (trialExpired) {
+      window.location.href = trialMpUrl
+    }
+  }, [trialExpired, trialMpUrl])
+
+  // Tutorial state — triggered explicitly from LoginScreen "Entrar como invitado".
+  const [showTutorial, setShowTutorial] = useState(false)
+  const dismissTutorial = async () => {
     setShowTutorial(false)
+    // After tutorial, auto-login as demo + mark trial start.
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: demoUser, password: demoPass }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        if (!localStorage.getItem('trial_start')) {
+          localStorage.setItem('trial_start', String(Date.now()))
+        }
+        localStorage.setItem('auth_token', data.token)
+        localStorage.setItem('auth_user', JSON.stringify(data))
+        setAuthUser(data)
+      }
+    } catch {}
   }
 
-  // Login modal triggered by gated actions (download, etc).
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const requireLogin = () => { if (!authUser) { setLoginModalOpen(true); return false } return true }
-  // Expose globally so any component can call window.requireLogin()
   useEffect(() => { window.requireLogin = requireLogin }, [authUser])
 
-  // Guests on Discover by default
-  useEffect(() => { if (isGuest && page !== 'discover' && page !== 'set' && page !== 'library') setPage('discover') }, [isGuest, page, setPage])
+  // Gate: no auth → LoginScreen (with "Entrar como invitado" → Tutorial → demo login)
+  if (!authUser && !showTutorial) {
+    return <LoginScreen
+      onLogin={setAuthUser}
+      onGuestStart={() => setShowTutorial(true)}
+    />
+  }
+  if (showTutorial) {
+    return <Tutorial onDone={dismissTutorial} />
+  }
+
+  const isGuest = isDemo
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
-      {showTutorial && <Tutorial onDone={dismissTutorial} />}
       {loginModalOpen && (
         <LoginScreen
           isModal
           onClose={() => setLoginModalOpen(false)}
           onLogin={(data) => { setAuthUser(data); setLoginModalOpen(false) }}
         />
+      )}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setSettingsOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-[var(--text-primary)] mb-4">Configuración</h2>
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Trial gratuito</div>
+                <label className="block text-sm text-[var(--text-secondary)] mb-1">Días antes de redirigir a MercadoPago</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={trialDays}
+                  onChange={e => { const v = parseInt(e.target.value || '1', 10); setTrialDays(v); localStorage.setItem('trial_days', String(v)) }}
+                  className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-[var(--text-secondary)] mb-1">URL de MercadoPago</label>
+                <input
+                  type="url"
+                  value={trialMpUrl}
+                  onChange={e => { setTrialMpUrl(e.target.value); localStorage.setItem('trial_mp_url', e.target.value) }}
+                  className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-[var(--text-secondary)] mb-1">Demo user</label>
+                  <input
+                    value={demoUser}
+                    onChange={e => { setDemoUser(e.target.value); localStorage.setItem('demo_user', e.target.value) }}
+                    className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--text-secondary)] mb-1">Demo pass</label>
+                  <input
+                    value={demoPass}
+                    onChange={e => { setDemoPass(e.target.value); localStorage.setItem('demo_pass', e.target.value) }}
+                    className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)]"
+                  />
+                </div>
+              </div>
+              {trialStart > 0 && (
+                <div className="text-xs text-[var(--text-muted)] bg-[var(--bg-input)] rounded-lg p-3">
+                  <div>Trial iniciado: {new Date(trialStart).toLocaleString()}</div>
+                  <div>Quedan: {Math.max(0, Math.ceil((trialStart + trialDays * 86400000 - Date.now()) / 86400000))} días</div>
+                  <button
+                    onClick={() => { localStorage.removeItem('trial_start'); setSettingsOpen(false) }}
+                    className="mt-2 text-red-400 hover:text-red-300 underline text-xs"
+                  >
+                    Reiniciar trial
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setSettingsOpen(false)}
+              className="mt-5 w-full py-2.5 rounded-xl text-sm font-semibold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-90 transition-all active:scale-95"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
       )}
       {/* iOS install instructions modal (Safari doesn't expose beforeinstallprompt) */}
       {showIosInstall && (
@@ -5744,6 +5842,13 @@ function App() {
                     </div>
                   </div>
                   <div className="py-1">
+                    <button
+                      onClick={() => { setUserMenuOpen(false); setSettingsOpen(true) }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3"
+                    >
+                      <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      Configuración
+                    </button>
                     <button
                       onClick={() => { setUserMenuOpen(false); setShowTutorial(true) }}
                       className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3"
