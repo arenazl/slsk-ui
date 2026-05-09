@@ -3868,7 +3868,115 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
   )
 }
 
-function LoginScreen({ onLogin }) {
+function Tutorial({ onDone }) {
+  const [step, setStep] = useState(0)
+  const slides = [
+    {
+      icon: '🔍',
+      title: 'Descubrí música nueva',
+      desc: 'Beatport, Spotify y SoulSeek en un solo lugar. Filtrá por género, BPM, key y energía.',
+      bars: [40, 70, 55, 85, 60, 75, 45],
+    },
+    {
+      icon: '🎯',
+      title: 'Sets armados con Camelot',
+      desc: 'Generá sets que matchean en tonalidad y energía automáticamente. Camelot, Energy, Genre, Peak.',
+      bars: [50, 80, 65, 90, 70, 85, 60],
+    },
+    {
+      icon: '🎚️',
+      title: 'Mezclá y exportá',
+      desc: 'Editor de mix con waveforms, fades, beat-grid. Exportá a USB con un click.',
+      bars: [60, 75, 90, 65, 85, 70, 80],
+    },
+    {
+      icon: '☁️',
+      title: 'Sync cross-device',
+      desc: 'Tu biblioteca en PC y celu, siempre actualizada. Bajá desde cualquier lado.',
+      bars: [55, 65, 80, 70, 95, 75, 85],
+    },
+  ]
+  const s = slides[step]
+  const next = () => step < slides.length - 1 ? setStep(step + 1) : onDone()
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center overflow-hidden animate-fade-in">
+      {/* Animated mesh blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-[40rem] h-[40rem] rounded-full bg-blue-600/30 blur-[120px] animate-blob" />
+        <div className="absolute top-1/2 -right-40 w-[35rem] h-[35rem] rounded-full bg-purple-600/30 blur-[120px] animate-blob animation-delay-2000" />
+        <div className="absolute -bottom-40 left-1/3 w-[30rem] h-[30rem] rounded-full bg-pink-600/20 blur-[120px] animate-blob animation-delay-4000" />
+      </div>
+
+      {/* Animated waveform bottom */}
+      <div className="absolute bottom-0 left-0 right-0 h-40 flex items-end justify-center gap-[3px] px-4 pointer-events-none opacity-60">
+        {Array.from({ length: 64 }).map((_, i) => (
+          <div
+            key={i}
+            className="w-1.5 rounded-t-full bg-gradient-to-t from-blue-500 via-purple-500 to-pink-500"
+            style={{
+              height: `${20 + Math.random() * 70}%`,
+              animation: `bounce-bar ${(0.5 + Math.random() * 1).toFixed(2)}s ease-in-out ${(-Math.random() * 1.5).toFixed(2)}s infinite alternate`,
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-transparent to-slate-950/90 pointer-events-none" />
+
+      <div key={step} className="relative w-full max-w-md px-6 text-center animate-fade-in-up">
+        <div className="text-7xl mb-6 inline-block animate-bounce-subtle">{s.icon}</div>
+        <h2 className="text-4xl md:text-5xl font-bold text-white mb-3 tracking-tight">{s.title}</h2>
+        <p className="text-base md:text-lg text-gray-300 mb-8 leading-relaxed">{s.desc}</p>
+
+        {/* Mini visualizer specific to this slide */}
+        <div className="flex items-end justify-center gap-1.5 h-20 mb-10">
+          {s.bars.map((h, i) => (
+            <div
+              key={i}
+              className="w-2.5 rounded-full bg-gradient-to-t from-[var(--color-accent)] to-purple-400"
+              style={{
+                height: `${h}%`,
+                animation: `bounce-bar ${(0.4 + i * 0.05).toFixed(2)}s ease-in-out ${(-i * 0.1).toFixed(2)}s infinite alternate`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Dots */}
+        <div className="flex justify-center gap-2 mb-8">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setStep(i)}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                i === step ? 'w-8 bg-white' : 'w-1.5 bg-white/30 hover:bg-white/50'
+              }`}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={onDone}
+            className="px-5 py-3 rounded-2xl text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            Saltear
+          </button>
+          <button
+            onClick={next}
+            className="px-8 py-3.5 rounded-2xl font-semibold text-white shadow-xl shadow-blue-500/40 hover:brightness-110 active:scale-[0.98] transition-all"
+            style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
+          >
+            {step < slides.length - 1 ? 'Siguiente' : 'Empezar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LoginScreen({ onLogin, isModal = false, onClose }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -3896,38 +4004,97 @@ function LoginScreen({ onLogin }) {
     }
   }
 
+  // 64 waveform bars with random heights + animation delays
+  const bars = Array.from({ length: 64 }, (_, i) => ({
+    h: 20 + Math.random() * 70,
+    delay: -(Math.random() * 1.6).toFixed(2),
+    dur: (0.6 + Math.random() * 0.8).toFixed(2),
+  }))
+
+  const Wrapper = ({ children }) => isModal ? (
+    <div className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-md flex items-center justify-center animate-fade-in p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="relative">{children}</div>
+    </div>
+  ) : (
+    <div className="h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden">{children}</div>
+  )
+
   return (
-    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.15),transparent_50%),radial-gradient(circle_at_70%_80%,rgba(139,92,246,0.12),transparent_50%)]" />
-      <div className="relative w-[22rem] max-w-[90vw]">
-        <div className="flex flex-col items-center gap-3 mb-10">
-          <img src="/logo.png" alt="DJ Free App" className="w-20 h-20 rounded-2xl shadow-2xl shadow-blue-500/20 ring-1 ring-white/10" />
-          <span className="text-3xl font-bold text-white tracking-tight">DJ Free App</span>
-          <span className="text-xs text-gray-400">Tu música, tus sets, en cualquier lugar</span>
+    <Wrapper>
+      {!isModal && <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover opacity-40"
+        onError={(e) => { e.currentTarget.style.display = 'none' }}
+      >
+        <source src="/bg.mp4" type="video/mp4" />
+      </video>}
+
+      {/* Animated mesh gradient blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-[40rem] h-[40rem] rounded-full bg-blue-600/20 blur-[120px] animate-blob" />
+        <div className="absolute top-1/2 -right-40 w-[35rem] h-[35rem] rounded-full bg-purple-600/20 blur-[120px] animate-blob animation-delay-2000" />
+        <div className="absolute -bottom-40 left-1/3 w-[30rem] h-[30rem] rounded-full bg-pink-600/15 blur-[120px] animate-blob animation-delay-4000" />
+      </div>
+
+      {/* Waveform bars across the bottom */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 flex items-end justify-center gap-[3px] px-4 pointer-events-none opacity-50">
+        {bars.map((b, i) => (
+          <div
+            key={i}
+            className="w-1 rounded-t-full bg-gradient-to-t from-[var(--color-accent)] via-purple-500 to-pink-500"
+            style={{
+              height: `${b.h}%`,
+              animation: `bounce-bar ${b.dur}s ease-in-out ${b.delay}s infinite alternate`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Top fade overlay so bars don't overpower form */}
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-transparent to-slate-950/80 pointer-events-none" />
+
+      {/* Card */}
+      <div className="relative w-[24rem] max-w-[92vw] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/50 animate-fade-in-up">
+        <div className="flex flex-col items-center gap-3 mb-8">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-2xl bg-blue-500/40 blur-2xl" />
+            <img src="/logo.png" alt="DJ Free App" className="relative w-20 h-20 rounded-2xl ring-1 ring-white/20" />
+          </div>
+          <h1 className="text-3xl font-bold text-white tracking-tight">DJ Free App</h1>
+          <p className="text-xs text-gray-400 text-center">Discover · Sync · Set Builder · Mix</p>
         </div>
+
         <form onSubmit={handleLogin} className="space-y-3">
           <input
             value={username}
             onChange={e => setUsername(e.target.value)}
             placeholder="Usuario"
             autoFocus
-            className="w-full px-4 py-3.5 bg-white/[0.06] backdrop-blur-sm border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.08] transition-all"
+            className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
           />
           <input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="Contraseña"
-            className="w-full px-4 py-3.5 bg-white/[0.06] backdrop-blur-sm border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.08] transition-all"
+            className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
           />
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
           <button
             type="submit"
             disabled={loading || !username || !password}
-            className="w-full py-3.5 disabled:opacity-50 rounded-2xl font-semibold transition-all duration-200 active:scale-[0.98] shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+            className="w-full py-3.5 disabled:opacity-50 rounded-2xl font-semibold transition-all duration-200 active:scale-[0.98] shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)', color: '#fff' }}
           >
-            {loading ? 'Ingresando...' : 'Ingresar'}
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                Ingresando…
+              </span>
+            ) : 'Ingresar'}
           </button>
           <div className="flex items-center gap-3 py-1">
             <div className="flex-1 h-px bg-white/10" />
@@ -3937,13 +4104,32 @@ function LoginScreen({ onLogin }) {
           <button
             type="button"
             onClick={() => { window.location.href = `${window.location.pathname}?guest=1` }}
-            className="w-full py-3 rounded-2xl text-sm text-gray-300 hover:text-white border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-200 active:scale-[0.98]"
+            className="w-full py-3 rounded-2xl text-sm text-gray-300 hover:text-white border border-white/10 hover:border-white/30 hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98]"
           >
             Entrar como invitado
           </button>
         </form>
+
+        {/* Feature pills */}
+        <div className="mt-6 flex flex-wrap gap-1.5 justify-center">
+          {[
+            { icon: '🎯', label: 'Camelot' },
+            { icon: '⚡', label: 'Energy' },
+            { icon: '🎚️', label: 'Mix' },
+            { icon: '☁️', label: 'Sync' },
+          ].map(p => (
+            <span key={p.label} className="text-[10px] px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/10 text-gray-400 inline-flex items-center gap-1">
+              <span>{p.icon}</span>{p.label}
+            </span>
+          ))}
+        </div>
+        {isModal && (
+          <button onClick={onClose} className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-slate-800 border border-white/10 text-white hover:bg-slate-700 transition-colors flex items-center justify-center" aria-label="Cerrar">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        )}
       </div>
-    </div>
+    </Wrapper>
   )
 }
 
@@ -4991,6 +5177,7 @@ function App() {
   }
 
   const handleDownloadSingle = (result) => {
+    if (!authUser) { window.requireLogin?.(); return }
     if (!username || !password) return
     setSearchDlStatus(prev => ({ ...prev, [result.filename]: { status: 'downloading' } }))
     // Si el agente está conectado y tiene aioslsk, delegar el download a él:
@@ -5097,19 +5284,40 @@ function App() {
     { key: 'error', label: 'Errores', count: errors },
   ].filter(t => t.key === 'all' || t.key === 'by_genre' || t.count > 0)
 
-  // Guest mode: when someone opens a shared track link (?share=1 in URL),
-  // they can browse Discover and play previews without logging in. No favorites,
-  // no downloads, no library — pure discovery. They can click "Login" to upgrade.
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
-  const isGuest = !authUser && urlParams.get('guest') === '1'
+  // Guest by default: anyone without auth can browse, preview, etc. The
+  // LoginScreen only shows up as a modal when the user attempts an action
+  // that requires login (like Download).
+  const isGuest = !authUser
 
-  // Guests land on Discover and can't navigate elsewhere
-  useEffect(() => { if (isGuest && page !== 'discover') setPage('discover') }, [isGuest, page, setPage])
+  // First-visit tutorial: shown once, dismissed via localStorage.
+  const [showTutorial, setShowTutorial] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return !localStorage.getItem('tutorial_seen') && !authUser
+  })
+  const dismissTutorial = () => {
+    localStorage.setItem('tutorial_seen', '1')
+    setShowTutorial(false)
+  }
 
-  if (!authUser && !isGuest) return <LoginScreen onLogin={setAuthUser} />
+  // Login modal triggered by gated actions (download, etc).
+  const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const requireLogin = () => { if (!authUser) { setLoginModalOpen(true); return false } return true }
+  // Expose globally so any component can call window.requireLogin()
+  useEffect(() => { window.requireLogin = requireLogin }, [authUser])
+
+  // Guests on Discover by default
+  useEffect(() => { if (isGuest && page !== 'discover' && page !== 'set' && page !== 'library') setPage('discover') }, [isGuest, page, setPage])
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
+      {showTutorial && <Tutorial onDone={dismissTutorial} />}
+      {loginModalOpen && (
+        <LoginScreen
+          isModal
+          onClose={() => setLoginModalOpen(false)}
+          onLogin={(data) => { setAuthUser(data); setLoginModalOpen(false) }}
+        />
+      )}
       {/* iOS install instructions modal (Safari doesn't expose beforeinstallprompt) */}
       {showIosInstall && (
         <div
