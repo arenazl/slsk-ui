@@ -2232,30 +2232,44 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     const name = setName.trim() || `Set ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}`
     setExporting(true)
     try {
+      // M3U-only path: build the playlist text in the browser. No agent
+      // needed → works for any user/domain regardless of agent CORS state.
+      if (!exportWithTracks) {
+        const lines = ['#EXTM3U']
+        for (const t of setTracks) {
+          const dur = t.duration_est ? Math.round(t.duration_est * 60) : -1
+          const label = t.artist ? `${t.artist} - ${t.title || t.filename}` : (t.title || t.filename)
+          lines.push(`#EXTINF:${dur},${label}`)
+          lines.push(t.filename)
+        }
+        const m3uContent = lines.join('\n')
+        const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${name}.m3u`
+        a.click()
+        URL.revokeObjectURL(url)
+        toast(`Playlist ${name}.m3u exportada`)
+        return
+      }
+      // Include-tracks path: needs the agent to copy files locally.
       const metadata = {}
       setTracks.forEach(t => { metadata[t.filename] = { genre: t.genre, key: t.key, bpm: t.bpm, rating: t.rating, artist: t.artist, title: t.title } })
       const res = await agentFetch('export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, files: setTracks.map(t => t.filename), include_tracks: exportWithTracks, metadata }),
+        body: JSON.stringify({ name, files: setTracks.map(t => t.filename), include_tracks: true, metadata }),
       })
-      const data = await res.json()
-      if (!exportWithTracks) {
-        const m3uContent = data.m3u_content
-        if (m3uContent) {
-          const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `${name}.m3u`
-          a.click()
-          URL.revokeObjectURL(url)
-        }
-      } else {
-        toast(`${data.copied} archivos + playlist exportados`)
+      if (!res.ok) {
+        toast('Error exportando con tracks (¿agente conectado?)', 'error', 4000)
+        return
       }
+      const data = await res.json()
+      toast(`${data.copied} archivos + playlist exportados`)
     } catch (e) {
       console.error('Failed to export set', e)
+      toast('Error exportando set', 'error', 3000)
     } finally {
       setExporting(false)
     }
