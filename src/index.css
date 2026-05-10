@@ -126,6 +126,35 @@ input[type="color"]::-webkit-color-swatch {
   to { width: 100%; }
 }
 
+/* ScreenHint — life & motion */
+@keyframes hint-pan {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+@keyframes hint-shimmer {
+  0%   { background-position: 120% 0; opacity: 0; }
+  20%  { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { background-position: -20% 0; opacity: 0; }
+}
+@keyframes hint-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-2px) rotate(2deg); }
+}
+@keyframes hint-icon-pop {
+  0%   { transform: scale(0.5) rotate(-25deg); opacity: 0; }
+  60%  { transform: scale(1.18) rotate(8deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes hint-tip-in {
+  0%   { transform: translateX(18px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes hint-progress {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
 /* Centered scene title overlay — fades in big, holds, fades out */
 @keyframes demo-title-overlay {
   0% { opacity: 0; transform: scale(0.85) translateY(20px); }

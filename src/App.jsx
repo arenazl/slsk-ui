@@ -428,31 +428,60 @@ function killAudio(a) {
 // ScreenHint — modern dismissible mini-guide shown above each main screen.
 // Auto-rotates tips, gradient bg, animated icon, persisted-dismiss per screen.
 function ScreenHint({ id, title, tips }) {
+  const TIP_MS = 4500
   const [dismissed, setDismissed] = useState(() => !!localStorage.getItem(`hint_${id}_dismissed`))
   const [activeTip, setActiveTip] = useState(0)
   useEffect(() => {
     if (dismissed || !tips || tips.length <= 1) return
-    const t = setInterval(() => setActiveTip(i => (i + 1) % tips.length), 4500)
+    const t = setInterval(() => setActiveTip(i => (i + 1) % tips.length), TIP_MS)
     return () => clearInterval(t)
   }, [dismissed, tips?.length])
   if (dismissed || !tips || !tips.length) return null
   const tip = tips[activeTip]
   return (
     <div className="flex-shrink-0 relative overflow-hidden border-b border-[var(--color-accent)]/30 animate-fade-in">
-      {/* Animated gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10" />
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute -top-10 -left-10 w-40 h-40 rounded-full bg-blue-500/30 blur-3xl animate-blob" />
-        <div className="absolute -bottom-10 right-1/4 w-32 h-32 rounded-full bg-purple-500/30 blur-3xl animate-blob animation-delay-2000" />
+      {/* Slowly panning gradient sky */}
+      <div
+        className="absolute inset-0 opacity-90"
+        style={{
+          backgroundImage: 'linear-gradient(110deg, rgba(37,99,235,0.18), rgba(147,51,234,0.18) 35%, rgba(236,72,153,0.18) 65%, rgba(37,99,235,0.18))',
+          backgroundSize: '300% 100%',
+          animation: 'hint-pan 14s linear infinite',
+        }}
+      />
+      {/* Drifting blobs at different tempos for parallax feel */}
+      <div className="absolute inset-0 opacity-40 pointer-events-none">
+        <div className="absolute -top-12 -left-10 w-40 h-40 rounded-full bg-blue-500/40 blur-3xl animate-blob" />
+        <div className="absolute -bottom-12 left-1/3 w-36 h-36 rounded-full bg-fuchsia-500/35 blur-3xl animate-blob animation-delay-2000" />
+        <div className="absolute -top-8 right-1/4 w-32 h-32 rounded-full bg-pink-500/35 blur-3xl animate-blob animation-delay-4000" />
       </div>
+      {/* Diagonal shimmer sweep */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.07) 45%, rgba(255,255,255,0.16) 50%, rgba(255,255,255,0.07) 55%, transparent 70%)',
+          backgroundSize: '220% 100%',
+          animation: 'hint-shimmer 6s ease-in-out infinite',
+        }}
+      />
       <div className="relative flex items-center gap-3 px-3 md:px-6 py-2.5">
-        <div className="flex-shrink-0 relative">
-          <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/30 blur-md animate-pulse" />
-          <span className="relative inline-flex w-8 h-8 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-purple-500 items-center justify-center text-base shadow-lg">{tip.icon || '✨'}</span>
+        <div className="flex-shrink-0 relative" style={{ animation: 'hint-float 3.2s ease-in-out infinite' }}>
+          <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/40 blur-md animate-pulse" />
+          <span
+            key={`icon-${activeTip}`}
+            className="relative inline-flex w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-purple-500 items-center justify-center text-lg shadow-lg shadow-purple-900/40 ring-1 ring-white/15"
+            style={{ animation: 'hint-icon-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+          >
+            {tip.icon || '✨'}
+          </span>
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           {title && <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-0.5">{title}</div>}
-          <div key={activeTip} className="text-xs md:text-sm text-[var(--text-primary)] animate-fade-in-up">
+          <div
+            key={`tip-${activeTip}`}
+            className="text-xs md:text-sm text-[var(--text-primary)]"
+            style={{ animation: 'hint-tip-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) backwards' }}
+          >
             {typeof tip === 'string' ? tip : tip.text}
           </div>
         </div>
@@ -476,6 +505,14 @@ function ScreenHint({ id, title, tips }) {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
+      {/* Progress bar — fills over the 4.5s tip cycle then resets */}
+      {tips.length > 1 && (
+        <div
+          key={`progress-${activeTip}`}
+          className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-400 via-fuchsia-400 to-pink-400"
+          style={{ animation: `hint-progress ${TIP_MS}ms linear forwards` }}
+        />
+      )}
     </div>
   )
 }
