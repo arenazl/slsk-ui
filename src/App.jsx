@@ -4641,26 +4641,43 @@ function Tutorial({ onDone }) {
 }
 
 function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
+  const [mode, setMode] = useState('register') // 'login' | 'register' — register first by default
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Error'); return }
-      localStorage.setItem('auth_token', data.token)
-      localStorage.setItem('auth_user', JSON.stringify(data))
-      onLogin(data)
+      if (mode === 'login') {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        })
+        const data = await res.json()
+        if (!res.ok) { setError(data.error || 'Error'); return }
+        localStorage.setItem('auth_token', data.token)
+        localStorage.setItem('auth_user', JSON.stringify(data))
+        onLogin(data)
+      } else {
+        const res = await fetch(`${API_BASE}/api/auth/register-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), name: name.trim(), password }),
+        })
+        const data = await res.json()
+        if (!res.ok) { setError(data.error || 'Error'); return }
+        localStorage.setItem('auth_token', data.token)
+        localStorage.setItem('auth_user', JSON.stringify(data))
+        localStorage.setItem('just_registered', '1')  // boot will show toast/banner
+        onLogin(data)
+      }
     } catch {
       setError('No se pudo conectar al servidor')
     } finally {
@@ -4725,53 +4742,86 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
           <p className="text-xs text-gray-400 text-center">Discover · Sync · Set Builder · Mix</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-3">
-          <input
-            type="text"
-            name="username"
-            id="login-username"
-            autoComplete="username"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            placeholder="Usuario"
-            autoFocus
-            className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
-          />
-          <input
-            type="password"
-            name="password"
-            id="login-password"
-            autoComplete="current-password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Contraseña"
-            className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
-          />
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {mode === 'register' ? (
+            <>
+              <input
+                type="email"
+                name="email"
+                id="register-email"
+                autoComplete="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Tu mail"
+                autoFocus
+                className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
+              />
+              <input
+                type="text"
+                name="name"
+                id="register-name"
+                autoComplete="name"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Tu nombre"
+                className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
+              />
+              <input
+                type="password"
+                name="password"
+                id="register-password"
+                autoComplete="new-password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Contraseña (mín 6)"
+                className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
+              />
+            </>
+          ) : (
+            <>
+              <input
+                type="text"
+                name="username"
+                id="login-username"
+                autoComplete="username"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="Usuario o mail"
+                autoFocus
+                className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
+              />
+              <input
+                type="password"
+                name="password"
+                id="login-password"
+                autoComplete="current-password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Contraseña"
+                className="w-full px-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:bg-white/[0.10] transition-all"
+              />
+            </>
+          )}
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
           <button
             type="submit"
-            disabled={loading || !username || !password}
+            disabled={loading || (mode === 'login' ? (!username || !password) : (!email || !name || password.length < 6))}
             className="w-full py-3.5 disabled:opacity-50 rounded-2xl font-semibold transition-all duration-200 active:scale-[0.98] shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:brightness-110"
             style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)', color: '#fff' }}
           >
             {loading ? (
               <span className="inline-flex items-center gap-2">
                 <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Ingresando…
+                {mode === 'login' ? 'Ingresando…' : 'Creando cuenta…'}
               </span>
-            ) : 'Ingresar'}
+            ) : (mode === 'login' ? 'Ingresar' : 'Empezar gratis →')}
           </button>
-          <div className="flex items-center gap-3 py-1">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-[10px] uppercase tracking-wider text-gray-500">o</span>
-            <div className="flex-1 h-px bg-white/10" />
-          </div>
           <button
             type="button"
-            onClick={() => { if (onGuestStart) onGuestStart(); else window.location.href = `${window.location.pathname}?guest=1` }}
-            className="w-full py-3 rounded-2xl text-sm text-gray-300 hover:text-white border border-white/10 hover:border-white/30 hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98]"
+            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}
+            className="w-full text-center text-xs text-gray-400 hover:text-white transition-colors py-1"
           >
-            Entrar como invitado
+            {mode === 'login' ? '¿No tenés cuenta? Empezar gratis →' : '¿Ya tenés cuenta? Ingresar'}
           </button>
         </form>
 
@@ -7327,6 +7377,7 @@ function App() {
   const handleDownloadSingle = (result) => {
     if (!authUser) { window.requireLogin?.(); return }
     if (!username || !password) return
+    if (!ensureCanDownload()) return
     setSearchDlStatus(prev => ({ ...prev, [result.filename]: { status: 'downloading' } }))
     // Si el agente está conectado y tiene aioslsk, delegar el download a él:
     // corre en tu home network, sin los bugs de NAT de Heroku, peers-ghost
@@ -7449,6 +7500,89 @@ function App() {
   const isDemo = !!authUser && authUser.user === demoUser
   const trialStart = parseInt(localStorage.getItem('trial_start') || '0', 10)
   const trialExpired = isDemo && trialStart > 0 && (Date.now() - trialStart) > trialDays * 86400000
+
+  // Server-side auth/trial state — populated after login by hitting /api/auth/me.
+  // Source of truth for email_verified + trial_remaining_days + can_download.
+  // Legacy users (no email field) come back with email_verified=true so the
+  // existing demo flow keeps working without a forced re-verification.
+  const [userStatus, setUserStatus] = useState(null)
+  const refreshUserStatus = async () => {
+    if (!authUser) return null
+    try {
+      const token = localStorage.getItem('auth_token')
+      if (!token) return null
+      const res = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) return null
+      const data = await res.json()
+      setUserStatus(data)
+      return data
+    } catch { return null }
+  }
+  useEffect(() => {
+    if (!authUser) { setUserStatus(null); return }
+    refreshUserStatus()
+    // Re-fetch periodically so verification flips without a reload.
+    const t = setInterval(refreshUserStatus, 30000)
+    return () => clearInterval(t)
+  }, [authUser?.user])
+
+  // Surface ?verified=1 redirect from the email link as a celebratory toast.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const v = params.get('verified')
+    if (!v) return
+    if (v === '1') {
+      toast('¡Mail confirmado! Ya podés bajar temas.', 'success', 5000)
+      refreshUserStatus()
+    } else if (v === 'err') {
+      toast('No pudimos confirmar el link — pedí uno nuevo desde el banner.', 'error', 6000)
+    }
+    params.delete('verified')
+    const qs = params.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${qs ? '?' + qs : ''}${window.location.hash}`)
+  }, [])
+
+  // After a brand-new registration, nudge the user once so they go check the inbox.
+  useEffect(() => {
+    if (!authUser) return
+    if (localStorage.getItem('just_registered') !== '1') return
+    localStorage.removeItem('just_registered')
+    toast(`Te mandamos un mail a ${authUser.email || 'tu casilla'}. Confirmalo para bajar temas.`, 'info', 7000)
+  }, [authUser?.user])
+
+  const canDownload = userStatus ? userStatus.can_download : true
+
+  const resendVerification = async () => {
+    try {
+      const tk = localStorage.getItem('auth_token')
+      const res = await fetch(`${API_BASE}/api/auth/resend`, { method: 'POST', headers: { Authorization: `Bearer ${tk}` } })
+      const data = await res.json()
+      if (res.ok && data.ok) toast('Te reenviamos el mail. Revisá tu casilla (también el spam).', 'success', 5000)
+      else toast(data.error || 'No pudimos reenviar el mail', 'error', 5000)
+    } catch {
+      toast('No se pudo conectar al servidor', 'error', 4000)
+    }
+  }
+
+  // Centralised gate. Anything trying to download (Discover row +, Set add,
+  // pending retry, etc.) goes through this. Returns true if allowed.
+  const ensureCanDownload = () => {
+    if (!userStatus) return true   // /me hasn't returned yet — let it pass
+    if (userStatus.can_download) return true
+    if (!userStatus.email_verified) {
+      toast(`Confirmá tu mail (${userStatus.email || 'revisá tu casilla'}) para bajar temas.`, 'warning', 5000)
+      return false
+    }
+    if (userStatus.trial_expired) {
+      toast('Tu prueba terminó. Suscribite para seguir bajando.', 'warning', 4000)
+      setUpgradeModalOpen(true)
+      return false
+    }
+    return false
+  }
+  // Expose so children (DiscoverPage) can call it without prop drilling 5 layers.
+  useEffect(() => { window.__ensureCanDownload = ensureCanDownload }, [userStatus])
 
   // Trial expired → open the upgrade modal (no redirect, user picks how to pay)
   useEffect(() => {
@@ -7923,6 +8057,26 @@ function App() {
               Entendido
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Email verification banner — sticky until the user clicks the link */}
+      {userStatus && !userStatus.email_verified && userStatus.email && (
+        <div className="flex-shrink-0 bg-amber-500/10 border-b border-amber-500/30 px-3 md:px-6 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span className="text-xs md:text-sm text-amber-200 truncate">
+              Confirmá tu mail (<strong>{userStatus.email}</strong>) para activar tu prueba y poder bajar temas.
+            </span>
+          </div>
+          <button
+            onClick={resendVerification}
+            className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400 transition-colors active:scale-95"
+          >
+            Reenviar mail
+          </button>
         </div>
       )}
 
@@ -10042,6 +10196,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   }
 
   const searchAndDownload = (track) => {
+    // Gate first — verified mail + active trial/paid required.
+    if (typeof window.__ensureCanDownload === 'function' && !window.__ensureCanDownload()) return
+
     // Always log the click in Discover to pending so we have a persistent record
     // for later cross-reference in Descargas. Removed automatically when the track
     // actually completes (see search_dl_status handler).
