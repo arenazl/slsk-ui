@@ -5189,7 +5189,8 @@ function DemoReels() {
   }, [])
 
   return (
-    <div className="fixed inset-0 bg-slate-950 overflow-hidden">
+    <div className="fixed inset-0 bg-black flex items-center justify-center overflow-hidden">
+      <div className="relative bg-slate-950 overflow-hidden h-full" style={{ aspectRatio: '9 / 16', maxHeight: '100vh', maxWidth: '100vw' }}>
       <audio ref={audioRef} src="/demo/bg.mp3" loop autoPlay preload="auto" />
       {/* Background blobs (always visible) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -5209,6 +5210,7 @@ function DemoReels() {
         {Array.from({ length: SCENES }).map((_, i) => (
           <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === scene ? 'w-12 bg-white' : 'w-2 bg-white/30'}`} />
         ))}
+      </div>
       </div>
     </div>
   )
@@ -5294,6 +5296,11 @@ function ReelDiscover() {
   const tracks = cat.tracks
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <DemoSceneTitle
+        title="Recorré los charts de Beatport y Spotify"
+        subtitle="top charts renovados cada semana · EDM · POP · LATIN"
+        accent="text-blue-400"
+      />
       <ReelHeader active="Discover" />
       {/* Hero header — dynamic per cycling catalog */}
       <div className="flex items-center gap-4">
@@ -5357,11 +5364,6 @@ function ReelDiscover() {
           </div>
         ))}
       </div>
-      {/* Tagline */}
-      <div className="text-center pt-2">
-        <p className="text-3xl font-black text-white">Catálogo <span className="text-blue-400">Beatport</span> + <span className="text-green-400">Spotify</span></p>
-        <p className="text-xl text-gray-400">renovado <span className="text-purple-300 font-bold">cada semana</span></p>
-      </div>
     </div>
   )
 }
@@ -5381,11 +5383,12 @@ function ReelDownload() {
   ]
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <DemoSceneTitle
+        title="Descarga directa · calidad profesional"
+        subtitle="FLAC sin pérdida · MP3 320k · WAV — al instante"
+        accent="text-green-400"
+      />
       <ReelHeader active="Discover" />
-      <div className="text-center">
-        <h2 className="text-4xl font-black text-white">Descarga directa · <span className="text-blue-400">calidad profesional</span></h2>
-        <p className="text-xl text-gray-400 mt-2">FLAC sin pérdida · MP3 320k · WAV — al instante, sin colas</p>
-      </div>
       {/* Track list with context menu popup */}
       <div className="relative flex-1">
         <div className="space-y-2">
@@ -5491,11 +5494,12 @@ function ReelLibrary() {
   ]
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <DemoSceneTitle
+        title="Biblioteca clasificada por IA"
+        subtitle="305 tracks · BPM · Camelot Key · género — sin tocar nada"
+        accent="text-purple-400"
+      />
       <ReelHeader active="Biblioteca" />
-      <div className="text-center">
-        <h2 className="text-4xl font-black text-white">Biblioteca clasificada <span className="text-purple-400">por IA</span></h2>
-        <p className="text-xl text-gray-400 mt-2"><span className="text-white font-bold">305 tracks</span> · BPM · Camelot Key · género — sin tocar nada</p>
-      </div>
       {/* Stats bar */}
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-900/60 border border-white/10">
         <span className="text-base text-gray-400"><span className="text-white font-bold">305</span> tracks</span>
@@ -5596,11 +5600,12 @@ function ReelSet() {
   }
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <DemoSceneTitle
+        title="Asistente IA de playlists"
+        subtitle="Sets compatibles por Camelot · Energy — 1 click"
+        accent="text-purple-400"
+      />
       <ReelHeader active="Export" />
-      <div className="text-center">
-        <h2 className="text-4xl font-black text-white">Asistente <span className="text-blue-400">IA</span> de playlists</h2>
-        <p className="text-xl text-gray-400 mt-2">Sets compatibles por <span className="text-purple-300 font-bold">Camelot · Energy</span> — 1 click</p>
-      </div>
       {/* Filter chips */}
       <div className="flex justify-center gap-2.5 flex-wrap">
         <span className="text-base px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 font-bold">60'</span>
@@ -5698,11 +5703,12 @@ function ReelMix() {
   ]
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+      <DemoSceneTitle
+        title="Previsualizá tu mix antes de tocarlo"
+        subtitle="Crossfading auto · beatmatching · export MP3 320k"
+        accent="text-pink-400"
+      />
       <ReelHeader active="Mix" />
-      <div className="text-center">
-        <h2 className="text-4xl font-black text-white">Previsualizá tu mix <span className="text-blue-400">antes de tocarlo</span></h2>
-        <p className="text-xl text-gray-400 mt-2">Crossfading auto · beatmatching · fade 16s · export MP3 320k</p>
-      </div>
       {/* Mix Editor toolbar */}
       <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-900/60 border border-white/10 text-base flex-wrap">
         <span className="text-gray-400">‹ Volver al Set</span>
@@ -7022,7 +7028,7 @@ function App() {
       )}
       {demoVideoOpen && (
         <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setDemoVideoOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-7xl">
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl">
             <DemoShowcase />
             <button
               onClick={() => setDemoVideoOpen(false)}
