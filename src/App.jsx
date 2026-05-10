@@ -2199,6 +2199,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const [suggestionOffset, setSuggestionOffset] = useState(0) // page index into 9-track grid
   const [bottomTab, setBottomTab] = useState('sugerencias') // 'sugerencias' | 'biblioteca'
   const [libBrowserSearch, setLibBrowserSearch] = useState('')
+  const [libBrowserGenre, setLibBrowserGenre] = useState('')
   const [libBrowserPage, setLibBrowserPage] = useState(0)
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const [selectedGenres, setSelectedGenres] = useState([])
@@ -2718,7 +2719,8 @@ ${playlistEntries}
           const filteredLib = allTracks.filter(t => {
             if (setIds.has(t.filename)) return false
             if ((t.rating || 0) < minStars) return false
-            if (selectedGenres.length > 0 && !selectedGenres.includes(t.genre)) return false
+            if (libBrowserGenre && t.genre !== libBrowserGenre) return false
+            if (!libBrowserGenre && selectedGenres.length > 0 && !selectedGenres.includes(t.genre)) return false
             if (!q) return true
             const hay = `${t.artist || ''} ${t.title || ''} ${t.filename}`.toLowerCase()
             return hay.includes(q)
@@ -2803,10 +2805,21 @@ ${playlistEntries}
                       value={libBrowserSearch}
                       onChange={(e) => { setLibBrowserSearch(e.target.value); setLibBrowserPage(0) }}
                       placeholder="Buscar..."
-                      className="w-40 md:w-56 px-2 py-1 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+                      className="w-32 md:w-44 px-2 py-1 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
                     />
+                    <select
+                      value={libBrowserGenre}
+                      onChange={(e) => { setLibBrowserGenre(e.target.value); setLibBrowserPage(0) }}
+                      className="px-2 py-1 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors max-w-[8rem]"
+                      title="Filtrar por género"
+                    >
+                      <option value="">Todos los géneros</option>
+                      {availableGenres.map(g => (
+                        <option key={g.genre} value={g.genre}>{g.genre} ({g.count})</option>
+                      ))}
+                    </select>
                     {totalPages > 1 && (
-                      <div className="flex items-center gap-0.5 ml-1 px-1 py-0.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)]">
+                      <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)]">
                         <button onClick={() => setLibBrowserPage(p => Math.max(0, p - 1))} disabled={safePage === 0} className="w-6 h-6 flex items-center justify-center rounded-md hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-all">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                         </button>
@@ -2818,6 +2831,38 @@ ${playlistEntries}
                     )}
                   </>
                 )}
+                {/* Export buttons — moved into the tab strip, pinned to the right */}
+                <div className="ml-auto flex items-center gap-1.5 pl-2 border-l border-[var(--border-color)]">
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono whitespace-nowrap">{setTracks.length}t · ~{totalMin}'</span>
+                  <button
+                    onClick={exportM3U}
+                    disabled={exporting}
+                    className="flex items-center gap-1 px-2.5 py-1 disabled:opacity-50 rounded-lg text-xs font-semibold text-white transition-all duration-200 active:scale-95 flex-shrink-0 shadow-md hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
+                    title="Rekordbox playlist (.m3u)"
+                  >
+                    {exporting ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>}
+                    .m3u
+                  </button>
+                  <button
+                    onClick={exportRekordboxXML}
+                    disabled={exporting}
+                    className="flex items-center gap-1 px-2.5 py-1 disabled:opacity-50 rounded-lg text-xs font-semibold text-white transition-all duration-200 active:scale-95 flex-shrink-0 shadow-md hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
+                    title="Rekordbox XML (con rating, BPM, key, género)"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                    .xml
+                  </button>
+                  <button
+                    onClick={() => onEditMix(setTracks)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 bg-purple-600 hover:bg-purple-500 text-white flex-shrink-0"
+                    title="Editor de mezcla"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="12" r="2.2" fill="currentColor"/><circle cx="13" cy="17" r="2.2" fill="currentColor"/></svg>
+                    Mezclar
+                  </button>
+                </div>
               </div>
               {/* Grid */}
               <div className="px-3 md:px-6 py-2">
@@ -2833,58 +2878,7 @@ ${playlistEntries}
         })()}
       </div>
 
-      {/* Export footer */}
-      {setTracks.length > 0 && (
-        <div className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-2.5 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
-          <span className="text-xs md:text-sm text-gray-400 flex-shrink-0">
-            {setTracks.length} tracks · ~{totalMin}'
-          </span>
-          <input
-            value={setName}
-            onChange={e => setSetName(e.target.value)}
-            placeholder="Nombre del set..."
-            className="flex-1 min-w-0 max-w-xs px-2 md:px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
-          />
-          <button
-            onClick={exportM3U}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-xs md:text-sm font-medium text-white transition-all duration-200 active:scale-95 flex-shrink-0 shadow-md hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
-            title="Playlist .m3u — File → Import → Import Playlist en Rekordbox"
-          >
-            {exporting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (
-              // Vinyl record (Pioneer/Rekordbox vibe)
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-            )}
-            Rekordbox playlist
-          </button>
-          <button
-            onClick={exportRekordboxXML}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-xs md:text-sm font-medium text-white transition-all duration-200 active:scale-95 flex-shrink-0 shadow-md hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
-            title="Rekordbox XML — incluye rating, BPM, key, género (Preferences → Advanced → Database)"
-          >
-            {/* Same vinyl mark for visual consistency */}
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-            Rekordbox XML
-          </button>
-          <button
-            onClick={() => onEditMix(setTracks)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all duration-200 active:scale-95 bg-purple-600 hover:bg-purple-500 text-white flex-shrink-0"
-            title="Editor de mezcla con waveforms, fades y crossfade"
-          >
-            {/* Crossfader / mixer sliders */}
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16"/>
-              <circle cx="15" cy="7" r="2.2" fill="currentColor"/>
-              <circle cx="9" cy="12" r="2.2" fill="currentColor"/>
-              <circle cx="13" cy="17" r="2.2" fill="currentColor"/>
-            </svg>
-            Mezclar
-          </button>
-        </div>
-      )}
+      {/* Export footer removed — buttons moved into the tab strip above. setName auto-fills via computeSetName(). */}
       {/* Hint: how to import */}
       {setTracks.length > 0 && (
         <div className="flex-shrink-0 px-3 md:px-6 py-2 bg-gradient-to-r from-orange-500/5 via-pink-500/5 to-orange-500/5 border-t border-[var(--border-color)] flex flex-col sm:flex-row gap-2 sm:gap-6 text-[11px] md:text-xs text-[var(--text-muted)]">
