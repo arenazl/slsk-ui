@@ -1058,7 +1058,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       const ungroupedNames = files.filter(f => !f.genre).map(f => f.filename)
       if (ungroupedNames.length > 0) {
         setClassifying(true)
-        toast(`Clasificando ${ungroupedNames.length} temas con IA...`, 'info', 4000)
+        toast(`Clasificando ${ungroupedNames.length} temas automáticamente...`, 'info', 4000)
         const res = await fetch(`${API_BASE}/api/classify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1435,8 +1435,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     <div className="flex-1 flex flex-col min-h-0">
       <ScreenHint id="library" title="Tu biblioteca" tips={[
         { icon: '⭐', text: <>Click <strong>derecho</strong> sobre un track para puntuar, mover de género, o renombrar. En mobile: deslizá lateral.</> },
-        { icon: '🎼', text: <>Botón <strong>Detectar Keys</strong> — la IA analiza cada tema y le pone tonalidad (C, Am, etc) para mezclar armónicamente después.</> },
-        { icon: '🤖', text: <>Botón <strong>Clasificar</strong> — IA detecta género (Tech House, Melodic, Trance...) y mueve a la subcarpeta correcta.</> },
+        { icon: '🎼', text: <>Botón <strong>Detectar Keys</strong> — análisis automático que pone tonalidad (C, Am, etc) a cada tema para mezclar armónicamente después.</> },
+        { icon: '🤖', text: <>Botón <strong>Clasificar</strong> — detector automático de género (Tech House, Melodic, Trance...) que mueve a la subcarpeta correcta.</> },
         { icon: '🔁', text: <>Vista <strong>Cards</strong>: agrupado por género · <strong>Tracks</strong>: lista plana ordenable · <strong>Join</strong>: tabla compacta para auditar.</> },
         { icon: '🎯', text: <>Filtrá por <strong>estrellas + género + búsqueda</strong> en simultáneo. Lo que veas se respeta al armar Sets.</> },
       ]} />
@@ -2196,6 +2196,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
   const [suggestions, setSuggestions] = useState([])
+  const [suggestionOffset, setSuggestionOffset] = useState(0) // page index into 9-track grid
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const [selectedGenres, setSelectedGenres] = useState([])
   const [availableGenres, setAvailableGenres] = useState([])
@@ -2244,12 +2245,13 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
         body: JSON.stringify({
           current: currentTracks.map(t => t.filename),
           min_stars: minStars,
-          limit: 8,
+          limit: 30,
           username: authUser?.name || '',
         }),
       })
       const data = await res.json()
       setSuggestions(data.suggestions || [])
+      setSuggestionOffset(0)
     } catch (e) {
       console.error('Failed to fetch suggestions', e)
     } finally {
@@ -2694,7 +2696,7 @@ ${playlistEntries}
           </div>
         )}
 
-        {/* Suggestions */}
+        {/* Suggestions — 3 columns × 3 tracks; "Más recomendados" rotates through more pages. */}
         {setTracks.length > 0 && (
           <div className="flex-shrink-0 border-t border-[var(--border-color)]">
             <div className="flex items-center gap-2 px-3 md:px-6 py-2 bg-[var(--bg-panel)]">
@@ -2704,47 +2706,54 @@ ${playlistEntries}
               <span className="text-sm font-semibold text-[var(--text-primary)]">Sugerencias</span>
               {loadingSuggestions && <div className="w-3.5 h-3.5 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />}
               <span className="hidden md:inline text-xs text-[var(--text-muted)]">compatibles con el último track</span>
-            </div>
-            <div className="max-h-48 overflow-y-auto">
-              {suggestions.length === 0 && !loadingSuggestions && (
-                <div className="px-6 py-3 text-sm text-gray-600">No hay sugerencias disponibles</div>
+              <div className="flex-1" />
+              {suggestions.length > 9 && (
+                <button
+                  onClick={() => setSuggestionOffset(o => (o + 9) % Math.max(9, suggestions.length))}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-[var(--color-accent)] bg-[var(--color-accent)]/10 hover:bg-[var(--color-accent)]/20 transition-all active:scale-95"
+                  title="Mostrar otras 9 sugerencias"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  Más recomendados
+                </button>
               )}
-              {suggestions.map((s, i) => {
-                const isPlaying = playing === s.filename
-                return (
-                  <div
-                    key={s.filename}
-                    onDoubleClick={() => handlePlay(s)}
-                    className={`flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 hover:bg-[var(--bg-hover)] transition-colors cursor-default ${isPlaying ? 'bg-white/5' : ''}`}
-                  >
-                    <PlayPauseBtn isPlaying={isPlaying} onClick={(e) => { e.stopPropagation(); handlePlay(s) }} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-xs md:text-sm truncate ${isPlaying ? 'text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>{s.artist ? `${s.artist} - ` : ''}{s.title || s.filename}</div>
-                    </div>
-                    <span className="hidden lg:block w-24 flex-shrink-0 text-xs text-gray-500 truncate text-center">{s.genre || '-'}</span>
-                    <span className={`hidden md:block w-10 flex-shrink-0 text-xs text-center ${
-                      s.format === 'FLAC' ? 'text-purple-400' : 'text-gray-500'
-                    }`}>{(s.format || '').toUpperCase()}</span>
-                    <span className="hidden md:block w-14 flex-shrink-0 text-xs text-gray-500 text-center">{s.size_mb ? `${s.size_mb}MB` : '-'}</span>
-                    <span className={`w-16 md:w-20 flex-shrink-0 text-[10px] md:text-xs font-mono px-1 md:px-1.5 py-0.5 rounded text-center ${
-                      s.distance <= 1 ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'
-                    }`}>
-                      {s.key}{s.camelot ? <span className="hidden sm:inline"> · {s.camelot}</span> : ''}
-                    </span>
-                    <span className="hidden sm:block w-16 flex-shrink-0 text-xs text-[var(--text-primary)] text-center">{'★'.repeat(s.rating)}</span>
-                    <button
-                      onClick={() => addToSet(s)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-[var(--color-accent-text)] font-medium transition-all duration-200 active:scale-95 flex-shrink-0"
-                      style={{ background: 'var(--color-accent)' }}
+            </div>
+            <div className="px-3 md:px-6 py-2">
+              {suggestions.length === 0 && !loadingSuggestions && (
+                <div className="px-3 py-3 text-sm text-gray-600">No hay sugerencias disponibles</div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
+                {suggestions.slice(suggestionOffset, suggestionOffset + 9).map((s) => {
+                  const isPlaying = playing === s.filename
+                  return (
+                    <div
+                      key={s.filename}
+                      onDoubleClick={() => handlePlay(s)}
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors cursor-default min-w-0 ${isPlaying ? 'bg-white/5' : 'bg-[var(--bg-input)]/40'}`}
                     >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                      </svg>
-                      <span className="hidden sm:inline">Agregar</span>
-                    </button>
-                  </div>
-                )
-              })}
+                      <PlayPauseBtn isPlaying={isPlaying} onClick={(e) => { e.stopPropagation(); handlePlay(s) }} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-xs truncate ${isPlaying ? 'text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>{s.artist ? `${s.artist} - ` : ''}{s.title || s.filename}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`text-[9px] font-mono px-1 py-0.5 rounded ${s.distance <= 1 ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                            {s.camelot || s.key}
+                          </span>
+                          <span className={`text-[9px] font-bold ${s.format === 'FLAC' ? 'text-purple-400' : 'text-gray-500'}`}>{(s.format || '').toUpperCase()}</span>
+                          {s.rating ? <span className="text-[9px] text-yellow-400">{'★'.repeat(s.rating)}</span> : null}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => addToSet(s)}
+                        className="w-7 h-7 flex items-center justify-center rounded-md text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
+                        style={{ background: 'var(--color-accent)' }}
+                        title="Agregar al set"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -4857,7 +4866,7 @@ function DemoLibrary() {
   return (
     <div className="absolute inset-0 flex flex-col p-3 md:p-5 animate-fade-in z-10">
       <DemoSceneTitle
-        title="Biblioteca clasificada por IA"
+        title="Biblioteca clasificada automáticamente"
         subtitle="305 tracks · BPM · Camelot Key · género — sin tocar nada"
         accent="text-purple-400"
       />
@@ -4989,7 +4998,7 @@ function DemoSetBuilder() {
   return (
     <div className="absolute inset-0 flex flex-col p-4 md:p-6 animate-fade-in z-10">
       <DemoSceneTitle
-        title="Asistente IA de playlists"
+        title="Asistente inteligente de playlists"
         subtitle="Sets compatibles por Camelot · Energy — 1 click"
         accent="text-purple-400"
       />
@@ -5038,7 +5047,7 @@ function DemoSetBuilder() {
       {showFeatures ? (
         <div className="flex-1 flex flex-col justify-center min-h-0 px-4 py-3 space-y-3">
           <div className="text-center mb-3 animate-fade-in-up">
-            <p className="text-sm uppercase tracking-widest text-purple-400 font-bold mb-1">Editor de playlists con IA</p>
+            <p className="text-sm uppercase tracking-widest text-purple-400 font-bold mb-1">Editor inteligente de playlists</p>
             <h3 className="text-2xl md:text-3xl font-black text-white leading-tight">Integración nativa con <span className="text-orange-400">Rekordbox</span></h3>
           </div>
           {FEATURES.map((f, i) => (
@@ -5267,7 +5276,15 @@ function DemoReels() {
 
   return (
     <div className="fixed inset-0 bg-black flex items-center justify-center overflow-hidden">
-      <div className="relative bg-slate-950 overflow-hidden h-full" style={{ aspectRatio: '9 / 16', maxHeight: '100vh', maxWidth: '100vw' }}>
+      <div
+        className="relative bg-slate-950 overflow-hidden flex-shrink-0"
+        style={{
+          width: '1080px',
+          height: '1920px',
+          transform: 'scale(min(calc(100vw / 1080), calc(100vh / 1920)))',
+          transformOrigin: 'center center',
+        }}
+      >
       <audio ref={audioRef} src="/demo/bg.mp3" loop autoPlay preload="auto" />
       {/* Background blobs (always visible) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -5311,25 +5328,20 @@ function ReelIntro() {
 function ReelHeader({ active }) {
   const tabs = ['Discover', 'Biblioteca', 'Export', 'Mix']
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
-      <img src="/logo.png" alt="" className="w-9 h-9 rounded-lg flex-shrink-0" />
-      <span className="text-lg text-white font-bold whitespace-nowrap flex-shrink-0">DJ Free App</span>
-      <div className="flex-1 flex justify-end items-center gap-1 min-w-0">
+    <div className="flex items-center gap-4 px-5 py-3 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
+      <img src="/logo.png" alt="" className="w-10 h-10 rounded-lg flex-shrink-0" />
+      <span className="text-2xl text-white font-bold whitespace-nowrap flex-shrink-0">DJ Free App</span>
+      <div className="flex-1 flex justify-end items-center gap-2 min-w-0">
         {tabs.map(t => (
           <span
             key={t}
-            className={`text-base px-3 py-1 rounded-lg font-bold whitespace-nowrap transition-colors ${
+            className={`text-xl px-4 py-1.5 rounded-lg font-bold whitespace-nowrap transition-colors ${
               t === active ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40' : 'text-gray-500'
             }`}
           >
             {t}
           </span>
         ))}
-      </div>
-      <div className="flex gap-1.5 flex-shrink-0">
-        <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
-        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
-        <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
       </div>
     </div>
   )
@@ -5580,7 +5592,7 @@ function ReelLibrary() {
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
       <DemoSceneTitle
-        title="Biblioteca clasificada por IA"
+        title="Biblioteca clasificada automáticamente"
         subtitle="305 tracks · BPM · Camelot Key · género — sin tocar nada"
         accent="text-purple-400"
       />
@@ -5686,7 +5698,7 @@ function ReelSet() {
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
       <DemoSceneTitle
-        title="Asistente IA de playlists"
+        title="Asistente inteligente de playlists"
         subtitle="Sets compatibles por Camelot · Energy — 1 click"
         accent="text-purple-400"
       />
@@ -5728,7 +5740,7 @@ function ReelSet() {
         /* Features enumeration after method cycling */
         <div className="flex-1 flex flex-col justify-center min-h-0 px-4 py-3 space-y-3">
           <div className="text-center mb-3 animate-fade-in-up">
-            <p className="text-sm uppercase tracking-widest text-purple-400 font-bold mb-1">Editor de playlists con IA</p>
+            <p className="text-sm uppercase tracking-widest text-purple-400 font-bold mb-1">Editor inteligente de playlists</p>
             <h3 className="text-3xl font-black text-white leading-tight">Integración nativa con <span className="text-orange-400">Rekordbox</span></h3>
           </div>
           {FEATURES.map((f, i) => (
