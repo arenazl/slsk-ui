@@ -7393,14 +7393,21 @@ function App() {
                   </button>
                 </div>
               )}
-              {/* Demo Reel link — temporal, vista vertical 9:16 para preview */}
-              <div className="border-t border-[var(--border-color)] pt-3">
-                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Reel preview</div>
+              <div className="border-t border-[var(--border-color)] pt-3 space-y-2">
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Demo</div>
+                <button
+                  onClick={() => { setSettingsOpen(false); setDemoVideoOpen(true) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white border border-white/15 hover:brightness-110 active:scale-95 transition-all"
+                  style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  Ver demo
+                </button>
                 <a
                   href="?demorec=1"
                   target="_blank"
                   rel="noopener"
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white border border-white/15 hover:brightness-110 transition-all no-underline"
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white border border-white/15 hover:brightness-110 transition-all no-underline"
                   style={{ background: 'linear-gradient(135deg, #ec4899, #f59e0b)' }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
@@ -7737,13 +7744,14 @@ function App() {
           {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
             <button
               onClick={handleInstall}
-              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-90 transition-all active:scale-95 flex-shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
               title="Instalar como app"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+              <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="4" y="3" width="16" height="18" rx="3.5" strokeWidth={1.6} />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8.5v6m-3-3h6" />
               </svg>
-              <span className="hidden sm:inline">Instalar app</span>
+              <span className="hidden sm:inline">Instalar</span>
             </button>
           )}
           <button
