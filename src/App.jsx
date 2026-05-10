@@ -9320,16 +9320,15 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   const handleShareTrack = (track) => {
     if (!track) return
-    const params = new URLSearchParams({ share: '1' })
-    if (track.artist) params.set('artist', track.artist)
-    if (track.title) params.set('title', track.title)
-    if (track.artwork_url) params.set('artwork', track.artwork_url)
-    const preview = track.sample_url || track.preview_url
-    if (preview) params.set('preview', preview)
-    // Always share the production HTTPS root, not whatever local origin the
-    // user is on. Avoids leaking localhost / dev URLs and guarantees ShareView
-    // (no-login preview) gets served.
-    const url = `https://djfreeapp.ar/?${params.toString()}`
+    // Friendly URL: djfreeapp.ar/s/<artist-title-slug>. ShareView resolves
+    // metadata (artwork, preview) from iTunes by the same slug as a query.
+    const slugify = (s) => (s || '').toLowerCase()
+      .normalize('NFKD').replace(/\p{M}/gu, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+    const combined = `${track.artist || ''} ${track.title || ''}`.trim()
+    const slug = slugify(combined) || 'track'
+    const url = `https://djfreeapp.ar/s/${slug}`
     setDiscoverCtx(null)
     setShareDialog({ track, url })
   }
@@ -11004,9 +11003,14 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
 function ShareView() {
   const params = new URLSearchParams(window.location.search)
-  const artist = params.get('artist') || ''
-  const title = params.get('title') || ''
-  const artwork = params.get('artwork') || ''
+  // Friendly path-based share: /s/<slug>. Falls back to ?artist= ?title= for
+  // backwards compat with already-shared old-style links.
+  const path = window.location.pathname
+  const slugFromPath = path.startsWith('/s/') ? decodeURIComponent(path.slice(3)) : ''
+  const slugQuery = slugFromPath.replace(/-/g, ' ').trim()
+  const [artist, setArtist] = useState(params.get('artist') || '')
+  const [title, setTitle] = useState(params.get('title') || (slugQuery ? slugQuery.replace(/\b\w/g, c => c.toUpperCase()) : ''))
+  const [artwork, setArtwork] = useState(params.get('artwork') || '')
   const previewFromUrl = params.get('preview') || ''
   const [previewUrl, setPreviewUrl] = useState(previewFromUrl)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -11014,19 +11018,24 @@ function ShareView() {
   const audioRef = useRef(null)
 
   useEffect(() => {
-    document.title = artist && title ? `${artist} – ${title}` : 'DJ Free App'
+    document.title = artist && title ? `${artist} – ${title}` : (title || 'DJ Free App')
   }, [artist, title])
 
   useEffect(() => {
-    if (previewFromUrl) return
-    const q = `${artist} ${title}`.trim()
+    if (previewFromUrl && artwork) { setLoadingPreview(false); return }
+    const q = slugQuery || `${artist} ${title}`.trim()
     if (!q) { setLoadingPreview(false); return }
     let cancelled = false
     fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=1`)
       .then(r => r.json())
       .then(d => {
         if (cancelled) return
-        if (d.results?.[0]?.previewUrl) setPreviewUrl(d.results[0].previewUrl)
+        const r = d.results?.[0]
+        if (!r) return
+        if (!previewFromUrl && r.previewUrl) setPreviewUrl(r.previewUrl)
+        if (!artwork && r.artworkUrl100) setArtwork(r.artworkUrl100.replace('100x100', '600x600'))
+        if (r.artistName) setArtist(r.artistName)
+        if (r.trackName) setTitle(r.trackName)
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoadingPreview(false) })
@@ -11040,25 +11049,41 @@ function ShareView() {
     else { a.pause(); setIsPlaying(false) }
   }
 
-  const appUrl = `${window.location.origin}${window.location.pathname}`
+  const appUrl = `${window.location.origin}/`
   const bigArt = artwork ? artwork.replace('1400x1400', '600x600') : ''
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
-      <header className="flex-shrink-0 h-14 px-4 md:px-6 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-topbar)]">
+    <div className="h-screen flex flex-col overflow-hidden bg-slate-950 text-white relative">
+      {/* Animated mesh blobs — same vibe as Tutorial */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-[40rem] h-[40rem] rounded-full bg-blue-600/25 blur-[120px] animate-blob" />
+        <div className="absolute top-1/2 -right-40 w-[35rem] h-[35rem] rounded-full bg-purple-600/30 blur-[120px] animate-blob animation-delay-2000" />
+        <div className="absolute -bottom-40 left-1/3 w-[30rem] h-[30rem] rounded-full bg-pink-600/20 blur-[120px] animate-blob animation-delay-4000" />
+      </div>
+      {/* Big blurred logo as background watermark — violet */}
+      <img
+        src="/logo.png"
+        alt=""
+        aria-hidden="true"
+        className="absolute left-1/2 top-1/2 w-[34rem] h-[34rem] -translate-x-1/2 -translate-y-1/2 opacity-[0.07] blur-3xl pointer-events-none select-none"
+        style={{ filter: 'blur(60px) saturate(1.4) hue-rotate(-10deg)' }}
+      />
+      {/* Subtle dark gradient on top + bottom for legibility */}
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-transparent to-slate-950/80 pointer-events-none" />
+
+      <header className="relative z-10 flex-shrink-0 h-14 px-4 md:px-6 flex items-center justify-between border-b border-white/10 bg-slate-950/40 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center">
-            <svg className="w-4 h-4 text-[var(--color-accent-text,white)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-          </div>
+          <img src="/logo.png" alt="" className="w-8 h-8 rounded-lg ring-1 ring-white/10" />
           <span className="font-bold text-sm md:text-base">DJ Free App</span>
         </div>
-        <span className="text-xs text-gray-500">Preview compartida</span>
+        <span className="text-xs text-purple-300/80">Preview compartida</span>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto">
+      <main className="relative z-10 flex-1 min-h-0 overflow-y-auto">
         <div className="min-h-full flex flex-col items-center justify-center p-6 gap-6">
           <div className="relative">
-            <div className="w-64 h-64 md:w-80 md:h-80 rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-2xl bg-gradient-to-br from-gray-800 to-gray-900">
+            <div className="absolute inset-0 rounded-2xl bg-purple-500/40 blur-3xl scale-110 pointer-events-none" />
+            <div className="relative w-64 h-64 md:w-80 md:h-80 rounded-2xl overflow-hidden ring-1 ring-white/15 shadow-2xl shadow-purple-900/40 bg-gradient-to-br from-gray-800 to-gray-900">
               {bigArt ? (
                 <img src={bigArt} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -11070,7 +11095,7 @@ function ShareView() {
             <button
               onClick={togglePlay}
               disabled={!previewUrl}
-              className="absolute bottom-3 right-3 w-16 h-16 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-text,white)] shadow-2xl flex items-center justify-center transition-all duration-200 active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="absolute bottom-3 right-3 w-16 h-16 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-text,white)] shadow-2xl shadow-purple-900/60 ring-2 ring-white/20 flex items-center justify-center transition-all duration-200 active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
             >
               {isPlaying ? (
@@ -11082,17 +11107,17 @@ function ShareView() {
           </div>
 
           <div className="text-center max-w-md">
-            <div className="text-xl md:text-2xl font-bold">{title || 'Tema compartido'}</div>
-            {artist && <div className="text-base md:text-lg text-gray-400 mt-1">{artist}</div>}
-            {loadingPreview && <div className="text-xs text-gray-500 mt-3 animate-pulse">Buscando preview…</div>}
-            {!loadingPreview && !previewUrl && <div className="text-xs text-gray-500 mt-3">Preview no disponible</div>}
+            <div className="text-xl md:text-2xl font-bold drop-shadow-lg">{title || 'Tema compartido'}</div>
+            {artist && <div className="text-base md:text-lg text-purple-200/80 mt-1">{artist}</div>}
+            {loadingPreview && <div className="text-xs text-gray-400 mt-3 animate-pulse">Buscando preview…</div>}
+            {!loadingPreview && !previewUrl && <div className="text-xs text-gray-400 mt-3">Preview no disponible</div>}
           </div>
 
           <audio ref={audioRef} src={previewUrl || undefined} onEnded={() => setIsPlaying(false)} preload="auto" />
 
           <a
             href={appUrl}
-            className="mt-2 px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-sm flex items-center gap-2 transition-colors duration-200 active:scale-95"
+            className="mt-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 text-white text-sm font-semibold flex items-center gap-2 transition-all duration-200 active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
             Abrí DJ Free App
@@ -11153,6 +11178,7 @@ function ReelsView() {
 function AppWithToast() {
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search)
+    const path = window.location.pathname
     // Native vertical DemoReels — used by playwright to record the raw
     // animation at 1080x1920 (no landing wrapper, no controls)
     if (params.get('demorec') === '1') {
@@ -11161,7 +11187,8 @@ function AppWithToast() {
     if (params.get('reels') === '1') {
       return <ToastProvider><ReelsView /></ToastProvider>
     }
-    if (params.get('share') === '1') {
+    // Friendly share URL: /s/<slug>. Backwards-compat: also accept ?share=1.
+    if (path.startsWith('/s/') || params.get('share') === '1') {
       return <ToastProvider><ShareView /></ToastProvider>
     }
   }
