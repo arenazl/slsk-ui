@@ -9230,8 +9230,19 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const beatportClicks = useGenreClicks('beatport_genre_clicks', authUser?.name || '')
   const spotifyClicks  = useGenreClicks('spotify_cat_clicks',    authUser?.name || '')
   // YouTube embed for POP/LATIN — higher quality than iTunes 30s previews.
-  // { videoId, track } | null. Rendered as a floating iframe player.
+  // { videoId, track } | null. The iframe stays MOUNTED while playing so audio
+  // keeps coming; `youtubeVisible` only controls whether the video card is
+  // on-screen or parked offscreen (hidden iframes get throttled, offscreen
+  // ones keep playing). Default is hidden — footer is the primary UI.
   const [youtubeEmbed, setYoutubeEmbed] = useState(null)
+  const [youtubeVisible, setYoutubeVisible] = useState(false)
+  // When playback stops globally (footer Stop, panic-stop, etc.) drop the iframe.
+  useEffect(() => {
+    if (!playingFile || !playingFile.startsWith('discover-')) {
+      setYoutubeEmbed(null)
+      setYoutubeVisible(false)
+    }
+  }, [playingFile])
   const [genres, setGenres] = useState([])
   // URL-synced selections: share/bookmark any view directly
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
@@ -9971,6 +9982,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         .then(data => {
           if (data?.videoId) {
             setYoutubeEmbed({ videoId: data.videoId, track })
+            setYoutubeVisible(false) // primary UI is the footer; video stays hidden until user opens it
           } else {
             toast('No se encontró video en YouTube', 'warning', 2500)
             clearDiscoverAudio()
@@ -11192,32 +11204,63 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         )
       })()}
 
-      {/* YouTube Music embed — POP/LATIN preview (full track, high quality).
-          Floating bottom-right card; small iframe is enough since it's audio-first. */}
+      {/* YouTube Music embed — POP/LATIN preview. Audio is primary (via footer);
+          video is hidden by default and toggled with the YT button sitting
+          just above the AudioPlayerBar. The iframe is ALWAYS rendered while a
+          track is active so audio keeps flowing; only its position changes. */}
       {youtubeEmbed && (
-        <div className="fixed bottom-4 right-4 z-[70] w-80 max-w-[calc(100vw-2rem)] bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{youtubeEmbed.track?.title}</div>
-              <div className="text-[10px] text-[var(--text-muted)] truncate">{youtubeEmbed.track?.artist} • YouTube Music</div>
-            </div>
-            <button
-              onClick={() => { setYoutubeEmbed(null); clearDiscoverAudio() }}
-              className="ml-2 w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90"
-              title="Cerrar"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+        <>
+          {/* Toggle button — floats just above the global AudioPlayerBar.
+              The footer has h-14 (≈3.5rem) so we sit at bottom-20 with a small gap. */}
+          <button
+            onClick={() => setYoutubeVisible(v => !v)}
+            className={`fixed bottom-20 right-4 z-[71] w-11 h-11 flex items-center justify-center rounded-full shadow-xl shadow-black/40 ring-1 transition-all duration-200 active:scale-95 ${
+              youtubeVisible
+                ? 'bg-red-600 ring-red-400/40 text-white hover:bg-red-500'
+                : 'bg-[var(--bg-panel)] ring-[var(--border-color)] text-red-500 hover:text-red-400 hover:bg-[var(--bg-hover)]'
+            }`}
+            title={youtubeVisible ? 'Ocultar video' : 'Ver video de YouTube'}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+          </button>
+
+          {/* Iframe — visible card OR parked offscreen. Parking via `left/top` (not
+              display:none) keeps the iframe playing without browser throttling. */}
+          <div
+            className={`z-[70] bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden ${
+              youtubeVisible
+                ? 'fixed bottom-20 right-4 w-80 max-w-[calc(100vw-2rem)] animate-fade-in'
+                : 'fixed w-1 h-1 opacity-0 pointer-events-none'
+            }`}
+            style={youtubeVisible ? undefined : { left: '-9999px', top: '-9999px' }}
+          >
+            {youtubeVisible && (
+              <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{youtubeEmbed.track?.title}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] truncate">{youtubeEmbed.track?.artist} • YouTube Music</div>
+                </div>
+                <button
+                  onClick={() => setYoutubeVisible(false)}
+                  className="ml-2 w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90"
+                  title="Minimizar"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13H5" /></svg>
+                </button>
+              </div>
+            )}
+            <iframe
+              key={youtubeEmbed.videoId}
+              src={`https://www.youtube-nocookie.com/embed/${youtubeEmbed.videoId}?autoplay=1&modestbranding=1&rel=0`}
+              title="YouTube preview"
+              className={youtubeVisible ? 'w-full aspect-video border-0' : 'w-full h-full border-0'}
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
           </div>
-          <iframe
-            key={youtubeEmbed.videoId}
-            src={`https://www.youtube-nocookie.com/embed/${youtubeEmbed.videoId}?autoplay=1&modestbranding=1&rel=0`}
-            title="YouTube preview"
-            className="w-full aspect-video border-0"
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
+        </>
       )}
     </div>
   )
