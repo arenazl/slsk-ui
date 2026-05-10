@@ -9226,6 +9226,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Per-user genre click tracking with 5-click reorder threshold (server-persisted)
   const beatportClicks = useGenreClicks('beatport_genre_clicks', authUser?.name || '')
   const spotifyClicks  = useGenreClicks('spotify_cat_clicks',    authUser?.name || '')
+  // YouTube embed for POP/LATIN — higher quality than iTunes 30s previews.
+  // { videoId, track } | null. Rendered as a floating iframe player.
+  const [youtubeEmbed, setYoutubeEmbed] = useState(null)
   const [genres, setGenres] = useState([])
   // URL-synced selections: share/bookmark any view directly
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
@@ -9905,6 +9908,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     setPlayingFile(null)
     setNowPlaying(null)
     setIsAudioPlaying(false)
+    setYoutubeEmbed(null)
   }
 
   const setDiscoverAudio = (audio, track) => {
@@ -9940,6 +9944,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         audioRef.current = null
       }
       clearDiscoverAudio()
+      setYoutubeEmbed(null)
       return
     }
     if (audioRef.current) {
@@ -9947,6 +9952,32 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       try { audioRef.current.onerror = null } catch {}
       try { audioRef.current.pause() } catch {}
       try { audioRef.current.src = '' } catch {}
+    }
+
+    // POP / LATIN → YouTube Music embed (full track, much higher quality than
+    // iTunes 30s clips). EDM stays on Beatport sample → iTunes fallback.
+    if (collection === 'pop' || collection === 'latin') {
+      setPlayingId(track.id)
+      lastPlayedTrackRef.current = track
+      setPlayingFile(`discover-${track.id}`)
+      setNowPlaying({ filename: `discover-${track.id}`, title: track.title, artist: track.artist, isPreview: true })
+      setIsAudioPlaying(true)
+      const q = `${track.artist || ''} ${track.title || ''}`.trim()
+      fetch(`${API_BASE}/api/youtube-resolve?q=${encodeURIComponent(q)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.videoId) {
+            setYoutubeEmbed({ videoId: data.videoId, track })
+          } else {
+            toast('No se encontró video en YouTube', 'warning', 2500)
+            clearDiscoverAudio()
+          }
+        })
+        .catch(() => {
+          toast('Error buscando en YouTube', 'warning', 2500)
+          clearDiscoverAudio()
+        })
+      return
     }
 
     // Try Beatport sample_url first, then iTunes
@@ -11157,6 +11188,34 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           </div>
         )
       })()}
+
+      {/* YouTube Music embed — POP/LATIN preview (full track, high quality).
+          Floating bottom-right card; small iframe is enough since it's audio-first. */}
+      {youtubeEmbed && (
+        <div className="fixed bottom-4 right-4 z-[70] w-80 max-w-[calc(100vw-2rem)] bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{youtubeEmbed.track?.title}</div>
+              <div className="text-[10px] text-[var(--text-muted)] truncate">{youtubeEmbed.track?.artist} • YouTube Music</div>
+            </div>
+            <button
+              onClick={() => { setYoutubeEmbed(null); clearDiscoverAudio() }}
+              className="ml-2 w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90"
+              title="Cerrar"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <iframe
+            key={youtubeEmbed.videoId}
+            src={`https://www.youtube-nocookie.com/embed/${youtubeEmbed.videoId}?autoplay=1&modestbranding=1&rel=0`}
+            title="YouTube preview"
+            className="w-full aspect-video border-0"
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
     </div>
   )
 }
