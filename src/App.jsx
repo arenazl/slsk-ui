@@ -469,10 +469,10 @@ function ScreenHint({ id, title, tips }) {
           <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/40 blur-md animate-pulse" />
           <span
             key={`icon-${activeTip}`}
-            className="relative inline-flex w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-purple-500 items-center justify-center text-lg shadow-lg shadow-purple-900/40 ring-1 ring-white/15"
-            style={{ animation: 'hint-icon-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+            className="relative inline-flex w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-purple-500 items-center justify-center shadow-lg shadow-purple-900/40 ring-1 ring-white/15 overflow-hidden"
+            style={{ animation: 'hint-tremble 0.7s cubic-bezier(0.36, 0.07, 0.19, 0.97)' }}
           >
-            {tip.icon || '✨'}
+            <img src="/logo.png" alt="" className="w-6 h-6 object-contain drop-shadow" />
           </span>
         </div>
         <div className="flex-1 min-w-0 overflow-hidden">
@@ -8131,7 +8131,7 @@ function App() {
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 md:gap-3 min-w-0 flex-1 justify-end">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
           {logs.length > 0 && isRunning && (
             <div className="hidden lg:flex items-center gap-1.5 max-w-lg">
               <span className="text-sm text-yellow-400 truncate">
@@ -8148,21 +8148,24 @@ function App() {
               </button>
             </div>
           )}
-          <div className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/50 flex-shrink-0">
+          {/* Unified topbar icon row: every control shares h-8 + rounded-lg +
+              border + subtle bg + same hover. Status icons use semantic color
+              only for the icon/border, never as a solid fill. */}
+          <div className="hidden lg:flex items-center h-8 gap-1 px-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 flex-shrink-0">
             <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mr-1">Cliente Descargas</span>
             <button
               onClick={() => setAgentInstallOpen(true)}
-              className="relative p-1 rounded text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
+              className="relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
               title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows)'}
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
               </svg>
-              <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-[var(--bg-panel)] ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
+              <span className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
             </button>
             <a
               href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
-              className="relative p-1 rounded text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
+              className="relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
               title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Mac) - Click derecho para Mac viejo'}
               onContextMenu={(e) => {
                 e.preventDefault()
@@ -8173,7 +8176,7 @@ function App() {
                 )
               }}
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
               </svg>
             </a>
@@ -8186,24 +8189,24 @@ function App() {
                 connectWs()
               } catch (e) { console.error('Restart failed', e) }
             }}
-            className="hidden p-1.5 rounded-lg text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden w-8 h-8 items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title="Reiniciar conexión SoulSeek"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
           <button
             onClick={toggleTheme}
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary,white)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}
           >
             {theme === 'dark' ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
               </svg>
             )}
@@ -8225,10 +8228,10 @@ function App() {
                 })
                 handleAppStop()
               }}
-              className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 active:scale-95 flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/5 text-red-400 hover:text-red-300 hover:bg-red-500/15 transition-all duration-200 active:scale-95 flex-shrink-0"
               title="Detener todo el audio"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                 <rect x="6" y="6" width="12" height="12" rx="1.5" />
               </svg>
             </button>
@@ -8236,7 +8239,7 @@ function App() {
           {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
             <button
               onClick={handleInstall}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
+              className="h-8 flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
               title="Instalar como app"
             >
               <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -8248,16 +8251,16 @@ function App() {
           )}
           <button
             onClick={() => window.location.reload()}
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90 flex-shrink-0"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title="Recargar versión nueva"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <span
-              className={`w-7 h-7 flex items-center justify-center rounded-lg border ${connected ? 'bg-green-500/15 border-green-500/30 text-green-400' : 'bg-red-500/15 border-red-500/30 text-red-400'}`}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg border bg-[var(--bg-input)]/40 ${connected ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'}`}
               title={connected ? (isRunning ? 'Buscando / descargando…' : 'Búsqueda — backend SoulSeek conectado') : 'Backend SoulSeek desconectado'}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -8265,7 +8268,7 @@ function App() {
               </svg>
             </span>
             <span
-              className={`w-7 h-7 flex items-center justify-center rounded-lg border ${agentConnected ? 'bg-green-500/15 border-green-500/30 text-green-400' : 'bg-red-500/15 border-red-500/30 text-red-400'}`}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg border bg-[var(--bg-input)]/40 ${agentConnected ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'}`}
               title={agentConnected ? `Descargas — agente ${agentVersion} conectado (${AGENT_MODE === 'local' ? 'local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'proxy cloud'})` : 'Descargas — agente local no conectado'}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -8275,21 +8278,21 @@ function App() {
             {fsaReady && (
               <button
                 onClick={forgetStorageFolder}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                className="h-8 flex items-center gap-1.5 px-2.5 rounded-lg border border-[var(--color-accent)]/30 bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
                 title={`Carpeta: ${fsaFolderName} (click para cambiar)`}
               >
-                <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
-                <span className="text-xs text-blue-400 hidden sm:inline truncate max-w-24">{fsaFolderName}</span>
+                <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                <span className="text-xs font-medium text-[var(--color-accent)] hidden sm:inline truncate max-w-24">{fsaFolderName}</span>
               </button>
             )}
             {fsaBackend.supported && !fsaReady && !agentConnected && (
               <button
                 onClick={() => setShowFolderModal(true)}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors"
+                className="h-8 flex items-center gap-1.5 px-2.5 rounded-lg border border-yellow-500/30 bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
                 title="Elegir carpeta de descargas"
               >
-                <svg className="w-3 h-3 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
-                <span className="text-xs text-yellow-400 hidden sm:inline">Elegir carpeta</span>
+                <svg className="w-3.5 h-3.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                <span className="text-xs font-medium text-yellow-400 hidden sm:inline">Elegir carpeta</span>
               </button>
             )}
           </div>
@@ -8297,11 +8300,11 @@ function App() {
             <div className="relative">
               <button
                 onClick={() => setUserMenuOpen(o => !o)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-[var(--bg-hover)] transition-all"
+                className="h-8 flex items-center gap-1.5 pl-1 pr-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
                 title={authUser.name}
               >
-                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ring-1 ring-white/10" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{authUser.name?.[0]?.toUpperCase()}</span>
-                <span className="hidden sm:inline">{authUser.name}</span>
+                <span className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{authUser.name?.[0]?.toUpperCase()}</span>
+                <span className="hidden sm:inline font-medium">{authUser.name}</span>
                 <svg className="w-3 h-3 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </button>
               {userMenuOpen && (<>

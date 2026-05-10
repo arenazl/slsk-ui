@@ -146,6 +146,16 @@ input[type="color"]::-webkit-color-swatch {
   60%  { transform: scale(1.18) rotate(8deg); opacity: 1; }
   100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
+/* Trembling shake when the tip changes — quick, organic wobble */
+@keyframes hint-tremble {
+  0%   { transform: scale(0.85) rotate(0deg); opacity: 0; }
+  20%  { transform: scale(1.15) rotate(-12deg); opacity: 1; }
+  35%  { transform: scale(1.08) rotate(10deg); }
+  50%  { transform: scale(1.05) rotate(-7deg); }
+  65%  { transform: scale(1.03) rotate(5deg); }
+  80%  { transform: scale(1.01) rotate(-3deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
 @keyframes hint-tip-in {
   0%   { transform: translateX(18px); opacity: 0; }
   100% { transform: translateX(0); opacity: 1; }
