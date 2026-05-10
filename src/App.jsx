@@ -2274,6 +2274,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const [suggestions, setSuggestions] = useState([])
   const [suggestionOffset, setSuggestionOffset] = useState(0) // page index into 9-track grid
   const [bottomTab, setBottomTab] = useState('sugerencias') // 'sugerencias' | 'biblioteca'
+  const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [libBrowserSearch, setLibBrowserSearch] = useState('')
   const [libBrowserGenre, setLibBrowserGenre] = useState('')
   const [libBrowserPage, setLibBrowserPage] = useState(0)
@@ -2788,9 +2789,12 @@ ${playlistEntries}
             })}
           </div>
         )}
+      </div>
 
-        {/* Bottom panel — tabbed: Sugerencias (3×4) | Biblioteca (browse all). */}
-        {setTracks.length > 0 && (() => {
+      {/* Bottom panel — tabbed: Sugerencias (3×4) | Biblioteca (browse all).
+          Sits OUTSIDE the scrollable tracklist so it always shows the same
+          4 rows regardless of how many tracks are in the playlist above. */}
+      {setTracks.length > 0 && (() => {
           // Filter library by current selectedGenres + minStars + search.
           const setIds = new Set(setTracks.map(t => t.filename))
           const q = libBrowserSearch.trim().toLowerCase()
@@ -2876,9 +2880,18 @@ ${playlistEntries}
                   Biblioteca
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 font-mono">{filteredLib.length}</span>
                 </button>
-                {bottomTab === 'sugerencias' && loadingSuggestions && <div className="w-3.5 h-3.5 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin ml-2" />}
+                <button
+                  onClick={() => setPanelCollapsed(c => !c)}
+                  className="ml-1 w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-95"
+                  title={panelCollapsed ? 'Expandir panel' : 'Colapsar panel'}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={panelCollapsed ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
+                  </svg>
+                </button>
+                {!panelCollapsed && bottomTab === 'sugerencias' && loadingSuggestions && <div className="w-3.5 h-3.5 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin ml-2" />}
                 <div className="flex-1" />
-                {bottomTab === 'sugerencias' && suggestions.length > 12 && (
+                {!panelCollapsed && bottomTab === 'sugerencias' && suggestions.length > 12 && (
                   <button
                     onClick={() => setSuggestionOffset(o => (o + 12) % Math.max(12, suggestions.length))}
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-[var(--color-accent)] bg-[var(--color-accent)]/10 hover:bg-[var(--color-accent)]/20 transition-all active:scale-95"
@@ -2888,7 +2901,7 @@ ${playlistEntries}
                     Más recomendados
                   </button>
                 )}
-                {bottomTab === 'biblioteca' && (
+                {!panelCollapsed && bottomTab === 'biblioteca' && (
                   <>
                     {/* BUSCAR */}
                     <div className="flex flex-col gap-0.5">
@@ -3002,18 +3015,19 @@ ${playlistEntries}
                 </div>
               </div>
               {/* Grid */}
-              <div className={`px-3 md:px-6 py-2 ${bottomTab === 'biblioteca' && libBrowserShowAll ? 'max-h-96 overflow-y-auto' : ''}`}>
-                {list.length === 0 && (
-                  <div className="px-3 py-3 text-sm text-gray-600">
-                    {bottomTab === 'sugerencias' ? 'No hay sugerencias disponibles' : 'Sin resultados — probá otra búsqueda'}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">{list.map(renderRow)}</div>
-              </div>
+              {!panelCollapsed && (
+                <div className={`px-3 md:px-6 py-2 ${bottomTab === 'biblioteca' && libBrowserShowAll ? 'max-h-96 overflow-y-auto' : ''}`}>
+                  {list.length === 0 && (
+                    <div className="px-3 py-3 text-sm text-gray-600">
+                      {bottomTab === 'sugerencias' ? 'No hay sugerencias disponibles' : 'Sin resultados — probá otra búsqueda'}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">{list.map(renderRow)}</div>
+                </div>
+              )}
             </div>
           )
         })()}
-      </div>
 
       {/* Export footer removed — buttons moved into the tab strip above. setName auto-fills via computeSetName(). */}
       {/* Hint: how to import */}
