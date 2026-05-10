@@ -6293,6 +6293,7 @@ function App() {
   }
   // Whether the logged-in user has a registered agent (probed via Heroku proxy).
   const [agentRegistered, setAgentRegistered] = useState(false)
+  const [agentCheckDone, setAgentCheckDone] = useState(false)
 
   // Check FSA on mount. Three cases:
   // - 'granted'  → fully ready, no UI prompt
@@ -6308,8 +6309,9 @@ function App() {
       const name = await fsaBackend.folderName()
       setFsaFolderName(name)
       if (status === 'granted') setFsaReady(true)
-      else if (status === 'no-folder') setShowFolderModal(true)
-      // 'needs-activation' → show banner via fsaStatus, don't auto-prompt
+      // 'no-folder' / 'needs-activation' → don't auto-prompt here; the
+      // download-mode flow decides whether to ask for a folder (only when
+      // the user opts into 'local' mode).
     })()
   }, [])
 
@@ -6515,16 +6517,39 @@ function App() {
           () => agentFetch('config', { method: 'POST', headers: configHeaders, body: configBody })
         )) {
           setAgentRegistered(true)
+          setAgentCheckDone(true)
           return
         }
       } catch { /* proxy failed */ }
       setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
       setAgentRegistered(false)
+      setAgentCheckDone(true)
     }
     checkAgent()
     const interval = setInterval(checkAgent, 30000)
     return () => clearInterval(interval)
   }, [authUser])
+
+  // Decide initial download mode for this device once we know what's available.
+  // - If the user has a registered agent AND the browser supports FSA → ask.
+  // - If only one option is viable → pick it silently.
+  // - If neither → leave null; the download flow shows an "instalá el agente" hint.
+  const [showDownloadModeModal, setShowDownloadModeModal] = useState(false)
+  useEffect(() => {
+    if (!authUser || !agentCheckDone) return
+    if (downloadMode) return
+    const canRemote = agentRegistered
+    const canLocal = fsaBackend.supported
+    if (canRemote && canLocal) {
+      setShowDownloadModeModal(true)
+    } else if (canRemote) {
+      setDownloadMode('remote')
+    } else if (canLocal) {
+      setDownloadMode('local')
+      // Returning user may already have a folder granted; only prompt if not.
+      if (!fsaReady) setShowFolderModal(true)
+    }
+  }, [authUser, agentCheckDone, agentRegistered, fsaReady, downloadMode])
 
   const [tracks, setTracks] = useState([])
   const [connected, setConnected] = useState(false)
@@ -7306,7 +7331,8 @@ function App() {
     // Si el agente está conectado y tiene aioslsk, delegar el download a él:
     // corre en tu home network, sin los bugs de NAT de Heroku, peers-ghost
     // dejan de ghostear. El agent postea progress a Heroku que lo rebota por WS.
-    if (agentConnected && agentHasSlsk) {
+    // downloadMode='local' fuerza el path WS (archivo a este dispositivo).
+    if (downloadMode !== 'local' && agentConnected && agentHasSlsk) {
       agentFetch('slsk-download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -7967,6 +7993,43 @@ function App() {
         </div>
       )}
 
+      {/* Download mode picker — first time on this device, both options viable */}
+      {showDownloadModeModal && (
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full p-6 md:p-8" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">¿Adónde van las descargas?</h2>
+            <p className="text-sm text-[var(--text-muted)] mb-5">Elegí cómo querés que funcione este dispositivo.</p>
+            <div className="space-y-3">
+              <button
+                onClick={() => { setDownloadMode('remote'); setShowDownloadModeModal(false) }}
+                className="w-full text-left p-4 rounded-xl border border-[var(--border-color)] hover:border-[var(--color-accent)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.99] flex items-start gap-3"
+              >
+                <div className="w-10 h-10 rounded-lg bg-[var(--color-accent)]/15 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-[var(--text-primary)]">Bajar a la PC con el agente</div>
+                  <div className="text-xs text-[var(--text-muted)] mt-0.5">Las descargas se disparan en tu computadora — perfecto para usar la tablet de control y armar sets en Rekordbox después.</div>
+                </div>
+              </button>
+              <button
+                onClick={() => { setDownloadMode('local'); setShowDownloadModeModal(false); setShowFolderModal(true) }}
+                className="w-full text-left p-4 rounded-xl border border-[var(--border-color)] hover:border-[var(--color-accent)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.99] flex items-start gap-3"
+              >
+                <div className="w-10 h-10 rounded-lg bg-purple-500/15 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-[var(--text-primary)]">Bajar a este dispositivo</div>
+                  <div className="text-xs text-[var(--text-muted)] mt-0.5">Los temas se guardan localmente en una carpeta del navegador. Te vamos a pedir cuál carpeta usar.</div>
+                </div>
+              </button>
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] mt-4 text-center">Después podés cambiarlo desde el menú de usuario.</p>
+          </div>
+        </div>
+      )}
+
       {/* Folder picker modal: only shown when no folder was ever picked */}
       {showFolderModal && fsaBackend.supported && (
         <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
@@ -8285,6 +8348,43 @@ function App() {
                       Descargar agente
                     </a>
                   </div>
+                  {(agentRegistered || fsaBackend.supported) && (
+                    <div className="border-t border-[var(--border-color)] px-4 py-3">
+                      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Modo descarga</div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => agentRegistered && setDownloadMode('remote')}
+                          disabled={!agentRegistered}
+                          title={agentRegistered ? 'Las descargas las hace tu PC con el agente' : 'Necesitás un agente registrado en tu cuenta'}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
+                            downloadMode === 'remote'
+                              ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/40'
+                              : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:hover:text-[var(--text-muted)]'
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                          Mi PC
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!fsaBackend.supported) return
+                            setDownloadMode('local')
+                            if (!fsaReady) setShowFolderModal(true)
+                          }}
+                          disabled={!fsaBackend.supported}
+                          title={fsaBackend.supported ? 'Bajar a una carpeta de este dispositivo' : 'Tu navegador no soporta carpetas locales (probá Chrome/Edge)'}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
+                            downloadMode === 'local'
+                              ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/40'
+                              : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:hover:text-[var(--text-muted)]'
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                          Este dispositivo
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="border-t border-[var(--border-color)] px-4 py-3">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Color de acento</div>
                     <div className="flex items-center gap-1.5">
@@ -9006,6 +9106,7 @@ function App() {
           onRadioConsumed={() => setPendingRadioTrack(null)}
           agentConnected={agentConnected}
           agentHasSlsk={agentHasSlsk}
+          downloadMode={downloadMode}
           authUser={authUser}
           collection={collection}
           onGoToLibrary={goToLibraryTrack}
@@ -9120,7 +9221,7 @@ function SwipeableRow({ children, onReveal }) {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection, onGoToLibrary }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary }) {
   const toast = useToast()
   // Per-user genre click tracking with 5-click reorder threshold (server-persisted)
   const beatportClicks = useGenreClicks('beatport_genre_clicks', authUser?.name || '')
@@ -9893,9 +9994,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // actually completes (see search_dl_status handler).
     addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
 
-    // Mobile: no SoulSeek available, send to pending queue for later download on desktop
-    const isMobile = window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    if (isMobile || !wsRef?.current || wsRef.current.readyState !== 1 || !username || !password) {
+    // No WS or no creds → just queue as pending (Descargas tab handles it later).
+    if (!wsRef?.current || wsRef.current.readyState !== 1 || !username || !password) {
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Agregado a pendientes' } }))
       return
     }
@@ -9946,8 +10046,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '', collection }))
       }
 
-      if (agentConnected && agentHasSlsk) {
-        console.info('[DL] via=agent', { filename: best.filename })
+      // downloadMode='local' forces WS path (file lands on this device).
+      // Otherwise prefer the agent path when reachable.
+      const useAgent = downloadMode !== 'local' && agentConnected && agentHasSlsk
+      if (useAgent) {
+        console.info('[DL] via=agent', { filename: best.filename, mode: downloadMode })
         agentFetch('slsk-download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -9963,7 +10066,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           sendViaWs('agent-error')
         })
       } else {
-        sendViaWs(agentConnected ? 'no-aioslsk' : 'agent-disconnected')
+        sendViaWs(downloadMode === 'local' ? 'mode-local' : (agentConnected ? 'no-aioslsk' : 'agent-disconnected'))
       }
 
       // Watchdog: if we don't even get a queued/downloading status within 90s,
