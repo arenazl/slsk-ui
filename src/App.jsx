@@ -9463,25 +9463,32 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // badge so the user can re-trigger a download. Reset on page reload.
   const [clearedTrackIds, setClearedTrackIds] = useState(() => new Set())
 
-  const handleShareTrack = (track) => {
+  const handleShareTrack = async (track) => {
     if (!track) return
-    // Friendly URL: djfreeapp.ar/s/<artist-title-slug>. ShareView resolves
-    // metadata (artwork, preview) from iTunes by the same slug as a query.
+    // Clean URL: djfreeapp.ar/s/<artist-title-slug>. Metadata (artwork,
+    // preview) is persisted server-side in Cloudinary so the link stays short.
     const slugify = (s) => (s || '').toLowerCase()
       .normalize('NFKD').replace(/\p{M}/gu, '')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
     const combined = `${track.artist || ''} ${track.title || ''}`.trim()
     const slug = slugify(combined) || 'track'
-    const qs = new URLSearchParams()
-    if (track.artwork_url) qs.set('artwork', track.artwork_url)
-    if (track.preview_url) qs.set('preview', track.preview_url)
-    if (track.artist) qs.set('artist', track.artist)
-    if (track.title) qs.set('title', track.title)
-    const tail = qs.toString()
-    const url = `https://djfreeapp.ar/s/${slug}${tail ? '?' + tail : ''}`
+    const url = `https://djfreeapp.ar/s/${slug}`
     setDiscoverCtx(null)
     setShareDialog({ track, url })
+    try {
+      await fetch(`${API_BASE}/api/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          artist: track.artist || '',
+          title: track.title || '',
+          artwork_url: track.artwork_url || '',
+          preview_url: track.preview_url || '',
+        }),
+      })
+    } catch { /* link still works via iTunes fallback */ }
   }
 
   const cleanTrackState = (t) => {
@@ -11176,18 +11183,20 @@ function ShareView() {
 
   useEffect(() => {
     if (previewFromUrl && artwork) { setLoadingPreview(false); return }
-    const baseQ = slugQuery || `${artist} ${title}`.trim()
-    if (!baseQ) { setLoadingPreview(false); return }
+    let cancelled = false
+
     const stripSuffixes = (s) => s
       .replace(/\b(extended\s*mix|original\s*mix|radio\s*edit|club\s*mix|dub\s*mix|remix|edit|mix|version|vip|og)\b/gi, '')
       .replace(/\([^)]*\)/g, '')
       .replace(/\[[^\]]*\]/g, '')
       .replace(/\s+/g, ' ')
       .trim()
-    const cleaned = stripSuffixes(baseQ)
-    const queries = cleaned && cleaned !== baseQ ? [baseQ, cleaned] : [baseQ]
-    let cancelled = false
-    const tryQueries = async () => {
+
+    const tryItunes = async () => {
+      const baseQ = slugQuery || `${artist} ${title}`.trim()
+      if (!baseQ) return null
+      const cleaned = stripSuffixes(baseQ)
+      const queries = cleaned && cleaned !== baseQ ? [baseQ, cleaned] : [baseQ]
       for (const q of queries) {
         try {
           const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=1`)
@@ -11199,16 +11208,36 @@ function ShareView() {
       }
       return null
     }
-    tryQueries()
-      .then(r => {
-        if (cancelled || !r) return
-        if (!previewFromUrl && r.previewUrl) setPreviewUrl(r.previewUrl)
-        if (!artwork && r.artworkUrl100) setArtwork(r.artworkUrl100.replace('100x100', '600x600'))
-        if (r.artistName) setArtist(r.artistName)
-        if (r.trackName) setTitle(r.trackName)
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoadingPreview(false) })
+
+    const slugFromPathRaw = path.startsWith('/s/') ? decodeURIComponent(path.slice(3)) : ''
+
+    const run = async () => {
+      // 1) Try server-side share cache (clean URLs use this).
+      if (slugFromPathRaw) {
+        try {
+          const res = await fetch(`${API_BASE}/api/share/${encodeURIComponent(slugFromPathRaw)}`)
+          if (res.ok) {
+            const meta = await res.json()
+            if (!cancelled && meta?.ok) {
+              if (meta.artwork_url && !artwork) setArtwork(meta.artwork_url)
+              if (meta.preview_url && !previewFromUrl) setPreviewUrl(meta.preview_url)
+              if (meta.artist) setArtist(meta.artist)
+              if (meta.title) setTitle(meta.title)
+              if (meta.preview_url && meta.artwork_url) { setLoadingPreview(false); return }
+            }
+          }
+        } catch { /* fall through to iTunes */ }
+      }
+      // 2) Fallback to iTunes lookup.
+      const r = await tryItunes()
+      if (cancelled || !r) { setLoadingPreview(false); return }
+      if (!previewFromUrl && r.previewUrl) setPreviewUrl(r.previewUrl)
+      if (!artwork && r.artworkUrl100) setArtwork(r.artworkUrl100.replace('100x100', '600x600'))
+      if (r.artistName) setArtist(r.artistName)
+      if (r.trackName) setTitle(r.trackName)
+      setLoadingPreview(false)
+    }
+    run()
     return () => { cancelled = true }
   }, [])
 
