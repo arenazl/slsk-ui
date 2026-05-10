@@ -1128,7 +1128,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const handleContextMenu = (e, file) => {
     e.preventDefault()
-    setCtxMenu({ x: e.clientX, y: e.clientY, file })
+    // Anchor the menu to the ROW element instead of the click coords —
+    // on tablets long-press and touch events report inconsistent x/y,
+    // so the menu was showing far from the track. Bottom-left of the row
+    // is predictable on any input device.
+    const row = e.currentTarget?.getBoundingClientRect?.() || null
+    if (row) {
+      setCtxMenu({ x: row.left + 8, y: row.bottom + 4, file })
+    } else {
+      setCtxMenu({ x: e.clientX, y: e.clientY, file })
+    }
     setCustomGenre('')
   }
 
@@ -9309,7 +9318,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // badge so the user can re-trigger a download. Reset on page reload.
   const [clearedTrackIds, setClearedTrackIds] = useState(() => new Set())
 
-  const handleShareTrack = async (track) => {
+  const handleShareTrack = (track) => {
     if (!track) return
     const params = new URLSearchParams({ share: '1' })
     if (track.artist) params.set('artist', track.artist)
@@ -9321,42 +9330,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // user is on. Avoids leaking localhost / dev URLs and guarantees ShareView
     // (no-login preview) gets served.
     const url = `https://djfreeapp.ar/?${params.toString()}`
-    const shareText = `🎵 ${track.artist || ''} - ${track.title || ''}`.trim()
-
-    console.log('[Share] url=', url)
     setDiscoverCtx(null)
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
-    if (isMobile && navigator.share) {
-      try {
-        await navigator.share({ title: shareText, text: shareText, url })
-        return
-      } catch (e) { console.log('[Share] navigator.share failed:', e?.message) }
-    }
-    // Try modern Clipboard API
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(url)
-        toast('Link copiado al portapapeles ✓', 'success', 2500)
-        return
-      } catch (e) { console.log('[Share] clipboard.writeText failed:', e?.message) }
-    }
-    // Legacy execCommand path (works without focus / permissions in older browsers)
-    try {
-      const ta = document.createElement('textarea')
-      ta.value = url
-      ta.style.position = 'fixed'
-      ta.style.left = '-9999px'
-      document.body.appendChild(ta)
-      ta.select()
-      const ok = document.execCommand('copy')
-      document.body.removeChild(ta)
-      if (ok) {
-        toast('Link copiado ✓', 'success', 2500)
-        return
-      }
-    } catch (e) { console.log('[Share] execCommand failed:', e?.message) }
-    // Last resort: degraded toast — user can copy from the address bar.
-    toast(`No se pudo copiar — abrí el link manualmente: ${url}`, 'warning', 6000)
+    setShareDialog({ track, url })
   }
 
   const cleanTrackState = (t) => {
@@ -9387,6 +9362,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   const [radioLoading, setRadioLoading] = useState(false)
   // Context menu
   const [discoverCtx, setDiscoverCtx] = useState(null) // {x, y, track}
+  const [shareDialog, setShareDialog] = useState(null)  // { track, url }
   const discoverCtxRef = useRef(null)
 
   // Handle pending radio track from Library
@@ -10888,6 +10864,91 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           </div>
         </div>
       </>)}
+
+      {/* Share dialog — modal in-app con preview del track + link copiable */}
+      {shareDialog && (() => {
+        const { track, url } = shareDialog
+        const shareText = `🎵 ${track.artist || ''} - ${track.title || ''}`.trim()
+        const close = () => setShareDialog(null)
+        const copyLink = async () => {
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(url)
+            } else {
+              const ta = document.createElement('textarea')
+              ta.value = url
+              ta.style.position = 'fixed'
+              ta.style.left = '-9999px'
+              document.body.appendChild(ta)
+              ta.select()
+              document.execCommand('copy')
+              document.body.removeChild(ta)
+            }
+            toast('Link copiado ✓', 'success', 2000)
+            close()
+          } catch (e) {
+            toast('No se pudo copiar — seleccioná el link y copialo a mano', 'warning', 4000)
+          }
+        }
+        const nativeShare = async () => {
+          if (!navigator.share) return
+          try {
+            await navigator.share({ title: shareText, text: shareText, url })
+            close()
+          } catch {}
+        }
+        return (
+          <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={close}>
+            <div className="w-full max-w-md bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-color)]">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compartir tema</h3>
+                <button onClick={close} className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90" title="Cerrar">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="px-5 py-4 flex items-center gap-3">
+                {track.artwork_url && (
+                  <img src={track.artwork_url.replace('1400x1400', '250x250')} alt="" className="w-14 h-14 rounded-lg object-cover ring-1 ring-white/10 flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-[var(--text-primary)] truncate">{track.title}</div>
+                  <div className="text-xs text-[var(--text-muted)] truncate">{track.artist}</div>
+                </div>
+              </div>
+              <div className="px-5 pb-3">
+                <label className="block text-[10px] uppercase tracking-widest text-[var(--text-muted)] font-semibold mb-1">Link público</label>
+                <input
+                  readOnly
+                  value={url}
+                  onFocus={(e) => e.target.select()}
+                  className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+                />
+                <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">Quien abra el link puede escuchar el preview sin loguearse.</p>
+              </div>
+              <div className="px-5 pb-5 flex gap-2">
+                <button
+                  onClick={copyLink}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-[var(--color-accent-text)] transition-all active:scale-95"
+                  style={{ background: 'var(--color-accent)' }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  Copiar link
+                </button>
+                {typeof navigator !== 'undefined' && navigator.share && (
+                  <button
+                    onClick={nativeShare}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-95"
+                    title="Usar el compartidor del sistema"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                    Compartir…
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Download activity toast */}
       {(() => {
