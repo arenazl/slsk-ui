@@ -120,6 +120,12 @@ input[type="color"]::-webkit-color-swatch {
 }
 .animate-demo-arrow { animation: demo-arrow-slide 1.4s ease-in-out infinite; }
 
+/* Tutorial slide progress bar (auto-advance indicator) */
+@keyframes tutorial-progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
 /* Centered scene title overlay — fades in big, holds, fades out */
 @keyframes demo-title-overlay {
   0% { opacity: 0; transform: scale(0.85) translateY(20px); }

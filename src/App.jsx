@@ -4380,42 +4380,47 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
 }
 
 function Tutorial({ onDone }) {
-  const [step, setStep] = useState(0)
+  const SLIDE_MS = 6000
   const slides = [
-    {
-      icon: '🔍',
-      title: 'Descubrí música nueva',
-      desc: 'Beatport, Spotify y SoulSeek en un solo lugar. Filtrá por género, BPM, key y energía.',
-      bars: [40, 70, 55, 85, 60, 75, 45],
-    },
-    {
-      icon: '🎯',
-      title: 'Sets armados con Camelot',
-      desc: 'Generá sets que matchean en tonalidad y energía automáticamente. Camelot, Energy, Genre, Peak.',
-      bars: [50, 80, 65, 90, 70, 85, 60],
-    },
-    {
-      icon: '🎚️',
-      title: 'Mezclá y exportá',
-      desc: 'Editor de mix con waveforms, fades, beat-grid. Exportá a USB con un click.',
-      bars: [60, 75, 90, 65, 85, 70, 80],
-    },
-    {
-      icon: '☁️',
-      title: 'Sync cross-device',
-      desc: 'Tu biblioteca en PC y celu, siempre actualizada. Bajá desde cualquier lado.',
-      bars: [55, 65, 80, 70, 95, 75, 85],
-    },
+    { icon: '🔍', title: 'Descubrí música nueva',     desc: 'Beatport, Spotify y SoulSeek en un solo lugar. Filtrá por género, BPM, key y energía.', bars: [40, 70, 55, 85, 60, 75, 45], color: 'blue',   gradient: 'from-blue-600/40 via-blue-500/20 to-cyan-500/30' },
+    { icon: '🎯', title: 'Sets armados con Camelot',  desc: 'Generá sets que matchean en tonalidad y energía automáticamente. Camelot, Energy, Genre, Peak.', bars: [50, 80, 65, 90, 70, 85, 60], color: 'purple', gradient: 'from-purple-600/40 via-fuchsia-500/20 to-pink-500/30' },
+    { icon: '🎚️', title: 'Mezclá y exportá',          desc: 'Editor de mix con waveforms, fades, beat-grid. Exportá a USB con un click.', bars: [60, 75, 90, 65, 85, 70, 80], color: 'orange', gradient: 'from-orange-600/40 via-pink-500/20 to-red-500/30' },
+    { icon: '☁️', title: 'Sync cross-device',         desc: 'Tu biblioteca en PC y celu, siempre actualizada. Bajá desde cualquier lado.', bars: [55, 65, 80, 70, 95, 75, 85], color: 'green',  gradient: 'from-emerald-600/40 via-cyan-500/20 to-teal-500/30' },
   ]
+  const [step, setStep] = useState(0)
+  const [muted, setMuted] = useState(false)
+  const audioRef = useRef(null)
   const s = slides[step]
   const next = () => step < slides.length - 1 ? setStep(step + 1) : onDone()
+  // Auto-advance per slide
+  useEffect(() => {
+    if (step >= slides.length - 1) return
+    const t = setTimeout(() => setStep(s => s + 1), SLIDE_MS)
+    return () => clearTimeout(t)
+  }, [step])
+  // Background music — clicking "Entrar como invitado" gave us a user gesture so autoplay should work.
+  useEffect(() => {
+    const a = audioRef.current
+    if (!a) return
+    a.muted = false
+    a.volume = 0.5
+    a.play().catch(() => { a.muted = true; setMuted(true) })
+  }, [])
+
+  // Split title into words for stagger animation
+  const titleWords = s.title.split(' ')
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center overflow-hidden animate-fade-in">
+      <audio ref={audioRef} src="/demo/bg.mp3" loop autoPlay muted={muted} preload="auto" />
+
+      {/* Per-slide gradient backdrop — shifts color per step */}
+      <div key={`bg-${step}`} className={`absolute inset-0 bg-gradient-radial ${s.gradient} animate-fade-in pointer-events-none`} style={{ background: 'radial-gradient(ellipse at center, var(--tw-gradient-stops))' }} />
+
       {/* Animated mesh blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-[40rem] h-[40rem] rounded-full bg-blue-600/30 blur-[120px] animate-blob" />
-        <div className="absolute top-1/2 -right-40 w-[35rem] h-[35rem] rounded-full bg-purple-600/30 blur-[120px] animate-blob animation-delay-2000" />
+        <div className="absolute -top-40 -left-40 w-[40rem] h-[40rem] rounded-full bg-blue-600/25 blur-[120px] animate-blob" />
+        <div className="absolute top-1/2 -right-40 w-[35rem] h-[35rem] rounded-full bg-purple-600/25 blur-[120px] animate-blob animation-delay-2000" />
         <div className="absolute -bottom-40 left-1/3 w-[30rem] h-[30rem] rounded-full bg-pink-600/20 blur-[120px] animate-blob animation-delay-4000" />
       </div>
 
@@ -4435,35 +4440,78 @@ function Tutorial({ onDone }) {
 
       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-transparent to-slate-950/90 pointer-events-none" />
 
-      <div key={step} className="relative w-full max-w-md px-6 text-center animate-fade-in-up">
-        <div className="text-7xl mb-6 inline-block animate-bounce-subtle">{s.icon}</div>
-        <h2 className="text-4xl md:text-5xl font-bold text-white mb-3 tracking-tight">{s.title}</h2>
-        <p className="text-base md:text-lg text-gray-300 mb-8 leading-relaxed">{s.desc}</p>
+      {/* Mute toggle */}
+      <button
+        onClick={() => {
+          const next = !muted
+          setMuted(next)
+          if (audioRef.current) {
+            audioRef.current.muted = next
+            if (!next) audioRef.current.play().catch(() => {})
+          }
+        }}
+        className="absolute top-5 right-5 z-30 w-11 h-11 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white transition-all active:scale-95"
+        aria-label={muted ? 'Activar audio' : 'Silenciar'}
+      >
+        {muted ? (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+        ) : (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+        )}
+      </button>
 
-        {/* Mini visualizer specific to this slide */}
+      {/* Slide content */}
+      <div key={step} className="relative w-full max-w-lg px-6 text-center animate-fade-in-up">
+        {/* Icon with pulsing glow ring */}
+        <div className="relative inline-block mb-8">
+          <div className="absolute inset-0 rounded-full bg-white/20 blur-2xl scale-150 animate-demo-ping-slow" />
+          <div className="relative text-[6rem] md:text-[8rem] inline-block animate-bounce-subtle leading-none">{s.icon}</div>
+        </div>
+        {/* Title — word-by-word stagger */}
+        <h2 className="text-4xl md:text-6xl font-black text-white mb-4 tracking-tight leading-tight">
+          {titleWords.map((w, i) => (
+            <span
+              key={i}
+              className="inline-block animate-demo-tag-pop mr-3"
+              style={{ animationDelay: `${i * 120}ms`, animationFillMode: 'backwards' }}
+            >
+              {w}
+            </span>
+          ))}
+        </h2>
+        <p className="text-base md:text-xl text-gray-200 mb-8 leading-relaxed animate-fade-in-up" style={{ animationDelay: '400ms', animationFillMode: 'backwards' }}>{s.desc}</p>
+
+        {/* Mini visualizer — pulses per step */}
         <div className="flex items-end justify-center gap-1.5 h-20 mb-10">
           {s.bars.map((h, i) => (
             <div
               key={i}
-              className="w-2.5 rounded-full bg-gradient-to-t from-[var(--color-accent)] to-purple-400"
+              className="w-3 rounded-full bg-gradient-to-t from-[var(--color-accent)] via-purple-400 to-pink-400 shadow-lg"
               style={{
                 height: `${h}%`,
-                animation: `bounce-bar ${(0.4 + i * 0.05).toFixed(2)}s ease-in-out ${(-i * 0.1).toFixed(2)}s infinite alternate`,
+                animation: `bounce-bar ${(0.35 + i * 0.05).toFixed(2)}s ease-in-out ${(-i * 0.1).toFixed(2)}s infinite alternate`,
               }}
             />
           ))}
         </div>
 
-        {/* Dots */}
+        {/* Slide progress dots — filled progress for current */}
         <div className="flex justify-center gap-2 mb-8">
           {slides.map((_, i) => (
             <button
               key={i}
               onClick={() => setStep(i)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === step ? 'w-8 bg-white' : 'w-1.5 bg-white/30 hover:bg-white/50'
+              className={`h-1.5 rounded-full transition-all duration-300 overflow-hidden relative ${
+                i === step ? 'w-12 bg-white/20' : i < step ? 'w-2 bg-white' : 'w-2 bg-white/30 hover:bg-white/50'
               }`}
-            />
+            >
+              {i === step && (
+                <span
+                  className="absolute inset-y-0 left-0 bg-white rounded-full"
+                  style={{ animation: `tutorial-progress ${SLIDE_MS}ms linear forwards` }}
+                />
+              )}
+            </button>
           ))}
         </div>
 
