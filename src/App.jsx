@@ -5700,14 +5700,14 @@ function ReelIntro() {
 function ReelHeader({ active }) {
   const tabs = ['Discover', 'Biblioteca', 'Export', 'Mix']
   return (
-    <div className="flex items-center gap-4 px-5 py-3 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
-      <img src="/logo.png" alt="" className="w-10 h-10 rounded-lg flex-shrink-0" />
-      <span className="text-2xl text-white font-bold whitespace-nowrap flex-shrink-0">DJ Free App</span>
-      <div className="flex-1 flex justify-end items-center gap-2 min-w-0">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
+      <img src="/logo.png" alt="" className="w-12 h-12 rounded-lg flex-shrink-0" />
+      <span className="text-3xl text-white font-bold whitespace-nowrap flex-shrink-0">DJ Free App</span>
+      <div className="flex-1 flex justify-end items-center gap-1.5 min-w-0">
         {tabs.map(t => (
           <span
             key={t}
-            className={`text-xl px-4 py-1.5 rounded-lg font-bold whitespace-nowrap transition-colors ${
+            className={`text-2xl px-3 py-1.5 rounded-lg font-bold whitespace-nowrap transition-colors ${
               t === active ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40' : 'text-gray-500'
             }`}
           >
@@ -5759,7 +5759,7 @@ function ReelDiscover() {
   const tracks = cat.tracks
   const highlightIdx = tracks.findIndex(t => t.highlight)
   return (
-    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+    <div className="absolute inset-0 flex flex-col p-4 animate-fade-in z-10 gap-4">
       <DemoSceneTitle
         title="Recorré los charts de Beatport y Spotify"
         subtitle="top charts renovados cada semana · EDM · POP · LATIN"
@@ -5876,7 +5876,7 @@ function ReelDownload() {
     { name: 'Massano - Pa Ca.flac',          size: '32MB', fmt: 'FLAC', cover: '/demo/covers/paca.jpg' },
   ]
   return (
-    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+    <div className="absolute inset-0 flex flex-col p-4 animate-fade-in z-10 gap-4">
       <DemoSceneTitle
         title="Descarga directa · calidad profesional"
         subtitle="FLAC sin pérdida · MP3 320k · WAV — al instante"
@@ -5955,7 +5955,7 @@ function ReelLibrary() {
     ]},
   ]
   return (
-    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-5">
+    <div className="absolute inset-0 flex flex-col p-4 animate-fade-in z-10 gap-4">
       <DemoSceneTitle
         title="Biblioteca clasificada por IA"
         subtitle="BPM · Camelot Key · género — automático"
@@ -5963,33 +5963,33 @@ function ReelLibrary() {
       />
       <ReelHeader active="Biblioteca" />
       {/* Hero stats — big numbers, less chrome */}
-      <div className="flex items-center justify-around gap-3 px-5 py-4 rounded-2xl bg-gradient-to-r from-purple-500/15 via-blue-500/10 to-pink-500/15 border border-white/10">
+      <div className="flex items-center justify-around gap-3 px-4 py-5 rounded-2xl bg-gradient-to-r from-purple-500/15 via-blue-500/10 to-pink-500/15 border border-white/10">
         <div className="text-center">
-          <div className="text-4xl font-black text-white leading-none">305</div>
-          <div className="text-sm text-gray-400 mt-1 uppercase tracking-wider">tracks</div>
+          <div className="text-5xl font-black text-white leading-none">305</div>
+          <div className="text-base text-gray-400 mt-1.5 uppercase tracking-wider font-semibold">tracks</div>
         </div>
-        <div className="w-px h-10 bg-white/10" />
+        <div className="w-px h-12 bg-white/10" />
         <div className="text-center">
-          <div className="text-4xl font-black text-purple-300 leading-none">115</div>
-          <div className="text-sm text-gray-400 mt-1 uppercase tracking-wider">keys</div>
+          <div className="text-5xl font-black text-purple-300 leading-none">115</div>
+          <div className="text-base text-gray-400 mt-1.5 uppercase tracking-wider font-semibold">keys</div>
         </div>
-        <div className="w-px h-10 bg-white/10" />
+        <div className="w-px h-12 bg-white/10" />
         <div className="text-center">
-          <div className="text-4xl font-black text-blue-300 leading-none">12</div>
-          <div className="text-sm text-gray-400 mt-1 uppercase tracking-wider">géneros</div>
+          <div className="text-5xl font-black text-blue-300 leading-none">12</div>
+          <div className="text-base text-gray-400 mt-1.5 uppercase tracking-wider font-semibold">géneros</div>
         </div>
       </div>
       {/* Genre filter pills — bigger, fewer for mobile readability */}
       <div className="flex items-center gap-2 overflow-hidden flex-wrap">
-        <span className="text-base px-3 py-1.5 rounded-full bg-blue-500/30 border-2 border-blue-400/50 text-blue-200 font-bold flex-shrink-0">All</span>
+        <span className="text-lg px-4 py-2 rounded-full bg-blue-500/30 border-2 border-blue-400/50 text-blue-200 font-bold flex-shrink-0">All</span>
         {[
           { n: 'Tech',     c: 92, color: 'text-blue-400' },
           { n: 'Deep',     c: 47, color: 'text-green-400' },
           { n: 'Melodic',  c: 41, color: 'text-purple-400' },
           { n: 'Progress', c: 20, color: 'text-orange-400' },
         ].map(g => (
-          <span key={g.n} className={`text-base px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/10 ${g.color} font-semibold flex items-center gap-2 flex-shrink-0`}>
-            <span className="w-2 h-2 rounded-full bg-current" />
+          <span key={g.n} className={`text-lg px-4 py-2 rounded-full bg-white/[0.06] border border-white/10 ${g.color} font-semibold flex items-center gap-2 flex-shrink-0`}>
+            <span className="w-2.5 h-2.5 rounded-full bg-current" />
             {g.n} <span className="opacity-60">{g.c}</span>
           </span>
         ))}
@@ -6004,17 +6004,17 @@ function ReelLibrary() {
           >
             <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
               <div className="flex items-center gap-3 min-w-0">
-                <span className={`w-4 h-4 rounded-full ${g.dot} flex-shrink-0 shadow-lg`} />
-                <span className="text-3xl font-black text-white truncate">{g.name}</span>
+                <span className={`w-5 h-5 rounded-full ${g.dot} flex-shrink-0 shadow-lg`} />
+                <span className="text-4xl font-black text-white truncate">{g.name}</span>
               </div>
-              <span className="text-xl font-black text-white bg-white/15 px-4 py-1 rounded-lg">{g.count}</span>
+              <span className="text-2xl font-black text-white bg-white/15 px-4 py-1 rounded-lg">{g.count}</span>
             </div>
-            <div className="px-4 py-2 space-y-1.5">
+            <div className="px-4 py-3 space-y-2">
               {g.tracks.map((tr, ti) => (
-                <div key={ti} className="flex items-center gap-3 py-1.5 animate-demo-tag-pop" style={{ animationDelay: `${gi * 250 + 350 + ti * 100}ms` }}>
-                  <img src={tr.cover} alt="" className="w-10 h-10 rounded-md object-cover flex-shrink-0 ring-1 ring-white/15" />
-                  <span className="text-lg text-white/90 truncate flex-1 font-medium">{tr.t}</span>
-                  <span className={`text-sm font-extrabold flex-shrink-0 px-2 py-0.5 rounded ${tr.f === 'FLAC' ? 'bg-green-500/20 text-green-300' : tr.f === 'MP3' ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'}`}>{tr.f}</span>
+                <div key={ti} className="flex items-center gap-3 py-1 animate-demo-tag-pop" style={{ animationDelay: `${gi * 250 + 350 + ti * 100}ms` }}>
+                  <img src={tr.cover} alt="" className="w-12 h-12 rounded-md object-cover flex-shrink-0 ring-1 ring-white/15" />
+                  <span className="text-xl text-white/90 truncate flex-1 font-medium">{tr.t}</span>
+                  <span className={`text-base font-extrabold flex-shrink-0 px-2.5 py-1 rounded ${tr.f === 'FLAC' ? 'bg-green-500/20 text-green-300' : tr.f === 'MP3' ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'}`}>{tr.f}</span>
                 </div>
               ))}
             </div>
@@ -6065,7 +6065,7 @@ function ReelSet() {
     yellow: { chip: 'bg-yellow-500/30 border-yellow-400/60 text-yellow-200 shadow-yellow-500/40', text: 'text-yellow-300' },
   }
   return (
-    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+    <div className="absolute inset-0 flex flex-col p-4 animate-fade-in z-10 gap-4">
       <DemoSceneTitle
         title="Asistente inteligente de playlists"
         subtitle="Sets compatibles por Camelot · Energy — 1 click"
@@ -6168,7 +6168,7 @@ function ReelMix() {
     { name: '01-mau_p-merther',                          color: 'from-green-500/40 to-green-700/40 border-green-400/60',   text: 'text-green-200',  waveColor: 'text-green-300' },
   ]
   return (
-    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+    <div className="absolute inset-0 flex flex-col p-4 animate-fade-in z-10 gap-4">
       <DemoSceneTitle
         title="Previsualizá tu mix antes de tocarlo"
         subtitle="Crossfading auto · beatmatching · export MP3 320k"
