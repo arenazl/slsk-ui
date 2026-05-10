@@ -5279,14 +5279,14 @@ function ReelIntro() {
 function ReelHeader({ active }) {
   const tabs = ['Discover', 'Biblioteca', 'Export', 'Mix']
   return (
-    <div className="flex items-center gap-4 px-6 py-4 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
-      <img src="/logo.png" alt="" className="w-10 h-10 rounded-lg" />
-      <span className="text-2xl text-white font-bold">DJ Free App</span>
-      <div className="flex-1 flex justify-center gap-1">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
+      <img src="/logo.png" alt="" className="w-9 h-9 rounded-lg flex-shrink-0" />
+      <span className="text-lg text-white font-bold whitespace-nowrap flex-shrink-0">DJ Free App</span>
+      <div className="flex-1 flex justify-end items-center gap-1 min-w-0">
         {tabs.map(t => (
           <span
             key={t}
-            className={`text-xl px-4 py-1.5 rounded-lg font-bold transition-colors ${
+            className={`text-base px-3 py-1 rounded-lg font-bold whitespace-nowrap transition-colors ${
               t === active ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40' : 'text-gray-500'
             }`}
           >
@@ -5294,10 +5294,10 @@ function ReelHeader({ active }) {
           </span>
         ))}
       </div>
-      <div className="flex gap-2">
-        <span className="w-3 h-3 rounded-full bg-red-500/70" />
-        <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
-        <span className="w-3 h-3 rounded-full bg-green-500/70" />
+      <div className="flex gap-1.5 flex-shrink-0">
+        <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
       </div>
     </div>
   )
@@ -5333,12 +5333,15 @@ function ReelDiscover() {
     },
   ]
   const [catIdx, setCatIdx] = useState(0)
+  const [showMenu, setShowMenu] = useState(false)
   useEffect(() => {
-    const t = setTimeout(() => setCatIdx(i => (i + 1) % CATALOGS.length), 6000)
-    return () => clearTimeout(t)
-  }, [catIdx])
+    const t1 = setTimeout(() => setCatIdx(1), 6000)
+    const t2 = setTimeout(() => setShowMenu(true), 9500)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [])
   const cat = CATALOGS[catIdx]
   const tracks = cat.tracks
+  const highlightIdx = tracks.findIndex(t => t.highlight)
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
       <DemoSceneTitle
@@ -5381,33 +5384,63 @@ function ReelDiscover() {
         <span className="text-lg px-4 py-1.5 rounded-full bg-red-500/30 border-2 border-red-400/50 text-red-200 font-bold">● Stop</span>
       </div>
       {/* Track list — re-keyed per catalog so cards re-animate */}
-      <div key={`list-${catIdx}`} className="flex-1 space-y-2 overflow-hidden">
-        {tracks.map((t, i) => (
-          <div
-            key={`${catIdx}-${i}`}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl animate-demo-tag-pop ${t.highlight ? 'bg-green-500/[0.10] ring-2 ring-green-500/40' : 'bg-white/[0.04]'}`}
-            style={{ animationDelay: `${i * 200}ms` }}
-          >
-            <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 1}</span>
-            <img src={t.cover} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10" />
-            <div className="flex-1 min-w-0">
-              <div className={`text-xl font-bold truncate flex items-center gap-2 ${t.highlight ? 'text-green-300' : 'text-white'}`}>
-                {t.n}
-                {t.dot && <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />}
-              </div>
-              <div className="text-base text-gray-400 truncate">{t.a}</div>
-            </div>
-            <span className="text-base text-gray-500 font-mono flex-shrink-0">{t.bpm}</span>
-            <span className="text-base px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-300 font-bold font-mono flex-shrink-0">{t.k}</span>
-            <button
-              className={`text-base px-4 py-1.5 rounded-full font-bold flex-shrink-0 ${
-                t.state === 'done' ? 'bg-green-500/30 text-green-300 border border-green-500/40' : 'bg-blue-500 text-white shadow-lg shadow-blue-500/40'
-              }`}
+      <div className="relative flex-1">
+        <div key={`list-${catIdx}`} className="space-y-2 overflow-hidden">
+          {tracks.map((t, i) => (
+            <div
+              key={`${catIdx}-${i}`}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl animate-demo-tag-pop ${t.highlight ? 'bg-green-500/[0.10] ring-2 ring-green-500/40' : 'bg-white/[0.04]'}`}
+              style={{ animationDelay: `${i * 200}ms` }}
             >
-              {t.state === 'done' ? '✓' : '↓'}
-            </button>
+              <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 1}</span>
+              <img src={t.cover} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10" />
+              <div className="flex-1 min-w-0">
+                <div className={`text-xl font-bold truncate flex items-center gap-2 ${t.highlight ? 'text-green-300' : 'text-white'}`}>
+                  {t.n}
+                  {t.dot && <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />}
+                </div>
+                <div className="text-base text-gray-400 truncate">{t.a}</div>
+              </div>
+              <span className="text-base text-gray-500 font-mono flex-shrink-0">{t.bpm}</span>
+              <span className="text-base px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-300 font-bold font-mono flex-shrink-0">{t.k}</span>
+              <button
+                className={`text-base px-4 py-1.5 rounded-full font-bold flex-shrink-0 ${
+                  t.state === 'done' ? 'bg-green-500/30 text-green-300 border border-green-500/40' : 'bg-blue-500 text-white shadow-lg shadow-blue-500/40'
+                }`}
+              >
+                {t.state === 'done' ? '✓' : '↓'}
+              </button>
+            </div>
+          ))}
+        </div>
+        {/* Context menu — opens from the photo of the highlighted track on the 2nd genre */}
+        {catIdx === 1 && showMenu && highlightIdx >= 0 && (
+          <div
+            className="absolute left-16 w-72 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl shadow-black/60 z-30 overflow-hidden animate-demo-tag-pop"
+            style={{ top: `${highlightIdx * 84 + 20}px` }}
+          >
+            <div className="px-4 py-2.5 border-b border-white/10 text-base text-white font-bold truncate">{tracks[highlightIdx].a} · {tracks[highlightIdx].n}</div>
+            <div className="px-4 py-2.5 flex items-center gap-2.5 text-lg text-white">
+              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Descargar
+            </div>
+            <div className="px-4 pt-3 pb-1 text-sm uppercase tracking-wider text-gray-500 font-semibold">Preview continuo</div>
+            <div className="px-4 py-1.5 flex items-center gap-2.5 bg-purple-500/10 text-lg text-purple-200">
+              <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              Autoplay 30s por tema
+            </div>
+            <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">
+              <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              Autoplay 60s por tema
+            </div>
+            <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">
+              <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              Autoplay 90s · 120s
+            </div>
+            <div className="border-t border-white/10 px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">📻 Radio</div>
+            <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">🔗 Compartir link</div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   )
@@ -5434,48 +5467,23 @@ function ReelDownload() {
         accent="text-green-400"
       />
       <ReelHeader active="Discover" />
-      {/* Track list with context menu popup */}
-      <div className="relative flex-1">
-        <div className="space-y-2">
-          {listRows.map((t, i) => (
-            <div
-              key={i}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl animate-demo-tag-pop ${t.highlight ? 'bg-green-500/[0.10] ring-2 ring-green-500/40' : 'bg-white/[0.04]'}`}
-              style={{ animationDelay: `${i * 200}ms` }}
-            >
-              <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 3}</span>
-              <img src={t.cover} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10" />
-              <div className="flex-1 min-w-0">
-                <div className={`text-xl font-bold truncate ${t.highlight ? 'text-green-300' : 'text-white'}`}>{t.n}</div>
-                <div className="text-base text-gray-400 truncate">{t.a}</div>
-              </div>
-              <span className="text-base text-green-400 font-bold flex-shrink-0">{t.fmt}</span>
+      {/* Track list */}
+      <div className="flex-1 space-y-2">
+        {listRows.map((t, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl animate-demo-tag-pop ${t.highlight ? 'bg-green-500/[0.10] ring-2 ring-green-500/40' : 'bg-white/[0.04]'}`}
+            style={{ animationDelay: `${i * 200}ms` }}
+          >
+            <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 3}</span>
+            <img src={t.cover} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10" />
+            <div className="flex-1 min-w-0">
+              <div className={`text-xl font-bold truncate ${t.highlight ? 'text-green-300' : 'text-white'}`}>{t.n}</div>
+              <div className="text-base text-gray-400 truncate">{t.a}</div>
             </div>
-          ))}
-        </div>
-        {/* Context menu popup */}
-        <div className="absolute right-4 top-16 w-72 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl shadow-black/60 z-30 overflow-hidden animate-demo-tag-pop" style={{ animationDelay: '600ms' }}>
-          <div className="px-4 py-2.5 border-b border-white/10 text-base text-white font-bold truncate">Liva K · Didn't Miss You</div>
-          <div className="px-4 py-2.5 flex items-center gap-2.5 text-lg text-white">
-            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            Descargar
+            <span className="text-base text-green-400 font-bold flex-shrink-0">{t.fmt}</span>
           </div>
-          <div className="px-4 pt-3 pb-1 text-sm uppercase tracking-wider text-gray-500 font-semibold">Preview continuo</div>
-          <div className="px-4 py-1.5 flex items-center gap-2.5 bg-purple-500/10 text-lg text-purple-200">
-            <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-            Autoplay 30s por tema
-          </div>
-          <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">
-            <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-            Autoplay 60s por tema
-          </div>
-          <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">
-            <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-            Autoplay 90s · 120s
-          </div>
-          <div className="border-t border-white/10 px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">📻 Radio</div>
-          <div className="px-4 py-1.5 flex items-center gap-2.5 text-lg text-gray-300">🔗 Compartir link</div>
-        </div>
+        ))}
       </div>
       {/* Active downloads */}
       <div className="space-y-2">
