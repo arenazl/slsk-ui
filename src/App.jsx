@@ -64,6 +64,65 @@ function ConfirmProvider({ children }) {
 }
 const useConfirm = () => useContext(ConfirmContext)
 
+// Per-user genre click tracking with persistence + 5-click reorder threshold.
+// Returns:
+//   committed: snapshot of clicks used to sort (only updates every 5 new clicks)
+//   bump(name): increments live count, may trigger a new committed snapshot
+//   ready: true once initial load from server resolved
+const REORDER_THRESHOLD = 5
+function useGenreClicks(storeKey, user) {
+  const [live, setLive] = useState({})       // running counter
+  const [committed, setCommitted] = useState({}) // snapshot used for ordering
+  const [ready, setReady] = useState(false)
+  const lastSyncRef = useRef(0)
+  // Load from server on user change
+  useEffect(() => {
+    if (!user) { setReady(true); return }
+    let cancelled = false
+    fetch(`${API_BASE}/api/genre-clicks?user=${encodeURIComponent(user)}`)
+      .then(r => r.ok ? r.json() : {})
+      .then(data => {
+        if (cancelled) return
+        const stored = (data && typeof data === 'object' ? data[storeKey] : null) || {}
+        setLive(stored)
+        setCommitted(stored) // first paint uses the saved order
+        setReady(true)
+      })
+      .catch(() => setReady(true))
+    return () => { cancelled = true }
+  }, [user, storeKey])
+  const bump = useCallback((name) => {
+    setLive(prev => {
+      const next = { ...prev, [name]: (prev[name] || 0) + 1 }
+      const totalNew = Object.values(next).reduce((a, b) => a + b, 0)
+      const totalCommitted = Object.values(committed).reduce((a, b) => a + b, 0)
+      // Recompute order only every N clicks
+      if (totalNew - totalCommitted >= REORDER_THRESHOLD) {
+        setCommitted(next)
+      }
+      // Persist (debounced — at most one POST every 1.5s per user)
+      const now = Date.now()
+      if (user && now - lastSyncRef.current > 1500) {
+        lastSyncRef.current = now
+        // Send the WHOLE blob keyed by storeKey (server replaces it)
+        fetch(`${API_BASE}/api/genre-clicks?user=${encodeURIComponent(user)}`)
+          .then(r => r.ok ? r.json() : {})
+          .then(remote => {
+            const merged = { ...(remote && typeof remote === 'object' ? remote : {}), [storeKey]: next }
+            fetch(`${API_BASE}/api/genre-clicks`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user, clicks: merged }),
+            }).catch(() => {})
+          })
+          .catch(() => {})
+      }
+      return next
+    })
+  }, [committed, user, storeKey])
+  return { committed, bump, ready }
+}
+
 // Modern combobox — typeable autocomplete with clear-X. Replaces native <select>
 // where the look-and-feel matters. Closes on outside-click or Escape.
 function GenreCombo({ value, options, onChange, placeholder = 'Todos los géneros' }) {
@@ -9010,6 +9069,9 @@ function SwipeableRow({ children, onReveal }) {
 
 function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, authUser, collection, onGoToLibrary }) {
   const toast = useToast()
+  // Per-user genre click tracking with 5-click reorder threshold (server-persisted)
+  const beatportClicks = useGenreClicks('beatport_genre_clicks', authUser?.name || '')
+  const spotifyClicks  = useGenreClicks('spotify_cat_clicks',    authUser?.name || '')
   const [genres, setGenres] = useState([])
   // URL-synced selections: share/bookmark any view directly
   const [selectedGenre, setSelectedGenre] = useState(null) // null = All
@@ -10113,8 +10175,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 All
               </button>
               {(() => {
-                let clicks = {}
-                try { clicks = JSON.parse(localStorage.getItem('beatport_genre_clicks') || '{}') } catch {}
+                const clicks = beatportClicks.committed
                 const sorted = genres
                   .map((g, i) => ({ g, i, n: clicks[g.name] || 0 }))
                   .sort((a, b) => b.n - a.n || a.i - b.i)
@@ -10125,11 +10186,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     <button
                       key={g.name}
                       onClick={() => {
-                        try {
-                          const cur = JSON.parse(localStorage.getItem('beatport_genre_clicks') || '{}')
-                          cur[g.name] = (cur[g.name] || 0) + 1
-                          localStorage.setItem('beatport_genre_clicks', JSON.stringify(cur))
-                        } catch {}
+                        beatportClicks.bump(g.name)
                         loadChart(g)
                       }}
                       className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
@@ -10144,8 +10201,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               })()}
             </>) : (<>
               {(() => {
-                let clicks = {}
-                try { clicks = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}') } catch {}
+                const clicks = spotifyClicks.committed
                 const filtered = spotifyCategories.filter(c => (c.category || 'pop') === collection)
                 const sorted = filtered
                   .map((c, i) => ({ c, i, n: clicks[c.key] || 0 }))
@@ -10157,11 +10213,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     <button
                       key={cat.key}
                       onClick={() => {
-                        try {
-                          const cur = JSON.parse(localStorage.getItem('spotify_cat_clicks') || '{}')
-                          cur[cat.key] = (cur[cat.key] || 0) + 1
-                          localStorage.setItem('spotify_cat_clicks', JSON.stringify(cur))
-                        } catch {}
+                        spotifyClicks.bump(cat.key)
                         loadSpotifyPlaylist(cat)
                       }}
                       className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
