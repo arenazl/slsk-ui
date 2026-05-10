@@ -5171,8 +5171,8 @@ function DemoCTA() {
 // =====================================================================
 function DemoReels() {
   const SCENES = 7
-  // +1.5x slower per user feedback
-  const D = [5000, 7000, 7000, 7000, 10000, 7000, 5000]
+  // Match the web demo pacing — Set Builder dwells longer for the features list
+  const D = [6000, 13000, 9000, 9000, 18000, 9000, 5000]
   const [scene, setScene] = useState(0)
   const audioRef = useRef(null)
   useEffect(() => {
@@ -5257,38 +5257,64 @@ function ReelHeader({ active }) {
 }
 
 // Mirrors DemoSources — Melodic House Beatport-style page in portrait.
+// Cycles between two genre catalogs (Melodic House → Tech House).
 function ReelDiscover() {
-  const tracks = [
-    { n: 'Hot Sauce (Extended)',  a: 'Kapuchon, Miss Monique', label: 'AETERNA',    bpm: 129, k: 'Gb · 11A', d: '5:36', state: 'dl',                       cover: '/demo/covers/hot-sauce.jpg' },
-    { n: 'Be The One (Extended)', a: 'Adam Port, Keinemusik',  label: 'Keinemusik', bpm: 123, k: 'F · 11A',  d: '4:45', state: 'dl',                       cover: '/demo/covers/be-the-one.jpg' },
-    { n: 'Recall (Extended Mix)', a: 'HotLap',                 label: 'One Seven',  bpm: 122, k: 'E · 11A',  d: '5:48', state: 'done', dot: true,          cover: '/demo/covers/recall.jpg' },
-    { n: "Didn't Miss You (OG)",  a: 'Liva K',                 label: 'Magnifik',   bpm: 122, k: 'F · 11A',  d: '5:46', state: 'dl',   highlight: true,    cover: '/demo/covers/didnt-miss.jpg' },
+  const CATALOGS = [
+    {
+      genre: 'Melodic House',
+      count: 100,
+      tracks: [
+        { n: 'Hot Sauce (Extended)',     a: 'Kapuchon, Miss Monique', bpm: 129, k: 'Gb · 11A', state: 'dl',                       cover: '/demo/covers/hot-sauce.jpg' },
+        { n: 'Be The One (Extended)',    a: 'Adam Port, Keinemusik',  bpm: 123, k: 'F · 11A',  state: 'dl',                       cover: '/demo/covers/be-the-one.jpg' },
+        { n: 'Recall (Extended Mix)',    a: 'HotLap',                 bpm: 122, k: 'E · 11A',  state: 'done', dot: true,          cover: '/demo/covers/recall.jpg' },
+        { n: "Didn't Miss You (OG)",     a: 'Liva K',                 bpm: 122, k: 'F · 11A',  state: 'dl',   highlight: true,    cover: '/demo/covers/didnt-miss.jpg' },
+        { n: 'Eternity (Extended Mix)',  a: 'Anyma',                  bpm: 124, k: '8A',       state: 'dl',                       cover: '/demo/covers/eternity.jpg' },
+        { n: 'Innerbloom',               a: 'RÜFÜS DU SOL',           bpm: 122, k: '6B',       state: 'done', dot: true,          cover: '/demo/covers/innerbloom.jpg' },
+      ],
+    },
+    {
+      genre: 'Tech House',
+      count: 88,
+      tracks: [
+        { n: 'Tesla (Extended Mix)',     a: 'Mau P',                  bpm: 128, k: '4A',       state: 'dl',                       cover: '/demo/covers/tesla.jpg' },
+        { n: 'Crush (Extended Mix)',     a: 'Biscits',                bpm: 128, k: 'Fm · 4A',  state: 'dl',                       cover: '/demo/covers/biscits-crush.jpg' },
+        { n: 'Operate (Extended)',       a: 'Deeper Purpose',         bpm: 128, k: 'Gm · 6A',  state: 'done', dot: true,          cover: '/demo/covers/deeper-purpose.jpg' },
+        { n: 'Pom (Original Mix)',       a: 'Chico Rose (NL)',        bpm: 130, k: 'D# · 5B',  state: 'dl',   highlight: true,    cover: '/demo/covers/chico-rose.jpg' },
+        { n: "Don't Stop (Extended)",    a: 'Prospa',                 bpm: 124, k: 'D# · 5B',  state: 'dl',                       cover: '/demo/covers/prospa.jpg' },
+        { n: 'Sweet Dreams',             a: 'Polovich',               bpm: 130, k: 'B · 1B',   state: 'done', dot: true,          cover: '/demo/covers/polovich.jpg' },
+      ],
+    },
   ]
+  const [catIdx, setCatIdx] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setCatIdx(i => (i + 1) % CATALOGS.length), 6000)
+    return () => clearTimeout(t)
+  }, [catIdx])
+  const cat = CATALOGS[catIdx]
+  const tracks = cat.tracks
   return (
     <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
       <ReelHeader active="Discover" />
-      {/* Hero header */}
+      {/* Hero header — dynamic per cycling catalog */}
       <div className="flex items-center gap-4">
         <div className="flex-1 min-w-0">
-          <h2 className="text-4xl font-black text-white leading-tight">Melodic House</h2>
+          <h2 key={`title-${catIdx}`} className="text-4xl font-black text-white leading-tight animate-fade-in">{cat.genre}</h2>
           <p className="text-xl text-gray-400 flex items-center gap-2">
-            <span className="text-white font-bold">100</span> tracks · actualizado hoy 12:28
+            <span className="text-white font-bold">{cat.count}</span> tracks · actualizado hoy 12:28
           </p>
         </div>
-        <div className="flex gap-2">
-          <img src="/demo/covers/hot-sauce.jpg" alt="" className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/20" />
-          <img src="/demo/covers/be-the-one.jpg" alt="" className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/20" />
-          <img src="/demo/covers/recall.jpg" alt="" className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/20" />
+        <div key={`thumbs-${catIdx}`} className="flex gap-2 animate-fade-in">
+          {tracks.slice(0, 3).map((t, i) => (
+            <img key={i} src={t.cover} alt="" className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/20" />
+          ))}
         </div>
       </div>
-      {/* Genre tabs */}
+      {/* Genre tabs — active highlights based on cycling catalog */}
       <div className="flex items-center gap-3 overflow-hidden text-lg">
-        <span className="text-gray-500">All</span>
-        <span className="text-blue-300 border-b-2 border-blue-400 pb-1 font-semibold">Melodic House</span>
-        <span className="text-gray-500">Mel. Techno</span>
-        <span className="text-gray-500">Tech House</span>
-        <span className="text-gray-500">Afro</span>
-        <span className="text-gray-500">Deep</span>
+        {['All', 'Melodic House', 'Mel. Techno', 'Tech House', 'Afro', 'Deep'].map(t => {
+          const isActive = (cat.genre === 'Melodic House' && t === 'Melodic House') || (cat.genre === 'Tech House' && t === 'Tech House')
+          return <span key={t} className={isActive ? 'text-blue-300 border-b-2 border-blue-400 pb-1 font-semibold' : 'text-gray-500'}>{t}</span>
+        })}
       </div>
       {/* Preview continuo */}
       <div className="flex items-center gap-3">
@@ -5302,13 +5328,13 @@ function ReelDiscover() {
         <span className="text-base text-gray-400">120s</span>
         <span className="text-lg px-4 py-1.5 rounded-full bg-red-500/30 border-2 border-red-400/50 text-red-200 font-bold">● Stop</span>
       </div>
-      {/* Track list */}
-      <div className="flex-1 space-y-2.5 overflow-hidden">
+      {/* Track list — re-keyed per catalog so cards re-animate */}
+      <div key={`list-${catIdx}`} className="flex-1 space-y-2 overflow-hidden">
         {tracks.map((t, i) => (
           <div
-            key={i}
-            className={`flex items-center gap-3 px-3 py-3 rounded-xl animate-demo-tag-pop ${t.highlight ? 'bg-green-500/[0.10] ring-2 ring-green-500/40' : 'bg-white/[0.04]'}`}
-            style={{ animationDelay: `${i * 250}ms` }}
+            key={`${catIdx}-${i}`}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl animate-demo-tag-pop ${t.highlight ? 'bg-green-500/[0.10] ring-2 ring-green-500/40' : 'bg-white/[0.04]'}`}
+            style={{ animationDelay: `${i * 200}ms` }}
           >
             <span className="text-base text-gray-500 font-mono w-6 flex-shrink-0">{i + 1}</span>
             <img src={t.cover} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10" />
@@ -5436,22 +5462,31 @@ function ReelDownload() {
 function ReelLibrary() {
   const groups = [
     { name: 'Tech House',    count: 92, dot: 'bg-blue-500',   tracks: [
-      { t: '04 - 05 - Biscits - 2C2 (Extended)', f: 'FLAC' },
+      { t: '04 - Biscits - 2C2 (Extended)', f: 'FLAC' },
       { t: '06 - Corrupt (Uk) - Trippin', f: 'FLAC' },
       { t: '08 - Biscits - Freak (Extended)', f: 'FLAC' },
-      { t: '01-mau_p-merther_(extended)', f: 'FLAC' },
+      { t: '01 - Mau P - Merther (Extended)', f: 'FLAC' },
+      { t: '11 - Mau P - Tesla (Extended)', f: 'FLAC' },
+      { t: '03 - Solomun - Customer Is King', f: 'FLAC' },
+      { t: '07 - Andrea Oliva - Spotlight', f: 'FLAC' },
     ]},
     { name: 'Deep House',    count: 47, dot: 'bg-green-500',  tracks: [
-      { t: 'For The Soul', f: 'FLAC' },
-      { t: '01. Feels Like Us (Extended)', f: 'FLAC' },
-      { t: '02-zehv-leland.mp3', f: 'MP3' },
-      { t: 'dreams (Extended Mix)', f: 'FLAC' },
+      { t: 'For The Soul (Original Mix)', f: 'FLAC' },
+      { t: '01 - Feels Like Us (Extended)', f: 'FLAC' },
+      { t: '02 - Zehv - Leland', f: 'MP3' },
+      { t: 'Dreams (Extended Mix)', f: 'FLAC' },
+      { t: '14 - Jeff Sorkowitz - How Does It Feel', f: 'FLAC' },
+      { t: '04 - Sebastián Václava - A Beautiful Thing', f: 'FLAC' },
+      { t: '12 - Kim - Ready To Go (Original Mix)', f: 'WAV' },
     ]},
     { name: 'Melodic House', count: 41, dot: 'bg-purple-500', tracks: [
-      { t: '07 - 03-nordfold-forever_(extended)', f: 'MP3' },
+      { t: '07 - Nordfold - Forever (Extended)', f: 'MP3' },
       { t: '01 - Rainy (Devault Remix)', f: 'FLAC' },
-      { t: '01 RÜFÜS DU SOL - On My Knees', f: 'M4A' },
-      { t: '01 Somebody (2024)', f: 'FLAC' },
+      { t: '01 - RÜFÜS DU SOL - On My Knees', f: 'M4A' },
+      { t: '01 - Somebody (2024)', f: 'FLAC' },
+      { t: '03 - Hot Sauce - Kapuchon, Miss Monique', f: 'FLAC' },
+      { t: '02 - Be The One - Adam Port (Extended)', f: 'FLAC' },
+      { t: '04 - Recall - HotLap (Extended Mix)', f: 'FLAC' },
     ]},
   ]
   return (
@@ -5525,9 +5560,12 @@ function ReelLibrary() {
 function ReelSet() {
   const TRACKS = [
     { name: "Prospa - Don't Stop (Extended Mix)",        k: 'D# · 5B', bpm: 124, energy: 5, genre: 'Indie Dance',   fmt: 'FLAC', size: '27.82MB', stars: 3, cover: '/demo/covers/prospa.jpg' },
-    { name: 'Chico Rose (NL) - Pom (Original Mix) 130',  k: 'D# · 5B', bpm: 130, energy: 6, genre: 'Tech House',    fmt: 'FLAC', size: '49.8MB',  stars: 4, cover: '/demo/covers/chico-rose.jpg' },
+    { name: 'Chico Rose (NL) - Pom (Original Mix) 130',  k: 'D# · 5B', bpm: 130, energy: 5, genre: 'Tech House',    fmt: 'FLAC', size: '49.8MB',  stars: 4, cover: '/demo/covers/chico-rose.jpg' },
+    { name: 'Velvet Avenue (Extended)',                  k: 'Fm · 4A', bpm: 122, energy: 6, genre: 'Deep House',    fmt: 'FLAC', size: '38.4MB',  stars: 4, cover: '/demo/covers/velvet.jpg' },
     { name: '22 - Deeper Purpose - Operate (Extended)',  k: 'Gm · 6A', bpm: 128, energy: 7, genre: 'Tech House',    fmt: 'FLAC', size: '40.39MB', stars: 5, cover: '/demo/covers/deeper-purpose.jpg' },
+    { name: 'At Night (Anyma · Layton Giordani)',        k: '8A',      bpm: 124, energy: 7, genre: 'Mel. Techno',   fmt: 'FLAC', size: '44.2MB',  stars: 5, cover: '/demo/covers/at-night.jpg' },
     { name: 'Polovich - Sweet Dreams (Original Mix)',    k: 'B · 1B',  bpm: 130, energy: 8, genre: 'Melodic House', fmt: 'MP3',  size: '10.73MB', stars: 5, cover: '/demo/covers/polovich.jpg' },
+    { name: 'Tesla - Mau P (Extended Mix)',              k: '4A',      bpm: 128, energy: 8, genre: 'Tech House',    fmt: 'FLAC', size: '40.0MB',  stars: 5, cover: '/demo/covers/tesla.jpg' },
     { name: 'Biscits - Crush (Extended Mix)',            k: 'Fm · 4A', bpm: 128, energy: 9, genre: 'Tech House',    fmt: 'FLAC', size: '43.18MB', stars: 5, cover: '/demo/covers/biscits-crush.jpg' },
   ]
   const METHODS = [
@@ -5586,15 +5624,39 @@ function ReelSet() {
           )
         })}
       </div>
-      {/* Method description */}
-      <div className="text-center min-h-8">
-        {activeMethod ? (
-          <p key={activeMethod.id} className={`text-2xl font-bold animate-fade-in ${colorMap[activeMethod.color].text}`}>{activeMethod.desc}</p>
-        ) : (
-          <p className="text-2xl text-gray-500 animate-fade-in">Generando set…</p>
-        )}
-      </div>
-      {/* Track rows — full info, intensity-graded accent bar */}
+      {/* Method description — hidden during features stage */}
+      {!showFeatures && (
+        <div className="text-center min-h-8">
+          {activeMethod ? (
+            <p key={activeMethod.id} className={`text-2xl font-bold animate-fade-in ${colorMap[activeMethod.color].text}`}>{activeMethod.desc}</p>
+          ) : (
+            <p className="text-2xl text-gray-500 animate-fade-in">Generando set…</p>
+          )}
+        </div>
+      )}
+      {showFeatures ? (
+        /* Features enumeration after method cycling */
+        <div className="flex-1 flex flex-col justify-center min-h-0 px-4 py-3 space-y-3">
+          <div className="text-center mb-3 animate-fade-in-up">
+            <p className="text-sm uppercase tracking-widest text-purple-400 font-bold mb-1">Editor de playlists con IA</p>
+            <h3 className="text-3xl font-black text-white leading-tight">Integración nativa con <span className="text-orange-400">Rekordbox</span></h3>
+          </div>
+          {FEATURES.map((f, i) => (
+            <div
+              key={f.label}
+              className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-gradient-to-r from-white/[0.08] to-transparent border-l-4 border-purple-400/70 animate-demo-tag-pop"
+              style={{ animationDelay: `${i * 280}ms` }}
+            >
+              <span className="text-5xl flex-shrink-0">{f.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-2xl font-extrabold text-white leading-tight">{f.label}</div>
+                <div className="text-base text-gray-300 leading-tight mt-1">{f.desc}</div>
+              </div>
+              <span className="text-base px-3 py-1 rounded-full bg-green-500/25 text-green-300 font-extrabold flex-shrink-0">✓</span>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div key={activeMethod?.id || 'intro'} className="flex-1 space-y-2 overflow-hidden">
         {TRACKS.map((t, i) => {
           const accent = { 5: 'bg-blue-500', 6: 'bg-cyan-400', 7: 'bg-purple-500', 8: 'bg-pink-500', 9: 'bg-red-500' }[t.energy]
@@ -5621,6 +5683,7 @@ function ReelSet() {
           )
         })}
       </div>
+      )}
     </div>
   )
 }
@@ -7255,6 +7318,20 @@ function App() {
                   </button>
                 </div>
               )}
+              {/* Demo Reel link — temporal, vista vertical 9:16 para preview */}
+              <div className="border-t border-[var(--border-color)] pt-3">
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Reel preview</div>
+                <a
+                  href="?demorec=1"
+                  target="_blank"
+                  rel="noopener"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white border border-white/15 hover:brightness-110 transition-all no-underline"
+                  style={{ background: 'linear-gradient(135deg, #ec4899, #f59e0b)' }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                  Ver versión vertical 9:16 (Reel)
+                </a>
+              </div>
             </div>
             <button
               onClick={() => setSettingsOpen(false)}
