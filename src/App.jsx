@@ -5779,92 +5779,89 @@ function ReelDownload() {
 
 // Mirrors DemoLibrary — Cards layout with stats, filter pills, 3 genre cards.
 function ReelLibrary() {
+  // Reels-optimized: 3 genre cards × 4 tracks each (was 7) with cover thumbs.
+  // Bigger fonts, more visual breathing room — readable on a phone in 2-3 seconds.
   const groups = [
-    { name: 'Tech House',    count: 92, dot: 'bg-blue-500',   tracks: [
-      { t: '04 - Biscits - 2C2 (Extended)', f: 'FLAC' },
-      { t: '06 - Corrupt (Uk) - Trippin', f: 'FLAC' },
-      { t: '08 - Biscits - Freak (Extended)', f: 'FLAC' },
-      { t: '01 - Mau P - Merther (Extended)', f: 'FLAC' },
-      { t: '11 - Mau P - Tesla (Extended)', f: 'FLAC' },
-      { t: '03 - Solomun - Customer Is King', f: 'FLAC' },
-      { t: '07 - Andrea Oliva - Spotlight', f: 'FLAC' },
+    { name: 'Tech House', count: 92, dot: 'bg-blue-500', accent: 'from-blue-500/30 to-blue-700/10', border: 'border-blue-400/30', tracks: [
+      { t: 'Biscits - 2C2 (Extended)',         f: 'FLAC', cover: '/demo/covers/biscits-crush.jpg' },
+      { t: 'Mau P - Tesla (Extended)',         f: 'FLAC', cover: '/demo/covers/tesla.jpg' },
+      { t: 'Solomun - Customer Is King',       f: 'FLAC', cover: '/demo/covers/deeper-purpose.jpg' },
+      { t: 'Andrea Oliva - Spotlight',         f: 'FLAC', cover: '/demo/covers/spotlight.jpg' },
     ]},
-    { name: 'Deep House',    count: 47, dot: 'bg-green-500',  tracks: [
-      { t: 'For The Soul (Original Mix)', f: 'FLAC' },
-      { t: '01 - Feels Like Us (Extended)', f: 'FLAC' },
-      { t: '02 - Zehv - Leland', f: 'MP3' },
-      { t: 'Dreams (Extended Mix)', f: 'FLAC' },
-      { t: '14 - Jeff Sorkowitz - How Does It Feel', f: 'FLAC' },
-      { t: '04 - Sebastián Václava - A Beautiful Thing', f: 'FLAC' },
-      { t: '12 - Kim - Ready To Go (Original Mix)', f: 'WAV' },
+    { name: 'Deep House', count: 47, dot: 'bg-green-500', accent: 'from-green-500/30 to-green-700/10', border: 'border-green-400/30', tracks: [
+      { t: 'Feels Like Us (Extended Mix)',     f: 'FLAC', cover: '/demo/covers/velvet.jpg' },
+      { t: 'Dreams (Extended Mix)',            f: 'FLAC', cover: '/demo/covers/prospa.jpg' },
+      { t: 'Sorkowitz - How Does It Feel',     f: 'FLAC', cover: '/demo/covers/polovich.jpg' },
+      { t: 'Kim - Ready To Go (Original Mix)', f: 'WAV',  cover: '/demo/covers/chico-rose.jpg' },
     ]},
-    { name: 'Melodic House', count: 41, dot: 'bg-purple-500', tracks: [
-      { t: '07 - Nordfold - Forever (Extended)', f: 'MP3' },
-      { t: '01 - Rainy (Devault Remix)', f: 'FLAC' },
-      { t: '01 - RÜFÜS DU SOL - On My Knees', f: 'M4A' },
-      { t: '01 - Somebody (2024)', f: 'FLAC' },
-      { t: '03 - Hot Sauce - Kapuchon, Miss Monique', f: 'FLAC' },
-      { t: '02 - Be The One - Adam Port (Extended)', f: 'FLAC' },
-      { t: '04 - Recall - HotLap (Extended Mix)', f: 'FLAC' },
+    { name: 'Melodic House', count: 41, dot: 'bg-purple-500', accent: 'from-purple-500/30 to-purple-700/10', border: 'border-purple-400/30', tracks: [
+      { t: 'RÜFÜS DU SOL - On My Knees',       f: 'M4A',  cover: '/demo/covers/innerbloom.jpg' },
+      { t: 'Hot Sauce · Kapuchon · Miss Monique', f: 'FLAC', cover: '/demo/covers/hot-sauce.jpg' },
+      { t: 'Be The One - Adam Port (Extended)',f: 'FLAC', cover: '/demo/covers/be-the-one.jpg' },
+      { t: 'Recall - HotLap (Extended Mix)',   f: 'FLAC', cover: '/demo/covers/recall.jpg' },
     ]},
   ]
   return (
-    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-4">
+    <div className="absolute inset-0 flex flex-col p-8 animate-fade-in z-10 gap-5">
       <DemoSceneTitle
-        title="Biblioteca clasificada automáticamente"
-        subtitle="305 tracks · BPM · Camelot Key · género — sin tocar nada"
+        title="Biblioteca clasificada por IA"
+        subtitle="BPM · Camelot Key · género — automático"
         accent="text-purple-400"
       />
       <ReelHeader active="Biblioteca" />
-      {/* Stats bar */}
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-900/60 border border-white/10">
-        <span className="text-base text-gray-400"><span className="text-white font-bold">305</span> tracks</span>
-        <span className="text-base px-3 py-1 rounded-md bg-blue-500/30 text-blue-200 font-bold">Cards</span>
-        <span className="text-base text-gray-500">Tracks</span>
-        <span className="text-base px-2 py-1 rounded bg-blue-500/20 text-blue-300 font-bold">All</span>
-        <span className="text-base text-yellow-400 tracking-wider">★★★★★</span>
-        <span className="flex-1" />
-        <span className="text-base px-3 py-1 rounded-md bg-blue-500/20 text-blue-300 font-bold">📁 Organizar (3)</span>
-        <span className="text-base px-3 py-1 rounded-md bg-purple-500/20 text-purple-300 font-bold">🎵 Keys (115)</span>
+      {/* Hero stats — big numbers, less chrome */}
+      <div className="flex items-center justify-around gap-3 px-5 py-4 rounded-2xl bg-gradient-to-r from-purple-500/15 via-blue-500/10 to-pink-500/15 border border-white/10">
+        <div className="text-center">
+          <div className="text-4xl font-black text-white leading-none">305</div>
+          <div className="text-sm text-gray-400 mt-1 uppercase tracking-wider">tracks</div>
+        </div>
+        <div className="w-px h-10 bg-white/10" />
+        <div className="text-center">
+          <div className="text-4xl font-black text-purple-300 leading-none">115</div>
+          <div className="text-sm text-gray-400 mt-1 uppercase tracking-wider">keys</div>
+        </div>
+        <div className="w-px h-10 bg-white/10" />
+        <div className="text-center">
+          <div className="text-4xl font-black text-blue-300 leading-none">12</div>
+          <div className="text-sm text-gray-400 mt-1 uppercase tracking-wider">géneros</div>
+        </div>
       </div>
-      {/* Genre filter pills */}
-      <div className="flex items-center gap-2 overflow-hidden">
-        <span className="text-sm px-2.5 py-1 rounded-full bg-blue-500/30 border border-blue-400/40 text-blue-200 font-bold flex-shrink-0">All</span>
+      {/* Genre filter pills — bigger, fewer for mobile readability */}
+      <div className="flex items-center gap-2 overflow-hidden flex-wrap">
+        <span className="text-base px-3 py-1.5 rounded-full bg-blue-500/30 border-2 border-blue-400/50 text-blue-200 font-bold flex-shrink-0">All</span>
         {[
-          { n: 'Tech House',    c: 92, color: 'text-blue-400' },
-          { n: 'Deep House',    c: 47, color: 'text-green-400' },
-          { n: 'Melodic House', c: 41, color: 'text-purple-400' },
-          { n: 'Progressive',   c: 20, color: 'text-orange-400' },
-          { n: 'Afro House',    c: 18, color: 'text-pink-400' },
-          { n: 'Mel. Techno',   c: 17, color: 'text-cyan-400' },
+          { n: 'Tech',     c: 92, color: 'text-blue-400' },
+          { n: 'Deep',     c: 47, color: 'text-green-400' },
+          { n: 'Melodic',  c: 41, color: 'text-purple-400' },
+          { n: 'Progress', c: 20, color: 'text-orange-400' },
         ].map(g => (
-          <span key={g.n} className={`text-sm px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/10 ${g.color} font-semibold flex items-center gap-1.5 flex-shrink-0`}>
-            <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            {g.n} ({g.c})
+          <span key={g.n} className={`text-base px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/10 ${g.color} font-semibold flex items-center gap-2 flex-shrink-0`}>
+            <span className="w-2 h-2 rounded-full bg-current" />
+            {g.n} <span className="opacity-60">{g.c}</span>
           </span>
         ))}
       </div>
-      {/* Cards stacked vertically (instead of 3 cols horizontal) */}
+      {/* Genre cards — 3, each with 4 cover-thumbed tracks */}
       <div className="flex-1 space-y-3 overflow-hidden">
         {groups.map((g, gi) => (
           <div
             key={g.name}
-            className="bg-slate-900/80 border border-white/10 rounded-2xl overflow-hidden animate-demo-tag-pop"
-            style={{ animationDelay: `${gi * 200}ms` }}
+            className={`bg-gradient-to-r ${g.accent} border ${g.border} rounded-2xl overflow-hidden animate-demo-tag-pop`}
+            style={{ animationDelay: `${gi * 250}ms` }}
           >
             <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
               <div className="flex items-center gap-3 min-w-0">
-                <span className={`w-3 h-3 rounded-full ${g.dot} flex-shrink-0`} />
-                <span className="text-2xl font-bold text-white truncate">{g.name}</span>
+                <span className={`w-4 h-4 rounded-full ${g.dot} flex-shrink-0 shadow-lg`} />
+                <span className="text-3xl font-black text-white truncate">{g.name}</span>
               </div>
-              <span className="text-base font-bold text-gray-300 bg-white/10 px-3 py-1 rounded-md">{g.count}</span>
+              <span className="text-xl font-black text-white bg-white/15 px-4 py-1 rounded-lg">{g.count}</span>
             </div>
-            <div className="px-4 py-2 space-y-1">
+            <div className="px-4 py-2 space-y-1.5">
               {g.tracks.map((tr, ti) => (
-                <div key={ti} className="flex items-center gap-3 py-1 animate-demo-tag-pop" style={{ animationDelay: `${gi * 200 + 300 + ti * 80}ms` }}>
-                  <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                  <span className="text-base text-gray-300 truncate flex-1">{tr.t}</span>
-                  <span className={`text-sm font-bold flex-shrink-0 ${tr.f === 'FLAC' ? 'text-green-400' : tr.f === 'MP3' ? 'text-blue-400' : 'text-purple-400'}`}>{tr.f}</span>
+                <div key={ti} className="flex items-center gap-3 py-1.5 animate-demo-tag-pop" style={{ animationDelay: `${gi * 250 + 350 + ti * 100}ms` }}>
+                  <img src={tr.cover} alt="" className="w-10 h-10 rounded-md object-cover flex-shrink-0 ring-1 ring-white/15" />
+                  <span className="text-lg text-white/90 truncate flex-1 font-medium">{tr.t}</span>
+                  <span className={`text-sm font-extrabold flex-shrink-0 px-2 py-0.5 rounded ${tr.f === 'FLAC' ? 'bg-green-500/20 text-green-300' : tr.f === 'MP3' ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'}`}>{tr.f}</span>
                 </div>
               ))}
             </div>
