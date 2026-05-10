@@ -2631,7 +2631,18 @@ ${playlistEntries}
             </div>
           </div>
         ) : (
-          <div>
+          <div
+            onDragOver={(e) => {
+              // Accept drops from the bottom panel (Sugerencias/Biblioteca)
+              if (e.dataTransfer.types.includes('text/plain')) e.preventDefault()
+            }}
+            onDrop={(e) => {
+              const filename = e.dataTransfer.getData('text/plain')
+              if (!filename) return
+              const candidate = suggestions.find(s => s.filename === filename) || allTracks.find(t => t.filename === filename)
+              if (candidate && !setTracks.some(t => t.filename === filename)) addToSet(candidate)
+            }}
+          >
             {setTracks.map((t, i) => {
               const isPlaying = playing === t.filename
               return (
