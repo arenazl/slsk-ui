@@ -206,18 +206,18 @@ input[type="color"]::-webkit-color-swatch {
 }
 
 [data-theme="light"] {
-  --bg-app: #e5e7eb;
-  --bg-panel: #d8dbe0;
-  --bg-surface: #dcdfe4;
-  --bg-hover: rgba(0,0,0,0.04);
-  --bg-row-playing: rgba(71,85,105,0.08);
-  --bg-input: #d1d5db;
-  --bg-genre-header: #c8ccd2;
-  --text-primary: #1f2937;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --text-dim: #94a3b8;
-  --border-color: #c0c5cd;
-  --border-subtle: rgba(192,197,205,0.5);
-  --scrollbar-thumb: #a8aeb8;
+  --bg-app: #b8b5b0;
+  --bg-panel: #c4c0bb;
+  --bg-surface: #bdb9b4;
+  --bg-hover: rgba(0,0,0,0.05);
+  --bg-row-playing: rgba(80,70,55,0.08);
+  --bg-input: #aeaaa5;
+  --bg-genre-header: #a8a49f;
+  --text-primary: #1f1d1a;
+  --text-secondary: #524f4a;
+  --text-muted: #6e6a64;
+  --text-dim: #8a8680;
+  --border-color: #9a9590;
+  --border-subtle: rgba(154,149,144,0.5);
+  --scrollbar-thumb: #8a8680;
 }
