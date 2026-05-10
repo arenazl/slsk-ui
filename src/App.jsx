@@ -2901,18 +2901,27 @@ ${playlistEntries}
                       options={availableGenres}
                       onChange={(g) => { setLibBrowserGenre(g); setLibBrowserPage(0) }}
                     />
-                    <select
-                      value={libBrowserSort}
-                      onChange={(e) => setLibBrowserSort(e.target.value)}
-                      className="px-2 py-1 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
-                      title="Ordenar por"
-                    >
-                      <option value="rating">★ Rating</option>
-                      <option value="artist">A · Artista</option>
-                      <option value="bpm">♪ BPM</option>
-                      <option value="key">🎹 Camelot</option>
-                      <option value="recent">⏱ Reciente</option>
-                    </select>
+                    <div className="flex items-center gap-0.5 px-0.5 py-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg" title="Ordenar por">
+                      {[
+                        { id: 'rating', label: '★' },
+                        { id: 'artist', label: 'A·Z' },
+                        { id: 'bpm',    label: 'BPM' },
+                        { id: 'key',    label: 'Key' },
+                        { id: 'recent', label: 'New' },
+                      ].map(s => (
+                        <button
+                          key={s.id}
+                          onClick={() => setLibBrowserSort(s.id)}
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
+                            libBrowserSort === s.id
+                              ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)] shadow-sm'
+                              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
                     <button
                       onClick={() => setLibBrowserShowAll(v => !v)}
                       className={`w-7 h-7 flex items-center justify-center rounded-lg border transition-all active:scale-95 ${libBrowserShowAll ? 'bg-[var(--color-accent)]/15 border-[var(--color-accent)]/40 text-[var(--color-accent)]' : 'bg-[var(--bg-input)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
