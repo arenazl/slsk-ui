@@ -9487,8 +9487,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   useEffect(() => {
     if (!discoverCtx) return
+    // Both desktop dropdown and mobile bottom-sheet share the same ref name,
+    // so React only keeps the last one (mobile). Looking up via the data
+    // marker matches whichever menu is actually rendered/clicked.
     const handleClick = (e) => {
-      if (discoverCtxRef.current && !discoverCtxRef.current.contains(e.target)) setDiscoverCtx(null)
+      if (!e.target.closest('[data-discover-ctx="1"]')) setDiscoverCtx(null)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -10610,6 +10613,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         {/* Desktop: positioned dropdown */}
         <div
           ref={discoverCtxRef}
+          data-discover-ctx="1"
           className="hidden md:block fixed z-50 bg-[var(--bg-panel)] border border-gray-700 rounded-lg shadow-2xl py-1 min-w-48"
           style={{ left: Math.min(discoverCtx.x, window.innerWidth - 220), top: Math.min(discoverCtx.y, window.innerHeight - 200) }}
         >
@@ -10699,7 +10703,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         </div>
 
         {/* Mobile: bottom sheet */}
-        <div ref={discoverCtxRef} className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-[var(--bg-panel)] rounded-t-2xl shadow-2xl border-t border-[var(--border-color)] animate-sheet-up">
+        <div ref={discoverCtxRef} data-discover-ctx="1" className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-[var(--bg-panel)] rounded-t-2xl shadow-2xl border-t border-[var(--border-color)] animate-sheet-up">
           {/* Drag handle */}
           <div className="flex justify-center py-2">
             <div className="w-10 h-1 rounded-full bg-gray-600" />
