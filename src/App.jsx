@@ -3011,6 +3011,32 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
     }
   }, [pxPerSec, isPlaying, stopPlay])
 
+  // Ctrl + wheel → zoom in/out on the timeline (DAW-style). Anchored to
+  // the cursor position so what you're hovering stays put. Bound via
+  // addEventListener with passive:false because React's onWheel is passive.
+  useEffect(() => {
+    const el = timelineRef.current
+    if (!el) return
+    const handler = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return // free scroll without modifier
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const cursorX = e.clientX - rect.left + el.scrollLeft
+      const timeAtCursor = cursorX / pxPerSec
+      const factor = e.deltaY > 0 ? 0.85 : 1.15
+      setPxPerSec(p => {
+        const next = Math.max(2, Math.min(50, p * factor))
+        // Keep the time-under-cursor anchored after the zoom by adjusting scrollLeft.
+        requestAnimationFrame(() => {
+          if (el) el.scrollLeft = timeAtCursor * next - (e.clientX - rect.left)
+        })
+        return next
+      })
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [pxPerSec])
+
   // Master volume ref for use in crossfade interval
   const effectiveVolume = muted ? 0 : volume
   const volumeRef = useRef(effectiveVolume)
@@ -3578,17 +3604,23 @@ function MixEditor({ tracks: initialTracks, onBack, agentConnected }) {
         <div className="w-px h-6 bg-[var(--border-color)]" />
 
         {/* Zoom controls */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-[var(--text-muted)]">Zoom</span>
+        <div className="flex items-center gap-1 px-1 py-0.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-color)]" title="Ctrl + rueda del mouse para zoom">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] px-1.5 font-semibold">Zoom</span>
           <button
             onClick={() => setPxPerSec(p => Math.max(2, p - 2))}
-            className="w-7 h-7 flex items-center justify-center rounded-lg btn-ghost text-sm font-bold transition-all duration-200 active:scale-95"
-          >-</button>
-          <span className="text-xs text-[var(--text-muted)] w-8 text-center">{pxPerSec}x</span>
+            className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90"
+            title="Zoom out (Ctrl+rueda)"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14" /></svg>
+          </button>
+          <span className="text-[11px] font-mono text-[var(--text-primary)] w-8 text-center font-semibold">{Math.round(pxPerSec)}x</span>
           <button
             onClick={() => setPxPerSec(p => Math.min(50, p + 2))}
-            className="w-7 h-7 flex items-center justify-center rounded-lg btn-ghost text-sm font-bold transition-all duration-200 active:scale-95"
-          >+</button>
+            className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90"
+            title="Zoom in (Ctrl+rueda)"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14m-7-7h14" /></svg>
+          </button>
         </div>
 
         <div className="flex-1" />
