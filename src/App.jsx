@@ -6280,6 +6280,20 @@ function App() {
   const [fsaStatus, setFsaStatus] = useState('no-folder') // 'no-folder' | 'needs-activation' | 'granted'
   const [showFolderModal, setShowFolderModal] = useState(false)
 
+  // Download mode per device (separate from FSA/agent connectivity).
+  //  'remote' → trigger downloads on the user's registered agent (PC con Rekordbox)
+  //  'local'  → search + save into this device's FSA folder
+  //  null     → not yet chosen (first time on this device) → show modal
+  const [downloadMode, setDownloadModeState] = useState(() => {
+    try { return localStorage.getItem('download_mode') || null } catch { return null }
+  })
+  const setDownloadMode = (m) => {
+    setDownloadModeState(m)
+    try { if (m) localStorage.setItem('download_mode', m); else localStorage.removeItem('download_mode') } catch {}
+  }
+  // Whether the logged-in user has a registered agent (probed via Heroku proxy).
+  const [agentRegistered, setAgentRegistered] = useState(false)
+
   // Check FSA on mount. Three cases:
   // - 'granted'  → fully ready, no UI prompt
   // - 'needs-activation' → folder picked previously but Chrome requires
@@ -6487,32 +6501,25 @@ function App() {
       }
       return false
     }
-    // Skip agent polling when:
-    // - on mobile (no localhost to reach)
-    // - FSA is ready (user has local storage via browser, agent not needed)
-    // Avoids spamming console with ERR_CONNECTION_REFUSED.
-    const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
+    // The proxy check is server-to-server (Heroku → agent), so it works from
+    // ANY device — desktop, tablet, iPhone. We always run it for logged-in
+    // users so we know whether the account has a registered Windows agent.
+    const configBody = JSON.stringify({ username: authUser.name })
+    const configHeaders = { 'Content-Type': 'application/json' }
 
     const checkAgent = async () => {
-      if (IS_MOBILE) {
-        setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
-        return
-      }
-      const configBody = JSON.stringify({ username: authUser.name })
-      const configHeaders = { 'Content-Type': 'application/json' }
-      // Direct attempts (localhost, Funnel) hit the agent's CORS check and fail
-      // for users on domains the agent doesn't whitelist (anything other than
-      // groovesyncdj.netlify.app on v2.8.0). They also trigger Chrome's PNA
-      // permission prompt on HTTPS pages. Going via Heroku proxy avoids both:
-      // server-to-server, no CORS, no PNA. Slightly higher latency but seamless.
       try {
         const proxyStatus = `${API_BASE}/api/agent/proxy/status?u=${encodeURIComponent(authUser.name)}`
         if (await connectAgent('proxy',
           proxyStatus,
           () => agentFetch('config', { method: 'POST', headers: configHeaders, body: configBody })
-        )) return
+        )) {
+          setAgentRegistered(true)
+          return
+        }
       } catch { /* proxy failed */ }
       setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
+      setAgentRegistered(false)
     }
     checkAgent()
     const interval = setInterval(checkAgent, 30000)
@@ -9365,7 +9372,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       .replace(/^-+|-+$/g, '')
     const combined = `${track.artist || ''} ${track.title || ''}`.trim()
     const slug = slugify(combined) || 'track'
-    const url = `https://djfreeapp.ar/s/${slug}`
+    const qs = new URLSearchParams()
+    if (track.artwork_url) qs.set('artwork', track.artwork_url)
+    if (track.preview_url) qs.set('preview', track.preview_url)
+    if (track.artist) qs.set('artist', track.artist)
+    if (track.title) qs.set('title', track.title)
+    const tail = qs.toString()
+    const url = `https://djfreeapp.ar/s/${slug}${tail ? '?' + tail : ''}`
     setDiscoverCtx(null)
     setShareDialog({ track, url })
   }
@@ -11060,15 +11073,32 @@ function ShareView() {
 
   useEffect(() => {
     if (previewFromUrl && artwork) { setLoadingPreview(false); return }
-    const q = slugQuery || `${artist} ${title}`.trim()
-    if (!q) { setLoadingPreview(false); return }
+    const baseQ = slugQuery || `${artist} ${title}`.trim()
+    if (!baseQ) { setLoadingPreview(false); return }
+    const stripSuffixes = (s) => s
+      .replace(/\b(extended\s*mix|original\s*mix|radio\s*edit|club\s*mix|dub\s*mix|remix|edit|mix|version|vip|og)\b/gi, '')
+      .replace(/\([^)]*\)/g, '')
+      .replace(/\[[^\]]*\]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const cleaned = stripSuffixes(baseQ)
+    const queries = cleaned && cleaned !== baseQ ? [baseQ, cleaned] : [baseQ]
     let cancelled = false
-    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=1`)
-      .then(r => r.json())
-      .then(d => {
-        if (cancelled) return
-        const r = d.results?.[0]
-        if (!r) return
+    const tryQueries = async () => {
+      for (const q of queries) {
+        try {
+          const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=1`)
+          const d = await res.json()
+          if (cancelled) return null
+          const r = d.results?.[0]
+          if (r) return r
+        } catch { /* try next */ }
+      }
+      return null
+    }
+    tryQueries()
+      .then(r => {
+        if (cancelled || !r) return
         if (!previewFromUrl && r.previewUrl) setPreviewUrl(r.previewUrl)
         if (!artwork && r.artworkUrl100) setArtwork(r.artworkUrl100.replace('100x100', '600x600'))
         if (r.artistName) setArtist(r.artistName)
@@ -11117,7 +11147,19 @@ function ShareView() {
       </header>
 
       <main className="relative z-10 flex-1 min-h-0 overflow-y-auto">
-        <div className="min-h-full flex flex-col items-center justify-center p-6 gap-6">
+        <div className="min-h-full flex flex-col items-center justify-start p-6 gap-6">
+          <div className="relative mt-2 flex flex-col items-center gap-3">
+            <div className="absolute inset-0 rounded-full bg-purple-500/30 blur-3xl scale-110 pointer-events-none" />
+            <img
+              src="/logo.png"
+              alt="DJ Free App"
+              className="relative w-32 h-32 md:w-40 md:h-40 rounded-3xl ring-1 ring-white/15 shadow-2xl shadow-purple-900/40 select-none"
+              draggable={false}
+            />
+            <div className="relative text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-300 via-purple-200 to-pink-300 bg-clip-text text-transparent drop-shadow-lg">
+              DJ Free App
+            </div>
+          </div>
           <div className="relative">
             <div className="absolute inset-0 rounded-2xl bg-purple-500/40 blur-3xl scale-110 pointer-events-none" />
             <div className="relative w-64 h-64 md:w-80 md:h-80 rounded-2xl overflow-hidden ring-1 ring-white/15 shadow-2xl shadow-purple-900/40 bg-gradient-to-br from-gray-800 to-gray-900">
