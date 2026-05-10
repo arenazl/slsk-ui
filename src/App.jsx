@@ -2735,7 +2735,7 @@ ${playlistEntries}
                     e.dataTransfer.setData('text/plain', url)
                     e.dataTransfer.setData('DownloadURL', `audio/mpeg:${t.filename}:${url}`)
                   }}
-                  className={`flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3 transition-all duration-150 border-b border-[var(--border-color)]/30 cursor-grab active:cursor-grabbing ${
+                  className={`flex items-center gap-2 md:gap-3 px-3 md:px-6 py-1 md:py-1.5 transition-all duration-150 border-b border-[var(--border-color)]/30 cursor-grab active:cursor-grabbing ${
                     isPlaying ? 'bg-[var(--color-accent)]/5' : 'hover:bg-[var(--bg-hover)]'}`}
                 >
                   {/* Move buttons */}
