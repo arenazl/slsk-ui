@@ -31,6 +31,50 @@ function ToastProvider({ children }) {
 }
 const useToast = () => useContext(ToastContext)
 
+// Modern Confirm dialog — replaces window.confirm() with a Tailwind modal.
+// Usage:  const confirm = useConfirm(); if (await confirm('Borrar?')) { ... }
+const ConfirmContext = createContext(() => Promise.resolve(false))
+function ConfirmProvider({ children }) {
+  const [state, setState] = useState(null)
+  const confirm = useCallback((opts) => {
+    const o = typeof opts === 'string' ? { message: opts } : opts
+    return new Promise(resolve => setState({ ...o, resolve }))
+  }, [])
+  const close = (result) => {
+    if (state) state.resolve(result)
+    setState(null)
+  }
+  return (
+    <ConfirmContext.Provider value={confirm}>
+      {children}
+      {state && (
+        <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => close(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-6 max-w-md w-full animate-fade-in-up">
+            {state.title && <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">{state.title}</h3>}
+            <p className="text-sm text-[var(--text-secondary)] mb-5 leading-relaxed">{state.message}</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => close(false)} className="px-4 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">{state.cancelLabel || 'Cancelar'}</button>
+              <button onClick={() => close(true)} className={`px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all active:scale-95 ${state.danger !== false ? 'bg-red-600 hover:bg-red-500' : 'bg-[var(--color-accent)] hover:opacity-90'}`}>{state.confirmLabel || 'Borrar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </ConfirmContext.Provider>
+  )
+}
+const useConfirm = () => useContext(ConfirmContext)
+
+// Copy text to clipboard + show success toast.
+// Replaces window.prompt('Copy this text', value) which is ugly.
+async function copyToClipboard(text, toast, label = 'Copiado al portapapeles') {
+  try {
+    await navigator.clipboard.writeText(text)
+    if (toast) toast(label, 'success', 2000)
+  } catch {
+    if (toast) toast('No se pudo copiar — copialo manualmente', 'error', 3000)
+  }
+}
+
 const STATUS_LABELS = {
   pending: 'Pendiente',
   searching: 'Buscando...',
@@ -751,6 +795,7 @@ function useQS(key, defaultVal) {
 
 const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
   const toast = useToast()
+  const confirmDialog = useConfirm()
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [classifying, setClassifying] = useState(false)
@@ -1092,7 +1137,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const deleteDupes = async () => {
     const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
     if (!toDelete.length) return
-    if (!confirm(`Borrar ${toDelete.length} duplicados? Se mantienen los de mejor rating/calidad.`)) return
+    if (!await confirmDialog({ title: 'Borrar duplicados', message: `Borrar ${toDelete.length} duplicados? Se mantienen los de mejor rating/calidad.` })) return
     setDeletingDupes(true)
     let agentDeleted = 0
     try {
@@ -1746,10 +1791,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   return (
                     <div
                       key={f.filename}
-                      onContextMenu={(e) => {
+                      onContextMenu={async (e) => {
                         if (isBest) return
                         e.preventDefault()
-                        if (confirm(`Borrar "${f.filename}"?`)) {
+                        if (await confirmDialog({ title: 'Borrar archivo', message: `Borrar "${f.filename}"?` })) {
                           agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
                             .then(() => fetchLibrary())
                         }
@@ -7262,6 +7307,30 @@ function App() {
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-[var(--text-primary)] mb-4">Configuración</h2>
             <div className="space-y-4">
+              {!IS_MOBILE_DEVICE && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Modo de reproducción</div>
+                  <div className="flex items-center rounded-full bg-[var(--bg-input)] p-0.5 w-full">
+                    {[
+                      { id: 'local', label: 'Local', desc: 'Archivos reales' },
+                      { id: 'preview', label: 'Preview', desc: '30s desde iTunes' },
+                    ].map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setPlaybackMode(m.id)}
+                        className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                          playbackMode === m.id
+                            ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)]'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                        }`}
+                        title={m.desc}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Trial gratuito</div>
                 <label className="block text-sm text-[var(--text-secondary)] mb-1">Días antes de redirigir a MercadoPago</label>
@@ -7529,15 +7598,6 @@ function App() {
             <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain" />
             <span className="font-semibold text-base text-[var(--text-primary)] hidden sm:inline">DJ Free App</span>
           </div>
-          <button
-            onClick={() => setDemoVideoOpen(true)}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, var(--color-accent), #a855f7)' }}
-            title="Ver features en video"
-          >
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-            Ver demo
-          </button>
           <div className="hidden md:flex gap-1">
             {[
               { id: 'discover', label: 'Discover' },
@@ -7590,26 +7650,36 @@ function App() {
               </button>
             </div>
           )}
-          <button
-            onClick={() => setAgentInstallOpen(true)}
-            className="hidden lg:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
-            title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows)'}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
-            </svg>
-            <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-panel)] ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
-          </button>
-          <a
-            href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
-            className="hidden lg:flex relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
-            title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Mac) - Click derecho para Mac viejo'}
-            onContextMenu={(e) => { e.preventDefault(); window.prompt('Copiá este comando y pegalo en Terminal:', 'curl -sL https://bootstrap.pypa.io/get-pip.py | python3 && python3 -m pip install pystray pillow aiohttp cloudinary && curl -sL https://raw.githubusercontent.com/arenazl/slsk-agent/master/agent.py -o /tmp/agent.py && python3 /tmp/agent.py') }}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-            </svg>
-          </a>
+          <div className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/50 flex-shrink-0">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mr-1">Cliente Descargas</span>
+            <button
+              onClick={() => setAgentInstallOpen(true)}
+              className="relative p-1 rounded text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
+              title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows)'}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+              </svg>
+              <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-[var(--bg-panel)] ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
+            </button>
+            <a
+              href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
+              className="relative p-1 rounded text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
+              title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Mac) - Click derecho para Mac viejo'}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                copyToClipboard(
+                  'curl -sL https://bootstrap.pypa.io/get-pip.py | python3 && python3 -m pip install pystray pillow aiohttp cloudinary && curl -sL https://raw.githubusercontent.com/arenazl/slsk-agent/master/agent.py -o /tmp/agent.py && python3 /tmp/agent.py',
+                  toast,
+                  'Comando copiado — pegalo en Terminal'
+                )
+              }}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+              </svg>
+            </a>
+          </div>
           <button
             onClick={async () => {
               try {
@@ -7624,24 +7694,6 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-          <div className="hidden xl:flex items-center gap-1 flex-shrink-0" title="Color de acento">
-            {[
-              { color: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
-              { color: '#8b5cf6', gradient: 'from-violet-500 to-purple-600' },
-              { color: '#f43f5e', gradient: 'from-rose-500 to-pink-600' },
-              { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500' },
-              { color: '#22c55e', gradient: 'from-green-400 to-emerald-600' },
-            ].map(p => (
-              <button
-                key={p.color}
-                onClick={() => setAccentColor(p.color)}
-                className={`w-4.5 h-4.5 rounded-full bg-gradient-to-br ${p.gradient} transition-all duration-200 hover:scale-125 active:scale-95 ${
-                  accentColor === p.color ? 'ring-2 ring-white/60 scale-110' : 'ring-1 ring-white/10'
-                }`}
-                style={{ width: '18px', height: '18px' }}
-              />
-            ))}
-          </div>
           <button
             onClick={toggleTheme}
             className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary,white)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
@@ -7682,29 +7734,6 @@ function App() {
               </svg>
             </button>
           )}
-          {!IS_MOBILE_DEVICE && (
-            <div
-              className="hidden lg:flex items-center rounded-full bg-[var(--bg-input)] p-0.5 flex-shrink-0"
-              title="Modo de reproducción: Local (archivos reales) / Preview (30s desde iTunes)"
-            >
-              {[
-                { id: 'local', label: 'Local' },
-                { id: 'preview', label: 'Preview' },
-              ].map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => setPlaybackMode(m.id)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
-                    playbackMode === m.id
-                      ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)]'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          )}
           {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
             <button
               onClick={handleInstall}
@@ -7728,15 +7757,13 @@ function App() {
           </button>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="hidden sm:inline text-xs text-[var(--text-muted)]">
-              {connected ? (isRunning ? 'Descargando...' : 'Server') : 'Desconectado'}
+            <span className="hidden sm:inline text-xs text-[var(--text-muted)]" title="Backend de búsqueda en SoulSeek (Heroku)">
+              {connected ? (isRunning ? 'Descargando...' : 'Búsqueda') : 'Desconectado'}
             </span>
             {agentConnected && (
-              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/20" title={`Agente ${agentVersion} — ${AGENT_MODE === 'local' ? 'local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'proxy'}`}>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/20" title={`Agente ${agentVersion} — ${AGENT_MODE === 'local' ? 'local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'proxy cloud'}`}>
                 <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
-                <span className="text-xs text-green-400 hidden sm:inline">
-                  {AGENT_MODE === 'local' ? 'Local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'Remoto'}
-                </span>
+                <span className="text-xs text-green-400 hidden sm:inline">Descargas</span>
               </div>
             )}
             {fsaReady && (
@@ -7814,6 +7841,26 @@ function App() {
                       <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                       Descargar agente
                     </a>
+                  </div>
+                  <div className="border-t border-[var(--border-color)] px-4 py-3">
+                    <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Color de acento</div>
+                    <div className="flex items-center gap-1.5">
+                      {[
+                        { color: '#3b82f6', gradient: 'from-blue-500 to-blue-600' },
+                        { color: '#8b5cf6', gradient: 'from-violet-500 to-purple-600' },
+                        { color: '#f43f5e', gradient: 'from-rose-500 to-pink-600' },
+                        { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500' },
+                        { color: '#22c55e', gradient: 'from-green-400 to-emerald-600' },
+                      ].map(p => (
+                        <button
+                          key={p.color}
+                          onClick={() => setAccentColor(p.color)}
+                          className={`w-6 h-6 rounded-full bg-gradient-to-br ${p.gradient} transition-all duration-200 hover:scale-110 active:scale-95 ${
+                            accentColor === p.color ? 'ring-2 ring-[var(--text-primary)]/60 scale-110' : 'ring-1 ring-[var(--border-color)]'
+                          }`}
+                        />
+                      ))}
+                    </div>
                   </div>
                   <div className="border-t border-[var(--border-color)] py-1">
                     <button
@@ -8915,8 +8962,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         return
       }
     } catch (e) { console.log('[Share] execCommand failed:', e?.message) }
-    // Last resort: native prompt
-    window.prompt('Copiá el link para compartir:', url)
+    // Last resort: degraded toast — user can copy from the address bar.
+    toast(`No se pudo copiar — abrí el link manualmente: ${url}`, 'warning', 6000)
   }
 
   const cleanTrackState = (t) => {
@@ -10672,7 +10719,9 @@ function AppWithToast() {
   }
   return (
     <ToastProvider>
-      <App />
+      <ConfirmProvider>
+        <App />
+      </ConfirmProvider>
     </ToastProvider>
   )
 }
