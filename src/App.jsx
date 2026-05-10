@@ -8081,16 +8081,22 @@ function App() {
             </svg>
           </button>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="hidden sm:inline text-xs text-[var(--text-muted)]" title="Backend de búsqueda en SoulSeek (Heroku)">
-              {connected ? (isRunning ? 'Descargando...' : 'Búsqueda') : 'Desconectado'}
+            <span
+              className={`w-7 h-7 flex items-center justify-center rounded-lg border ${connected ? 'bg-green-500/15 border-green-500/30 text-green-400' : 'bg-red-500/15 border-red-500/30 text-red-400'}`}
+              title={connected ? (isRunning ? 'Buscando / descargando…' : 'Búsqueda — backend SoulSeek conectado') : 'Backend SoulSeek desconectado'}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m2.1-5.4a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" />
+              </svg>
             </span>
-            {agentConnected && (
-              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/20" title={`Agente ${agentVersion} — ${AGENT_MODE === 'local' ? 'local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'proxy cloud'}`}>
-                <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
-                <span className="text-xs text-green-400 hidden sm:inline">Descargas</span>
-              </div>
-            )}
+            <span
+              className={`w-7 h-7 flex items-center justify-center rounded-lg border ${agentConnected ? 'bg-green-500/15 border-green-500/30 text-green-400' : 'bg-red-500/15 border-red-500/30 text-red-400'}`}
+              title={agentConnected ? `Descargas — agente ${agentVersion} conectado (${AGENT_MODE === 'local' ? 'local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'proxy cloud'})` : 'Descargas — agente local no conectado'}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </span>
             {fsaReady && (
               <button
                 onClick={forgetStorageFolder}
