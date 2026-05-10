@@ -2890,64 +2890,85 @@ ${playlistEntries}
                 )}
                 {bottomTab === 'biblioteca' && (
                   <>
-                    <input
-                      value={libBrowserSearch}
-                      onChange={(e) => { setLibBrowserSearch(e.target.value); setLibBrowserPage(0) }}
-                      placeholder="Buscar..."
-                      className="w-32 md:w-44 px-2 py-1 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
-                    />
-                    <GenreCombo
-                      value={libBrowserGenre}
-                      options={availableGenres}
-                      onChange={(g) => { setLibBrowserGenre(g); setLibBrowserPage(0) }}
-                    />
-                    <div className="flex items-center gap-0.5 px-0.5 py-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg" title="Ordenar por">
-                      {[
-                        { id: 'rating', label: '★' },
-                        { id: 'artist', label: 'A·Z' },
-                        { id: 'bpm',    label: 'BPM' },
-                        { id: 'key',    label: 'Key' },
-                        { id: 'recent', label: 'New' },
-                      ].map(s => (
-                        <button
-                          key={s.id}
-                          onClick={() => setLibBrowserSort(s.id)}
-                          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
-                            libBrowserSort === s.id
-                              ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)] shadow-sm'
-                              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
+                    {/* BUSCAR */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Buscar</span>
+                      <input
+                        value={libBrowserSearch}
+                        onChange={(e) => { setLibBrowserSearch(e.target.value); setLibBrowserPage(0) }}
+                        placeholder="Artista, título…"
+                        className="w-28 md:w-40 px-2 py-1 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+                      />
                     </div>
-                    <button
-                      onClick={() => setLibBrowserShowAll(v => !v)}
-                      className={`w-7 h-7 flex items-center justify-center rounded-lg border transition-all active:scale-95 ${libBrowserShowAll ? 'bg-[var(--color-accent)]/15 border-[var(--color-accent)]/40 text-[var(--color-accent)]' : 'bg-[var(--bg-input)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                      title={libBrowserShowAll ? 'Volver a paginado' : 'Mostrar todos con scroll'}
-                    >
-                      {libBrowserShowAll ? (
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-                      ) : (
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
-                      )}
-                    </button>
+                    {/* GÉNERO */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Género</span>
+                      <GenreCombo
+                        value={libBrowserGenre}
+                        options={availableGenres}
+                        onChange={(g) => { setLibBrowserGenre(g); setLibBrowserPage(0) }}
+                      />
+                    </div>
+                    {/* ORDEN */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Orden</span>
+                      <div className="flex items-center gap-0.5 px-0.5 py-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg" title="Ordenar por">
+                        {[
+                          { id: 'rating', label: '★' },
+                          { id: 'artist', label: 'A·Z' },
+                          { id: 'bpm',    label: 'BPM' },
+                          { id: 'key',    label: 'Key' },
+                          { id: 'recent', label: 'New' },
+                        ].map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => setLibBrowserSort(s.id)}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
+                              libBrowserSort === s.id
+                                ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)] shadow-sm'
+                                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                            }`}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* VISTA */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Vista</span>
+                      <button
+                        onClick={() => setLibBrowserShowAll(v => !v)}
+                        className={`w-7 h-7 flex items-center justify-center rounded-lg border transition-all active:scale-95 ${libBrowserShowAll ? 'bg-[var(--color-accent)]/15 border-[var(--color-accent)]/40 text-[var(--color-accent)]' : 'bg-[var(--bg-input)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                        title={libBrowserShowAll ? 'Volver a paginado' : 'Mostrar todos con scroll'}
+                      >
+                        {libBrowserShowAll ? (
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                        )}
+                      </button>
+                    </div>
                     {!libBrowserShowAll && totalPages > 1 && (
-                      <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)]">
-                        <button onClick={() => setLibBrowserPage(p => Math.max(0, p - 1))} disabled={safePage === 0} className="w-6 h-6 flex items-center justify-center rounded-md hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-all">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-                        </button>
-                        <span className="text-[10px] font-mono px-1.5">{safePage + 1}/{totalPages}</span>
-                        <button onClick={() => setLibBrowserPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="w-6 h-6 flex items-center justify-center rounded-md hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-all">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
-                        </button>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Página</span>
+                        <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)]">
+                          <button onClick={() => setLibBrowserPage(p => Math.max(0, p - 1))} disabled={safePage === 0} className="w-6 h-6 flex items-center justify-center rounded-md hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-all">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                          </button>
+                          <span className="text-[10px] font-mono px-1.5">{safePage + 1}/{totalPages}</span>
+                          <button onClick={() => setLibBrowserPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="w-6 h-6 flex items-center justify-center rounded-md hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-all">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </>
                 )}
-                {/* Export buttons — moved into the tab strip, pinned to the right */}
-                <div className="ml-auto flex items-center gap-1.5 pl-2 border-l border-[var(--border-color)]">
+                {/* EXPORTAR — pinned to the right with its own label group. */}
+                <div className="ml-auto flex flex-col gap-0.5 pl-3 border-l border-[var(--border-color)]">
+                  <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5 flex items-center gap-1">Exportar <span className="text-[9px] text-[var(--text-muted)] font-mono normal-case tracking-normal">· {setTracks.length}t ~{totalMin}'</span></span>
+                  <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-[var(--text-muted)] font-mono whitespace-nowrap">{setTracks.length}t · ~{totalMin}'</span>
                   <button
                     onClick={exportM3U}
@@ -2977,6 +2998,7 @@ ${playlistEntries}
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="12" r="2.2" fill="currentColor"/><circle cx="13" cy="17" r="2.2" fill="currentColor"/></svg>
                     Mezclar
                   </button>
+                  </div>
                 </div>
               </div>
               {/* Grid */}
