@@ -8352,7 +8352,7 @@ function App() {
           </button>
           <button
             onClick={toggleTheme}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="w-8 h-8 hidden md:flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}
           >
             {theme === 'dark' ? (
@@ -8382,7 +8382,7 @@ function App() {
                 })
                 handleAppStop()
               }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/5 text-red-400 hover:text-red-300 hover:bg-red-500/15 transition-all duration-200 active:scale-95 flex-shrink-0"
+              className="w-8 h-8 hidden md:flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/5 text-red-400 hover:text-red-300 hover:bg-red-500/15 transition-all duration-200 active:scale-95 flex-shrink-0"
               title="Detener todo el audio"
             >
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -8393,7 +8393,7 @@ function App() {
           {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
             <button
               onClick={handleInstall}
-              className="h-8 flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
+              className="h-8 hidden md:flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
               title="Instalar como app"
             >
               <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -8405,14 +8405,14 @@ function App() {
           )}
           <button
             onClick={() => window.location.reload()}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="w-8 h-8 hidden md:flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
             title="Recargar versión nueva"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
             <span
               className={`w-8 h-8 flex items-center justify-center rounded-lg border bg-[var(--bg-input)]/40 ${connected ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'}`}
               title={connected ? (isRunning ? 'Buscando / descargando…' : 'Búsqueda — backend SoulSeek conectado') : 'Backend SoulSeek desconectado'}
@@ -8630,6 +8630,50 @@ function App() {
             </nav>
             {/* Mobile menu footer */}
             <div className="flex-shrink-0 border-t border-[var(--border-color)] p-4 space-y-4">
+              {/* Quick actions — controls que sacamos del topbar mobile */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={toggleTheme}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.98]"
+                >
+                  <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {theme === 'dark' ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    )}
+                  </svg>
+                  <span className="text-xs text-[var(--text-secondary)]">{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.98]"
+                >
+                  <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  <span className="text-xs text-[var(--text-secondary)]">Recargar app</span>
+                </button>
+                {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
+                  <button
+                    onClick={() => { handleInstall(); setMobileMenuOpen(false) }}
+                    className="col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-[var(--color-accent)]/15 hover:bg-[var(--color-accent)]/25 transition-all active:scale-[0.98]"
+                  >
+                    <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="4" y="3" width="16" height="18" rx="3.5" strokeWidth={1.6} />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8.5v6m-3-3h6" />
+                    </svg>
+                    <span className="text-xs font-semibold text-[var(--color-accent)]">Instalar como app</span>
+                  </button>
+                )}
+                {fsaBackend.supported && (
+                  <button
+                    onClick={() => { fsaReady ? forgetStorageFolder() : setShowFolderModal(true); setMobileMenuOpen(false) }}
+                    className="col-span-2 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.98]"
+                  >
+                    <svg className={`w-4 h-4 ${fsaReady ? 'text-[var(--color-accent)]' : 'text-yellow-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                    <span className="text-xs text-[var(--text-secondary)] truncate">{fsaReady ? `Carpeta: ${fsaFolderName}` : 'Elegir carpeta'}</span>
+                  </button>
+                )}
+              </div>
               {/* Accent color - segmented picker */}
               <div className="flex items-center gap-0.5 p-1 rounded-xl bg-[var(--bg-surface)]">
                 {[
