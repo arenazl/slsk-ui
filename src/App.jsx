@@ -8248,7 +8248,7 @@ function App() {
           </button>
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain" />
-            <span className="font-semibold text-base text-[var(--text-primary)] hidden sm:inline">DJ Free App</span>
+            <span className="font-semibold text-base text-[var(--text-primary)] hidden lg:inline">DJ Free App</span>
           </div>
           <div className="hidden md:flex gap-1">
             {[
@@ -8268,7 +8268,7 @@ function App() {
               </button>
             ))}
           </div>
-          <div className="flex items-center bg-white/10 rounded-full p-0.5">
+          <div className="flex items-center bg-white/10 rounded-full p-0.5 flex-shrink-0">
             {[
               { id: 'edm',   label: 'EDM' },
               { id: 'pop',   label: 'POP' },
@@ -8305,7 +8305,7 @@ function App() {
           {/* Unified topbar icon row: every control shares h-8 + rounded-lg +
               border + subtle bg + same hover. Status icons use semantic color
               only for the icon/border, never as a solid fill. */}
-          <div className="hidden lg:flex items-center h-8 gap-1 px-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 flex-shrink-0">
+          <div className="hidden xl:flex items-center h-8 gap-1 px-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 flex-shrink-0">
             <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mr-1">Cliente Descargas</span>
             <button
               onClick={() => setAgentInstallOpen(true)}
@@ -8393,7 +8393,7 @@ function App() {
           {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
             <button
               onClick={handleInstall}
-              className="h-8 hidden md:flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
+              className="h-8 hidden lg:flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
               title="Instalar como app"
             >
               <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
