@@ -8594,13 +8594,15 @@ function App() {
           {isDemo && (
             <button
               onClick={() => setUpgradeModalOpen(true)}
-              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all overflow-hidden group"
+              className="relative flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-md hover:brightness-110 active:scale-95 transition-all overflow-hidden group whitespace-nowrap"
               style={{ background: 'linear-gradient(135deg, #3b82f6, #a855f7, #ec4899)' }}
               title={trialStart > 0 ? `Trial: ${Math.max(0, Math.ceil((trialStart + trialDays * 86400000 - Date.now()) / 86400000))} días restantes` : 'Unite a la comunidad'}
             >
               <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
               <span className="relative animate-pulse">✨</span>
-              <span className="relative">Unite a la comunidad</span>
+              <span className="relative hidden xl:inline">Unite a la comunidad</span>
+              <span className="relative hidden lg:inline xl:hidden">Premium</span>
+              <span className="relative inline lg:hidden">Pro</span>
             </button>
           )}
         </div>
