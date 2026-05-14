@@ -7887,12 +7887,19 @@ function App() {
                 </a>
               </div>
 
-              {trialExpired && (
+              {trialExpired ? (
                 <button
                   onClick={() => { localStorage.setItem('trial_start', String(Date.now() - (trialDays - 1) * 86400000)); setUpgradeModalOpen(false); window.location.reload() }}
                   className="w-full mt-4 text-xs text-gray-500 hover:text-gray-300 transition-colors"
                 >
                   Probar 1 día más
+                </button>
+              ) : (
+                <button
+                  onClick={() => setUpgradeModalOpen(false)}
+                  className="w-full mt-4 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  Prefiero probar primero →
                 </button>
               )}
             </div>
