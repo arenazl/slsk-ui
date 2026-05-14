@@ -4823,6 +4823,15 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
           >
             {mode === 'login' ? '¿No tenés cuenta? Empezar gratis →' : '¿Ya tenés cuenta? Ingresar'}
           </button>
+          {onGuestStart && (
+            <button
+              type="button"
+              onClick={onGuestStart}
+              className="w-full text-center text-[11px] text-gray-500 hover:text-gray-300 transition-colors pt-0.5"
+            >
+              o entrá como invitado →
+            </button>
+          )}
         </form>
 
         {/* Feature pills */}
