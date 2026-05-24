@@ -7950,17 +7950,9 @@ function App() {
     if (trialExpired) setUpgradeModalOpen(true)
   }, [trialExpired])
 
-  // Every time a demo session starts, auto-show the upgrade prompt once.
-  // This nudges them toward subscribing on each login (per session, not per click).
-  useEffect(() => {
-    if (!isDemo) return
-    const key = `upgrade_shown_${authUser?.user || ''}_${trialStart || ''}`
-    if (!sessionStorage.getItem(key)) {
-      // Small delay so the app finishes loading before the modal pops.
-      const t = setTimeout(() => { setUpgradeModalOpen(true); sessionStorage.setItem(key, '1') }, 1500)
-      return () => clearTimeout(t)
-    }
-  }, [isDemo, authUser?.user, trialStart])
+  // Upgrade modal trigger: solo cuando el trial expira (useEffect arriba) o
+  // cuando el user explicitamente clickea "Subscribirse" en el topbar.
+  // No auto-prompt en el login (rompe el flujo de onboarding del invitado).
 
   // Admin can edit settings — only the "look" account.
   const isAdmin = !!authUser && (authUser.user === 'look' || authUser.user === 'Look' || authUser.role === 'admin')
