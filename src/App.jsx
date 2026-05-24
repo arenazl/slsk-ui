@@ -7361,6 +7361,46 @@ function App() {
     }
   }
 
+  // Incrementa el contador de intentos fallidos de un pending. Si llega a
+  // MAX_PENDING_ATTEMPTS (3), lo elimina automáticamente del pending — no
+  // tiene sentido seguir reintentando lo que SoulSeek nunca encontró.
+  const MAX_PENDING_ATTEMPTS = 3
+  const markPendingFailure = (track) => {
+    const artist = (track.artist || '').toLowerCase()
+    const title = (track.title || '').toLowerCase()
+    setPendingTracks(prev => {
+      const idx = prev.findIndex(p => (p.artist || '').toLowerCase() === artist && (p.title || '').toLowerCase() === title)
+      if (idx === -1) {
+        // No existía aún: agregar con attempts=1.
+        const entry = {
+          artist: track.artist || '',
+          title: track.title || '',
+          query: track.query || `${track.artist} - ${track.title}`,
+          source: track.source || 'manual',
+          addedAt: new Date().toISOString(),
+          device_id: DEVICE.id,
+          device_name: DEVICE.name,
+          attempts: 1,
+        }
+        fetch(`${API_BASE}/api/pending/add`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: username, track: entry }),
+        }).catch(() => {})
+        return [...prev, entry]
+      }
+      const next = (prev[idx].attempts || 0) + 1
+      if (next >= MAX_PENDING_ATTEMPTS) {
+        fetch(`${API_BASE}/api/pending/remove`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: username, tracks: [{ artist: prev[idx].artist, title: prev[idx].title }] }),
+        }).catch(() => {})
+        toast(`No encontrado tras ${MAX_PENDING_ATTEMPTS} intentos: ${prev[idx].artist} - ${prev[idx].title}`, 'warning', 4000)
+        return prev.filter((_, i) => i !== idx)
+      }
+      return prev.map((p, i) => i === idx ? { ...p, attempts: next } : p)
+    })
+  }
+
   // Favorites: heart toggle on Discover rows. Used for filtering in Biblioteca —
   // never triggers a download. Persisted in Cloudinary per user, or localStorage for guests.
   const persistFavorites = (tracks) => {
@@ -10591,7 +10631,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       if (idx >= ranked.length) {
         console.warn('[DL] all variants exhausted', { track: track.title, tried: ranked.length })
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: `Sin éxito en ${ranked.length} variantes` } }))
-        addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
+        markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection })
         wsRef.current?.removeEventListener('message', handler)
         return
       }
@@ -10659,7 +10699,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           console.info('[DL] search_results', { track: track.title, total: results.length, viable: viable.length, ranked: ranked.length })
           if (ranked.length === 0) {
             setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
-            addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
+            markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection })
             wsRef.current.removeEventListener('message', handler)
             return
           }
@@ -10708,7 +10748,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         if (curr?.status === 'searching') {
           wsRef.current?.removeEventListener('message', handler)
           clearVariantWatchdog()
-          addToPending({ artist: track.artist, title: track.title, source: 'discover', collection })
+          markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection })
           return { ...prev, [track.id]: { status: 'not_found', message: 'No encontrado' } }
         }
         return prev
