@@ -10721,7 +10721,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
     // Path 1 (preferido): si hay agente conectado, hacer search por el agente.
     // Ve los peers que Heroku no alcanza por NAT — mismos resultados que Nicotine+.
-    const useAgentSearch = downloadMode !== 'local' && agentConnected && agentHasSlsk
+    // NO depende de downloadMode: el search siempre conviene por agente; a dónde
+    // baja el archivo (FSA local / agente / Heroku) se decide después en dispatchPick.
+    const useAgentSearch = agentConnected && agentHasSlsk
     if (useAgentSearch) {
       console.info('[SEARCH] via=agent', { query, filename: track.title })
       agentFetch('slsk-search', {
