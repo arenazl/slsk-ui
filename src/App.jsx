@@ -6900,7 +6900,17 @@ function App() {
         }
       } catch { /* proxy failed */ }
       setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
-      setAgentRegistered(false)
+      // Agent isn't reachable RIGHT NOW (private IP, Tailscale, offline, dyno restart),
+      // but check Cloudinary for the durable "has ever registered" flag. This lets a
+      // tablet/phone on the same account toggle "Mi PC" mode even when the desktop is
+      // sleeping or behind NAT.
+      try {
+        const hasRes = await fetch(`${API_BASE}/api/agent/has?u=${encodeURIComponent(authUser.name)}`)
+        const hasData = await hasRes.json()
+        setAgentRegistered(!!hasData?.registered)
+      } catch {
+        setAgentRegistered(false)
+      }
       setAgentCheckDone(true)
     }
     checkAgent()
