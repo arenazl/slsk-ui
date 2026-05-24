@@ -6892,16 +6892,21 @@ function App() {
     if (!authUser) return
     AGENT_USER = authUser.name
     const connectAgent = async (mode, statusUrl, configFn) => {
-      const res = await fetch(statusUrl, { signal: AbortSignal.timeout(3000) })
+      // Timeout 8s: Heroku → Tailscale Funnel → agent local puede tardar ~2-3s,
+      // y queremos ser tolerantes en redes lentas. Antes 3s, fallaba seguido.
+      const res = await fetch(statusUrl, { signal: AbortSignal.timeout(8000) })
       if (res.ok) {
         AGENT_MODE = mode
         const status = await res.json()
         setAgentConnected(true); agentConnectedRef.current = true; AGENT_CONNECTED = true
         setAgentVersion(status.version || '')
         setAgentHasSlsk(!!status.slsk)
+        // Expongo en window para debug (F12 → window.__agentDebug)
+        window.__agentDebug = { connected: true, hasSlsk: !!status.slsk, version: status.version, mode }
         await configFn()
         return true
       }
+      window.__agentDebug = { connected: false, reason: `status ${res.status}`, mode }
       return false
     }
     // The proxy check is server-to-server (Heroku → agent), so it works from
@@ -10600,22 +10605,31 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Agregado a pendientes' } }))
       return
     }
-    // Beatport metadata viene con TODO el casting embedded ("Spiller, Sophie
-    // Ellis Bextor, William Kiss, Luke Alessi, not without friends" + title
-    // con 4 "feat. X" repetidos). Eso revienta la búsqueda en SoulSeek
-    // (queries gigantes → pocos peers responden). Limpiar agresivo:
-    //   - artist: solo el primer artista (los demás son featurings)
-    //   - title: quitar todos los "feat. X", brackets duplicados, y
-    //            etiquetas tipo "Extended Mix" que sí están en el nombre
-    //            real del archivo pero no ayudan a matchear más peers
+    // Beatport metadata viene con TODO el casting embedded + suffixes raros:
+    // "Music Is The Answer (Dancin' And Prancin') (Extended) (Dancin' And Prancin')".
+    // Esto rompe la búsqueda en SoulSeek (queries gigantes → pocos peers responden).
+    // Cleanup agresivo:
+    //   - artist: solo el primer (los demás son featurings)
+    //   - title: 1) quitar feat.X, 2) quitar suffixes (Extended Mix/Original Mix/etc),
+    //            3) dedupe grupos parentéticos (consecutivos o no),
+    //            4) quitar apóstrofos+brackets+comillas (rompen tokenizer SoulSeek)
     const firstArtist = (track.artist || '').split(/\s*(?:,|&|;|\sfeat\.?\s|\sft\.?\s|\sand\s|\sx\s)\s*/i)[0].trim()
-    const cleanedTitle = (track.title || '')
+    let cleanedTitle = (track.title || '')
       .replace(/\s*[\(\[]\s*feat\.?\s+[^)\]]*[\)\]]/gi, '')   // (feat. X) / [feat. X]
       .replace(/\s+feat\.?\s+[^(\[]+$/i, '')                    // trailing "feat. X..."
-      .replace(/(\([^)]*\)|\[[^\]]*\])\s*\1/g, '$1')           // grupos duplicados
-      .replace(/\s+/g, ' ')
-      .trim()
-    const query = `${firstArtist} - ${cleanedTitle}`.replace(/[()[\]{}]/g, '').replace(/\s+/g, ' ').trim()
+      .replace(/\s*[\(\[]\s*(?:extended|original|radio|club)\s*(?:mix|edit)?\s*[\)\]]/gi, '') // (Extended Mix), (Radio Edit), etc.
+    // Dedupe TODOS los grupos parentéticos iguales (no solo consecutivos)
+    const seenGroups = new Set()
+    cleanedTitle = cleanedTitle.replace(/[\(\[][^)\]]+[\)\]]/g, (m) => {
+      const key = m.toLowerCase().replace(/\s+/g, ' ')
+      if (seenGroups.has(key)) return ''
+      seenGroups.add(key)
+      return m
+    })
+    cleanedTitle = cleanedTitle.replace(/\s+/g, ' ').trim()
+    // Sacar TODO lo que no sea letra/número/espacio (apóstrofos, comillas,
+    // brackets) — el tokenizer AND de SoulSeek trata cada uno como token aparte.
+    const query = `${firstArtist} - ${cleanedTitle}`.replace(/[^\p{L}\p{N}\s\-]/gu, '').replace(/\s+/g, ' ').trim()
     setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'searching', message: `Buscando...` } }))
 
     // Ranked list of variants to try in order (calidad → fuentes). Filled
