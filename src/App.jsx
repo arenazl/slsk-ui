@@ -7641,8 +7641,29 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [demoVideoOpen, setDemoVideoOpen] = useState(false)
   const [agentInstallOpen, setAgentInstallOpen] = useState(false)
+  // `auto` makes the modal sticky (no backdrop dismiss) so first-timers
+  // can't accidentally close it before reading the steps. Manual opens
+  // (topbar icon click) keep the click-outside-to-close behavior.
+  const [agentInstallAuto, setAgentInstallAuto] = useState(false)
   const requireLogin = () => { if (!authUser) { setLoginModalOpen(true); return false } return true }
   useEffect(() => { window.requireLogin = requireLogin }, [authUser])
+
+  // Auto-onboarding: si el usuario está logueado pero no tiene agente
+  // conectado, mostrar el modal de instalación una vez. Se marca con
+  // localStorage para no spamear en cada refresh; vuelve a aparecer si
+  // borran el flag o cambian de PC.
+  useEffect(() => {
+    if (!authUser) return
+    if (agentConnected) return
+    if (IS_MOBILE_DEVICE) return // en mobile no hay agente
+    if (localStorage.getItem('agent_install_shown')) return
+    const t = setTimeout(() => {
+      setAgentInstallAuto(true)
+      setAgentInstallOpen(true)
+      localStorage.setItem('agent_install_shown', '1')
+    }, 2500)
+    return () => clearTimeout(t)
+  }, [authUser, agentConnected])
 
   // Gate: no auth → LoginScreen (with "Entrar como invitado" → Tutorial → demo login)
   if (!authUser && !showTutorial) {
@@ -7683,10 +7704,13 @@ function App() {
         </div>
       )}
       {agentInstallOpen && (
-        <div className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setAgentInstallOpen(false)}>
+        <div
+          className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => { if (!agentInstallAuto) setAgentInstallOpen(false) }}
+        >
           <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl bg-[var(--bg-panel)] border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
             <button
-              onClick={() => setAgentInstallOpen(false)}
+              onClick={() => { setAgentInstallOpen(false); setAgentInstallAuto(false) }}
               className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all"
               aria-label="Cerrar"
             >
@@ -7697,8 +7721,14 @@ function App() {
               <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 items-center justify-center mb-3 shadow-lg shadow-blue-500/30">
                 <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
               </div>
-              <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Instalá el agente local</h2>
-              <p className="text-sm text-[var(--text-muted)]">El agente corre en tu PC y maneja descargas + biblioteca local</p>
+              <h2 className="text-xl md:text-2xl font-bold text-white mb-1">
+                {agentInstallAuto ? '¡Bienvenido! Para empezar a bajar tracks…' : 'Instalá el agente local'}
+              </h2>
+              <p className="text-sm text-[var(--text-muted)]">
+                {agentInstallAuto
+                  ? 'Necesitás instalar el agente local en tu PC. Solo lleva 1 minuto.'
+                  : 'El agente corre en tu PC y maneja descargas + biblioteca local'}
+              </p>
             </div>
 
             {/* Heads-up about Windows warning */}
@@ -7741,6 +7771,13 @@ function App() {
                   <div className="text-xs text-[var(--text-muted)] mt-0.5">App arranca silenciosa. Vas a ver el icono ✨ en la bandeja del sistema (al lado del reloj).</div>
                 </div>
               </div>
+              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">5</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-[var(--text-primary)] font-semibold">Elegí la carpeta donde guardar la música</div>
+                  <div className="text-xs text-[var(--text-muted)] mt-0.5">La primera vez que descargás un tema, el agente pide una carpeta. Recomendado: <code className="px-1.5 py-0.5 rounded bg-white/10 text-xs font-mono">Música/groove-new</code>. Después se organiza solo por género.</div>
+                </div>
+              </div>
               <div className="flex gap-3 p-3 rounded-xl bg-green-500/10 border border-green-500/30">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/30 text-green-300 flex items-center justify-center">✓</div>
                 <div className="flex-1 min-w-0">
@@ -7748,6 +7785,14 @@ function App() {
                   <div className="text-xs text-green-200/80 mt-0.5">El indicador en la topbar de DJ Free App pasa a verde. Ya podés bajar tracks de SoulSeek.</div>
                 </div>
               </div>
+            </div>
+
+            {/* Animated arrow pointing to the download button below */}
+            <div className="flex flex-col items-center mb-2">
+              <div className="text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1">Empezá acá</div>
+              <svg className="w-6 h-6 text-blue-400 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
             </div>
 
             {/* Download buttons */}
