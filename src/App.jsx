@@ -10692,33 +10692,59 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       }, 90000)
     }
 
+    // Aplicar el ranking + dispatch a una lista de results — usado tanto
+    // por el flujo agente (HTTP directo) como por el server (WS).
+    const ingestResults = (results, source) => {
+      if (rankIdx >= 0) return  // ya estamos bajando
+      const hasDecentPeer = (r) => {
+        const srcs = Array.isArray(r.sources) && r.sources.length ? r.sources : [r]
+        return srcs.some(s => (s.queue || 0) <= 2000)
+      }
+      const viable = results.filter(hasDecentPeer)
+      const pool = viable.length ? viable : results
+      ranked = [...pool].sort((a, b) => {
+        const dq = qScore(b) - qScore(a)
+        if (dq) return dq
+        const ds = (b.source_count || 1) - (a.source_count || 1)
+        if (ds) return ds
+        return 0
+      })
+      console.info(`[DL] search_results via=${source}`, { track: track.title, total: results.length, viable: viable.length, ranked: ranked.length })
+      if (ranked.length === 0) {
+        setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
+        markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection })
+        wsRef.current?.removeEventListener('message', handler)
+        return
+      }
+      dispatchPick(0)
+    }
+
+    // Path 1 (preferido): si hay agente conectado, hacer search por el agente.
+    // Ve los peers que Heroku no alcanza por NAT — mismos resultados que Nicotine+.
+    const useAgentSearch = downloadMode !== 'local' && agentConnected && agentHasSlsk
+    if (useAgentSearch) {
+      console.info('[SEARCH] via=agent', { query, filename: track.title })
+      agentFetch('slsk-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, query, wait: 20 }),
+      }).then(async r => {
+        const data = await r.json()
+        if (!data.ok) throw new Error(data.error || 'agent search failed')
+        ingestResults(data.results || [], 'agent')
+      }).catch(err => {
+        // Fallback al server si el agente falla
+        console.warn('[SEARCH] agent failed, falling back to server', err?.message || err)
+        wsRef.current?.send(JSON.stringify({ type: 'search_slsk', username, password, query }))
+      })
+    }
+
     // Listen for search results + download progress
     const handler = (e) => {
       try {
         const data = JSON.parse(e.data)
         if (data.type === 'search_results' && rankIdx < 0) {
-          const results = data.results || []
-          const hasDecentPeer = (r) => {
-            const srcs = Array.isArray(r.sources) && r.sources.length ? r.sources : [r]
-            return srcs.some(s => (s.queue || 0) <= 2000)
-          }
-          const viable = results.filter(hasDecentPeer)
-          const pool = viable.length ? viable : results
-          ranked = [...pool].sort((a, b) => {
-            const dq = qScore(b) - qScore(a)
-            if (dq) return dq
-            const ds = (b.source_count || 1) - (a.source_count || 1)
-            if (ds) return ds
-            return 0
-          })
-          console.info('[DL] search_results', { track: track.title, total: results.length, viable: viable.length, ranked: ranked.length })
-          if (ranked.length === 0) {
-            setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
-            markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection })
-            wsRef.current.removeEventListener('message', handler)
-            return
-          }
-          dispatchPick(0)
+          ingestResults(data.results || [], 'server')
         }
         if (data.type === 'search_dl_status') {
           const fname = data.filename || ''
@@ -10746,12 +10772,17 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
     wsRef.current.addEventListener('message', handler)
 
-    // Send search
-    wsRef.current.send(JSON.stringify({
-      type: 'search_slsk',
-      username, password,
-      query,
-    }))
+    // Send search por WS solo si NO estamos usando el agente search.
+    // (Con agente, ya disparamos la búsqueda HTTP arriba — el handler WS
+    // queda igual para escuchar progress de download cuando el server
+    // sea el que baja, pero el search por server se evita.)
+    if (!useAgentSearch) {
+      wsRef.current.send(JSON.stringify({
+        type: 'search_slsk',
+        username, password,
+        query,
+      }))
+    }
 
     // Timeout after 160s. Must exceed server worst-case: up to 3 queries ×
     // (MANUAL_SEARCH_WAIT 35s + MANUAL_GRACE_WAIT 10s) = 135s, plus semaphore
