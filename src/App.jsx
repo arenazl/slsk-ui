@@ -10599,10 +10599,22 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Agregado a pendientes' } }))
       return
     }
-    // Dedupe consecutive identical parenthetical groups before stripping brackets
-    // (charts sometimes return "Title (feat. X) (feat. X)" — search needs clean text)
-    const cleanTitle = (track.title || '').replace(/(\([^)]*\)|\[[^\]]*\])\s*\1/g, '$1')
-    const query = `${track.artist} - ${cleanTitle}`.replace(/[()[\]{}]/g, '')
+    // Beatport metadata viene con TODO el casting embedded ("Spiller, Sophie
+    // Ellis Bextor, William Kiss, Luke Alessi, not without friends" + title
+    // con 4 "feat. X" repetidos). Eso revienta la búsqueda en SoulSeek
+    // (queries gigantes → pocos peers responden). Limpiar agresivo:
+    //   - artist: solo el primer artista (los demás son featurings)
+    //   - title: quitar todos los "feat. X", brackets duplicados, y
+    //            etiquetas tipo "Extended Mix" que sí están en el nombre
+    //            real del archivo pero no ayudan a matchear más peers
+    const firstArtist = (track.artist || '').split(/\s*(?:,|&|;|\sfeat\.?\s|\sft\.?\s|\sand\s|\sx\s)\s*/i)[0].trim()
+    const cleanedTitle = (track.title || '')
+      .replace(/\s*[\(\[]\s*feat\.?\s+[^)\]]*[\)\]]/gi, '')   // (feat. X) / [feat. X]
+      .replace(/\s+feat\.?\s+[^(\[]+$/i, '')                    // trailing "feat. X..."
+      .replace(/(\([^)]*\)|\[[^\]]*\])\s*\1/g, '$1')           // grupos duplicados
+      .replace(/\s+/g, ' ')
+      .trim()
+    const query = `${firstArtist} - ${cleanedTitle}`.replace(/[()[\]{}]/g, '').replace(/\s+/g, ' ').trim()
     setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'searching', message: `Buscando...` } }))
 
     // Ranked list of variants to try in order (calidad → fuentes). Filled
