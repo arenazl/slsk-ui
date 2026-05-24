@@ -7929,6 +7929,7 @@ function App() {
   // Centralised gate. Anything trying to download (Discover row +, Set add,
   // pending retry, etc.) goes through this. Returns true if allowed.
   const ensureCanDownload = () => {
+    if (isAdmin) return true       // admins (look) skip all gates
     if (!userStatus) return true   // /me hasn't returned yet — let it pass
     if (userStatus.can_download) return true
     if (!userStatus.email_verified) {
@@ -7940,6 +7941,8 @@ function App() {
       setUpgradeModalOpen(true)
       return false
     }
+    // Fallback: nunca silencioso — el user al menos sabe que algo lo está bloqueando.
+    toast('No podés bajar temas en este momento. Revisá tu cuenta.', 'warning', 5000)
     return false
   }
   // Expose so children (DiscoverPage) can call it without prop drilling 5 layers.
