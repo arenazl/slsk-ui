@@ -4640,6 +4640,325 @@ function Tutorial({ onDone }) {
   )
 }
 
+// Visual onboarding wizard: 6 slides with mockups (download, Windows SmartScreen
+// dialog, expanded dialog, system tray, folder picker, success). Replaces the
+// flat numbered checklist with a guided flow that actually shows what the user
+// is going to see on their screen.
+function AgentInstallWizard({ auto, onClose }) {
+  const [step, setStep] = useState(0)
+  const totalSteps = 6
+  const next = () => setStep(s => Math.min(s + 1, totalSteps - 1))
+  const prev = () => setStep(s => Math.max(s - 1, 0))
+
+  const stepLabels = ['Descargá', 'Windows', 'Más info', 'Ejecutar', 'Carpeta', 'Listo']
+
+  return (
+    <div
+      className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+      onClick={() => { if (!auto) onClose() }}
+    >
+      <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl bg-[var(--bg-panel)] border border-white/10 rounded-3xl shadow-2xl animate-fade-in-up max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Close */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all"
+          aria-label="Cerrar"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+
+        {/* Header */}
+        <div className="px-6 md:px-8 pt-6 pb-4 border-b border-white/5">
+          <div className="text-[10px] uppercase tracking-wider text-blue-400 font-semibold mb-1">
+            Paso {step + 1} de {totalSteps} · {stepLabels[step]}
+          </div>
+          <h2 className="text-lg md:text-xl font-bold text-white">
+            {auto && step === 0 ? '¡Bienvenido! Para empezar a bajar tracks…' : 'Instalá el agente local'}
+          </h2>
+          {/* Progress bar */}
+          <div className="mt-3 h-1 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-300"
+              style={{ width: `${((step + 1) / totalSteps) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Slide content — fixed-height area so navigating between steps doesn't jump */}
+        <div className="flex-1 px-6 md:px-8 py-6 overflow-y-auto" key={step}>
+          <div className="animate-fade-in-up">
+            {step === 0 && <SlideDownload />}
+            {step === 1 && <SlideWindowsAlert />}
+            {step === 2 && <SlideMasInfo />}
+            {step === 3 && <SlideEjecutar />}
+            {step === 4 && <SlideFolder />}
+            {step === 5 && <SlideDone />}
+          </div>
+        </div>
+
+        {/* Footer nav */}
+        <div className="px-6 md:px-8 py-4 border-t border-white/5 flex items-center justify-between gap-3">
+          <button
+            onClick={prev}
+            disabled={step === 0}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            ← Anterior
+          </button>
+
+          {/* Dots */}
+          <div className="flex items-center gap-1.5">
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setStep(i)}
+                className={`rounded-full transition-all duration-200 ${
+                  i === step ? 'w-6 h-1.5 bg-blue-400' : 'w-1.5 h-1.5 bg-white/20 hover:bg-white/40'
+                }`}
+                aria-label={`Ir al paso ${i + 1}`}
+              />
+            ))}
+          </div>
+
+          {step < totalSteps - 1 ? (
+            <button
+              onClick={next}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:brightness-110 transition-all active:scale-95"
+            >
+              Siguiente →
+            </button>
+          ) : (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-green-500 to-emerald-500 hover:brightness-110 transition-all active:scale-95"
+            >
+              ¡Listo!
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Slide 1 — pulsing download button mockup pointing to the real CTA below.
+function SlideDownload() {
+  return (
+    <div className="text-center">
+      <h3 className="text-base md:text-lg font-bold text-white mb-2">Bajá el agente para Windows</h3>
+      <p className="text-sm text-gray-400 mb-6">Apretá el botón. Se va a guardar en tu carpeta <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-white/10">Descargas</span>.</p>
+
+      {/* Browser-like mockup with the actual download button highlighted */}
+      <div className="mx-auto max-w-md rounded-xl bg-slate-900 border border-white/10 shadow-2xl overflow-hidden">
+        <div className="px-3 py-2 bg-slate-950 border-b border-white/5 flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
+          </div>
+          <div className="flex-1 mx-3 px-2 py-1 rounded bg-white/5 text-[10px] text-gray-400 text-left">djfreeapp.ar</div>
+        </div>
+        <div className="p-6 flex items-center justify-center">
+          <a
+            href="https://djfreeapp.ar/GrooveSyncAgent.exe"
+            className="group relative inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold shadow-lg shadow-blue-500/40 transition-all hover:scale-105 active:scale-95"
+            style={{ background: 'linear-gradient(135deg, #00b1ea, #0080c9)' }}
+          >
+            <span className="absolute inset-0 rounded-xl bg-blue-400/40 blur-xl animate-pulse" />
+            <svg className="relative w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+            <span className="relative">Descargar para Windows</span>
+          </a>
+        </div>
+        {/* Fake download bar at the bottom */}
+        <div className="px-3 py-2 bg-slate-950 border-t border-white/5 flex items-center gap-2 text-[10px] text-gray-500">
+          <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span>GrooveSyncAgent.exe</span>
+          <span className="ml-auto text-blue-400">Descargando…</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Slide 2 — mockup of the Windows SmartScreen blue dialog (initial state).
+function SlideWindowsAlert() {
+  return (
+    <div className="text-center">
+      <h3 className="text-base md:text-lg font-bold text-white mb-2">Windows va a mostrar este aviso</h3>
+      <p className="text-sm text-gray-400 mb-6">
+        <strong className="text-amber-300">No te asustes</strong> — es normal en apps nuevas. <span className="text-white font-semibold">No es virus</span>.
+      </p>
+
+      {/* Mockup of SmartScreen */}
+      <div className="mx-auto max-w-md rounded-xl shadow-2xl overflow-hidden" style={{ background: '#1f6ce0' }}>
+        <div className="px-5 py-4 text-left">
+          <div className="text-white text-base font-semibold mb-2">Windows protegió tu PC</div>
+          <p className="text-blue-100 text-xs leading-relaxed mb-4">
+            Microsoft Defender SmartScreen impidió el inicio de una aplicación no reconocida. La ejecución de esta aplicación puede poner en riesgo el PC.
+          </p>
+          <p className="text-blue-100 text-[10px] mb-1"><span className="text-blue-200">Aplicación:</span> GrooveSyncAgent.exe</p>
+          <p className="text-blue-100 text-[10px]"><span className="text-blue-200">Editor:</span> Editor desconocido</p>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-end gap-2 bg-blue-700/40">
+          <button className="px-4 py-1.5 text-xs text-white bg-blue-800/50 rounded">No ejecutar</button>
+        </div>
+      </div>
+
+      <p className="mt-4 text-xs text-gray-400">En el próximo paso te muestro cómo expandirlo.</p>
+    </div>
+  )
+}
+
+// Slide 3 — same dialog with "Más información" highlighted with arrow/ring.
+function SlideMasInfo() {
+  return (
+    <div className="text-center">
+      <h3 className="text-base md:text-lg font-bold text-white mb-2">Click en <span className="text-blue-300">"Más información"</span></h3>
+      <p className="text-sm text-gray-400 mb-6">Es un texto chico arriba en el cuadro azul. Lo expande con un nuevo botón verde.</p>
+
+      <div className="mx-auto max-w-md rounded-xl shadow-2xl overflow-hidden relative" style={{ background: '#1f6ce0' }}>
+        <div className="px-5 py-4 text-left">
+          <div className="flex items-start justify-between mb-2">
+            <div className="text-white text-base font-semibold">Windows protegió tu PC</div>
+            {/* Highlighted "Más información" link */}
+            <div className="relative">
+              <span className="absolute inset-0 -m-1.5 rounded bg-yellow-400/40 animate-pulse" />
+              <button className="relative text-yellow-200 text-xs underline font-semibold">Más información</button>
+            </div>
+          </div>
+          <p className="text-blue-100 text-xs leading-relaxed mb-4">
+            Microsoft Defender SmartScreen impidió el inicio de una aplicación no reconocida.
+          </p>
+          <p className="text-blue-100 text-[10px] mb-1"><span className="text-blue-200">Aplicación:</span> GrooveSyncAgent.exe</p>
+          <p className="text-blue-100 text-[10px]"><span className="text-blue-200">Editor:</span> Editor desconocido</p>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-end gap-2 bg-blue-700/40">
+          <button className="px-4 py-1.5 text-xs text-white bg-blue-800/50 rounded">No ejecutar</button>
+        </div>
+      </div>
+
+      {/* Pointer */}
+      <div className="mt-4 inline-flex items-center gap-2 text-xs text-yellow-300 font-semibold">
+        <svg className="w-4 h-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7"/></svg>
+        Buscalo arriba a la derecha
+      </div>
+    </div>
+  )
+}
+
+// Slide 4 — same dialog expanded, "Ejecutar de todos modos" highlighted.
+function SlideEjecutar() {
+  return (
+    <div className="text-center">
+      <h3 className="text-base md:text-lg font-bold text-white mb-2">Click en <span className="text-green-300">"Ejecutar de todos modos"</span></h3>
+      <p className="text-sm text-gray-400 mb-6">Aparece un botón nuevo cuando expandiste "Más información". Apretalo y listo.</p>
+
+      <div className="mx-auto max-w-md rounded-xl shadow-2xl overflow-hidden" style={{ background: '#1f6ce0' }}>
+        <div className="px-5 py-4 text-left">
+          <div className="text-white text-base font-semibold mb-2">Windows protegió tu PC</div>
+          <p className="text-blue-100 text-xs leading-relaxed mb-3">
+            Microsoft Defender SmartScreen impidió el inicio de una aplicación no reconocida.
+          </p>
+          <p className="text-blue-100 text-[10px] mb-1"><span className="text-blue-200">Aplicación:</span> GrooveSyncAgent.exe</p>
+          <p className="text-blue-100 text-[10px]"><span className="text-blue-200">Editor:</span> Editor desconocido</p>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-end gap-2 bg-blue-700/40">
+          <div className="relative">
+            <span className="absolute inset-0 -m-1.5 rounded bg-green-400/40 animate-pulse" />
+            <button className="relative px-4 py-1.5 text-xs text-white bg-green-600 rounded font-semibold ring-2 ring-green-300">
+              Ejecutar de todos modos
+            </button>
+          </div>
+          <button className="px-4 py-1.5 text-xs text-white bg-blue-800/50 rounded">No ejecutar</button>
+        </div>
+      </div>
+
+      <div className="mt-5 mx-auto max-w-md p-3 rounded-xl bg-white/[0.03] border border-white/5 text-left">
+        <div className="text-xs text-white font-semibold mb-1">El agente arranca silencioso</div>
+        <p className="text-[11px] text-gray-400">No abre ninguna ventana. Vas a ver un icono ✨ chiquito en la bandeja del sistema (al lado del reloj de Windows).</p>
+        {/* System tray mockup */}
+        <div className="mt-3 px-3 py-1.5 rounded bg-slate-900 border border-white/5 flex items-center justify-end gap-2 text-[10px] text-gray-400">
+          <span>📶</span><span>🔊</span>
+          <span className="relative inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200 font-semibold">
+            <span className="absolute -inset-0.5 rounded bg-blue-400/30 animate-ping" />
+            <span className="relative">✨ GrooveSync</span>
+          </span>
+          <span>21:34</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Slide 5 — folder picker mockup.
+function SlideFolder() {
+  return (
+    <div className="text-center">
+      <h3 className="text-base md:text-lg font-bold text-white mb-2">Elegí la carpeta de música</h3>
+      <p className="text-sm text-gray-400 mb-6">
+        La primera vez que descargues un tema, el agente pide una carpeta. Recomendamos <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-white/10 text-blue-300">Música/groove-new</span>.
+      </p>
+
+      <div className="mx-auto max-w-md rounded-xl bg-slate-900 border border-white/10 shadow-2xl overflow-hidden text-left">
+        <div className="px-3 py-2 bg-slate-950 border-b border-white/5 flex items-center gap-2 text-xs text-gray-400">
+          <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+          <span>Seleccionar carpeta</span>
+        </div>
+        <div className="p-4 space-y-1.5 text-xs">
+          <div className="flex items-center gap-2 px-2 py-1 rounded text-gray-400">
+            <span>📁</span><span>Documentos</span>
+          </div>
+          <div className="flex items-center gap-2 px-2 py-1 rounded text-gray-400">
+            <span>📁</span><span>Descargas</span>
+          </div>
+          <div className="flex items-center gap-2 px-2 py-1 rounded bg-blue-500/15 ring-1 ring-blue-400/40 text-blue-200 font-semibold relative">
+            <span className="absolute inset-0 rounded bg-blue-400/10 animate-pulse" />
+            <span className="relative">📁</span>
+            <span className="relative">Música</span>
+            <span className="relative ml-auto text-[10px] text-blue-300">→ groove-new</span>
+          </div>
+          <div className="flex items-center gap-2 px-2 py-1 rounded text-gray-400">
+            <span>📁</span><span>Imágenes</span>
+          </div>
+        </div>
+        <div className="px-3 py-2 border-t border-white/5 flex justify-end gap-2">
+          <button className="px-3 py-1.5 text-xs text-gray-400 rounded">Cancelar</button>
+          <button className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded font-semibold">Seleccionar carpeta</button>
+        </div>
+      </div>
+
+      <p className="mt-4 text-xs text-gray-400">Después se organiza solo por género: Tech House, Reggaeton, Cumbia, etc.</p>
+    </div>
+  )
+}
+
+// Slide 6 — success: green check, topbar indicator turns green.
+function SlideDone() {
+  return (
+    <div className="text-center">
+      <div className="inline-flex w-16 h-16 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 items-center justify-center mb-4 shadow-lg shadow-green-500/30">
+        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
+      </div>
+      <h3 className="text-xl md:text-2xl font-bold text-white mb-2">¡Listo!</h3>
+      <p className="text-sm text-gray-400 mb-6">El indicador en la topbar de DJ Free App va a pasar a verde.</p>
+
+      {/* Mockup of the topbar indicator */}
+      <div className="mx-auto max-w-md p-4 rounded-xl bg-slate-900 border border-white/10 shadow-xl">
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1">Estado</span>
+          <span className="w-8 h-8 flex items-center justify-center rounded-lg border border-green-500/30 bg-green-500/15 text-green-400">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          </span>
+          <span className="text-xs font-semibold text-green-400">Conectado</span>
+        </div>
+        <p className="mt-3 text-xs text-gray-400 text-center">Ya podés bajar tracks de SoulSeek a tu PC.</p>
+      </div>
+
+      <p className="mt-5 text-[10px] text-gray-500">El agente solo se conecta a tu carpeta de música. No envía ningún dato a terceros.</p>
+    </div>
+  )
+}
+
 function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
   const [mode, setMode] = useState('register') // 'login' | 'register' — register first by default
   const [username, setUsername] = useState('')
@@ -7704,126 +8023,10 @@ function App() {
         </div>
       )}
       {agentInstallOpen && (
-        <div
-          className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => { if (!agentInstallAuto) setAgentInstallOpen(false) }}
-        >
-          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-2xl bg-[var(--bg-panel)] border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => { setAgentInstallOpen(false); setAgentInstallAuto(false) }}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all"
-              aria-label="Cerrar"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-
-            <div className="text-center mb-5">
-              <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 items-center justify-center mb-3 shadow-lg shadow-blue-500/30">
-                <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
-              </div>
-              <h2 className="text-xl md:text-2xl font-bold text-white mb-1">
-                {agentInstallAuto ? '¡Bienvenido! Para empezar a bajar tracks…' : 'Instalá el agente local'}
-              </h2>
-              <p className="text-sm text-[var(--text-muted)]">
-                {agentInstallAuto
-                  ? 'Necesitás instalar el agente local en tu PC. Solo lleva 1 minuto.'
-                  : 'El agente corre en tu PC y maneja descargas + biblioteca local'}
-              </p>
-            </div>
-
-            {/* Heads-up about Windows warning */}
-            <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                <div className="text-xs md:text-sm text-amber-100">
-                  <strong className="text-amber-300">Windows va a mostrar un aviso de seguridad.</strong> Es normal — la app no está firmada todavía con cert comercial. <strong>No es virus</strong>, solo Windows siendo cauto. Te dejo los pasos abajo.
-                </div>
-              </div>
-            </div>
-
-            {/* Step-by-step with mock screenshots */}
-            <div className="space-y-3 mb-5">
-              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">1</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-[var(--text-primary)] font-semibold">Bajá el .exe</div>
-                  <div className="text-xs text-[var(--text-muted)] mt-0.5">Click en el botón abajo. Se baja a tu carpeta Descargas.</div>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">2</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-[var(--text-primary)] font-semibold">Abrí <code className="px-1.5 py-0.5 rounded bg-white/10 text-xs font-mono">GrooveSyncAgent.exe</code></div>
-                  <div className="text-xs text-[var(--text-muted)] mt-0.5">Doble click. Aparece un cuadro azul: <span className="font-semibold text-white">"Windows protegió tu PC"</span></div>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">3</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-[var(--text-primary)] font-semibold">Click en <span className="text-blue-300">"Más información"</span></div>
-                  <div className="text-xs text-[var(--text-muted)] mt-0.5">Es un texto chiquito en el cuadro azul. Lo expande con un nuevo botón.</div>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-sm font-bold">4</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-[var(--text-primary)] font-semibold">Click en <span className="text-green-300">"Ejecutar de todos modos"</span></div>
-                  <div className="text-xs text-[var(--text-muted)] mt-0.5">App arranca silenciosa. Vas a ver el icono ✨ en la bandeja del sistema (al lado del reloj).</div>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">5</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-[var(--text-primary)] font-semibold">Elegí la carpeta donde guardar la música</div>
-                  <div className="text-xs text-[var(--text-muted)] mt-0.5">La primera vez que descargás un tema, el agente pide una carpeta. Recomendado: <code className="px-1.5 py-0.5 rounded bg-white/10 text-xs font-mono">Música/groove-new</code>. Después se organiza solo por género.</div>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-xl bg-green-500/10 border border-green-500/30">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/30 text-green-300 flex items-center justify-center">✓</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-green-200 font-semibold">Listo</div>
-                  <div className="text-xs text-green-200/80 mt-0.5">El indicador en la topbar de DJ Free App pasa a verde. Ya podés bajar tracks de SoulSeek.</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Animated arrow pointing to the download button below */}
-            <div className="flex flex-col items-center mb-2">
-              <div className="text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1">Empezá acá</div>
-              <svg className="w-6 h-6 text-blue-400 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-            </div>
-
-            {/* Download buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <a
-                href="https://djfreeapp.ar/GrooveSyncAgent.exe"
-                className="group relative overflow-hidden rounded-2xl px-5 py-4 text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
-                style={{ background: 'linear-gradient(135deg, #00b1ea, #0080c9)' }}
-              >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
-                <div className="relative flex items-center justify-center gap-2">
-                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
-                  <span className="font-semibold text-white">Descargar para Windows</span>
-                </div>
-              </a>
-              <a
-                href="https://djfreeapp.ar/GrooveSyncAgent-macOS.zip"
-                className="group relative overflow-hidden rounded-2xl px-5 py-4 text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
-                style={{ background: 'linear-gradient(135deg, #4b5563, #1f2937)' }}
-              >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
-                <div className="relative flex items-center justify-center gap-2">
-                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-                  <span className="font-semibold text-white">Descargar para Mac</span>
-                </div>
-              </a>
-            </div>
-
-            <p className="mt-4 text-center text-[10px] text-[var(--text-muted)]">El agente solo se conecta a tu carpeta de música. No envía ningún dato a terceros.</p>
-          </div>
-        </div>
+        <AgentInstallWizard
+          auto={agentInstallAuto}
+          onClose={() => { setAgentInstallOpen(false); setAgentInstallAuto(false) }}
+        />
       )}
       {upgradeModalOpen && (
         <div className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => !trialExpired && setUpgradeModalOpen(false)}>
