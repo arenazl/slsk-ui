@@ -5190,7 +5190,7 @@ function LoginScreen({ onLogin, isModal = false, onClose, onGuestStart }) {
 // auto-download, dynamic library + BPM/Key analysis, set automation,
 // Rekordbox export, CTA. ~25s loop, all Tailwind + CSS keyframes.
 // =====================================================================
-function DemoShowcase() {
+function DemoShowcase({ onDone }) {
   const SCENES = 7
   // Per user: pace slower, dwell longer on Set Builder (Export) where the
   // playlist-assistant features need to be enumerated. Total ~70s, fits
@@ -5258,6 +5258,29 @@ function DemoShowcase() {
       {scene === 4 && <DemoSetBuilder />}
       {scene === 5 && <DemoExport />}
       {scene === 6 && <DemoCTA />}
+
+      {/* Skip button — only when used as guest onboarding */}
+      {onDone && (
+        <button
+          onClick={onDone}
+          className="absolute top-3 left-3 z-30 px-3 h-9 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/10 flex items-center gap-1.5 text-white text-xs font-semibold transition-all active:scale-95"
+          aria-label="Saltar demo y entrar a la app"
+        >
+          Saltar
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+        </button>
+      )}
+
+      {/* CTA "Empezar" — overlay on final scene when used as guest onboarding */}
+      {onDone && scene === SCENES - 1 && (
+        <button
+          onClick={onDone}
+          className="absolute left-1/2 -translate-x-1/2 bottom-12 z-40 px-7 py-3 rounded-2xl text-base font-bold text-white shadow-2xl shadow-blue-500/40 bg-gradient-to-br from-blue-500 to-purple-600 hover:brightness-110 active:scale-95 transition-all animate-fade-in flex items-center gap-2"
+        >
+          Empezar a usar la app
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+        </button>
+      )}
 
       {/* Scene progress indicators */}
       <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
@@ -7942,10 +7965,16 @@ function App() {
   // Admin can edit settings — only the "look" account.
   const isAdmin = !!authUser && (authUser.user === 'look' || authUser.user === 'Look' || authUser.role === 'admin')
 
-  // Tutorial state — triggered explicitly from LoginScreen "Entrar como invitado".
+  // Guest onboarding state — triggered from LoginScreen "Entrar como invitado".
+  // Renders the DemoShowcase (7-scene animated demo) full-screen; click "Saltar"
+  // or "Empezar a usar la app" auto-logins as demo. The legacy `Tutorial`
+  // slide-deck is still available from the user menu "Ver tutorial".
   const [showTutorial, setShowTutorial] = useState(false)
   const dismissTutorial = async () => {
     setShowTutorial(false)
+    // If the user is already logged in (re-watching the demo from the menu),
+    // don't re-login — they keep their current session.
+    if (authUser) return
     // After tutorial, auto-login as demo + mark trial start.
     try {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
@@ -8002,7 +8031,13 @@ function App() {
     />
   }
   if (showTutorial) {
-    return <Tutorial onDone={dismissTutorial} />
+    return (
+      <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center p-3 md:p-6">
+        <div className="w-full max-w-6xl">
+          <DemoShowcase onDone={dismissTutorial} />
+        </div>
+      </div>
+    )
   }
 
   // Demo can navigate everywhere — only the Subscribirse button distinguishes it
