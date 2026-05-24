@@ -28,10 +28,36 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // Register service worker for PWA install support
+      // Register service worker for PWA install support + auto-update.
+      // El cliente JAMÁS debería tener que "unregister" o "clear storage"
+      // para ver una versión nueva. Esto detecta updates y recarga solo.
       if ('serviceWorker' in navigator) {
+        let _reloading = false
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js').catch(() => {})
+          navigator.serviceWorker.register('/service-worker.js').then((reg) => {
+            // Cuando hay un SW nuevo "installed" pero esperando, lo activamos.
+            const activateNewWorker = (worker) => {
+              if (!worker) return
+              worker.addEventListener('statechange', () => {
+                if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                  worker.postMessage({ type: 'SKIP_WAITING' })
+                }
+              })
+            }
+            // Caso 1: en este momento ya hay uno installing.
+            activateNewWorker(reg.installing)
+            // Caso 2: un nuevo SW aparece mientras la pestaña está abierta.
+            reg.addEventListener('updatefound', () => activateNewWorker(reg.installing))
+            // Forzar check periódico (cada 60s) por si el browser no lo hace.
+            setInterval(() => { reg.update().catch(() => {}) }, 60000)
+          }).catch(() => {})
+          // Cuando el SW nuevo toma control, recargar UNA vez para servir
+          // los assets nuevos (sin esto el browser sigue mostrando el viejo).
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (_reloading) return
+            _reloading = true
+            window.location.reload()
+          })
         })
       }
     </script>

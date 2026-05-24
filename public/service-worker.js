@@ -9,6 +9,14 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
 
+// Permite que la UI fuerce activación de un SW nuevo sin esperar a que
+// se cierren todas las pestañas (clásico tema de PWAs).
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
+})
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
