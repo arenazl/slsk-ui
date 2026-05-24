@@ -10618,7 +10618,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
 
     const qScore = (r) => {
-      const ext = (r.ext || '').toLowerCase()
+      // r.ext viene del server pero a veces aioslsk devuelve 'mp3' default
+      // incluso para FLAC. Confiamos en la extensión REAL del filename.
+      const fnameExt = ((r.filename || '').match(/\.([a-zA-Z0-9]+)$/) || [, ''])[1].toLowerCase()
+      const ext = fnameExt || (r.ext || '').toLowerCase()
       const br = r.bitrate || 0
       if (ext === 'flac' || ext === 'wav') return 1000
       if (ext === 'aiff' || ext === 'aif') return 900
