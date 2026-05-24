@@ -7987,6 +7987,7 @@ function App() {
   }
   // Expose so children (DiscoverPage) can call it without prop drilling 5 layers.
   useEffect(() => { window.__ensureCanDownload = ensureCanDownload }, [userStatus])
+  useEffect(() => { window.__markPendingFailure = markPendingFailure }, [pendingTracks, username])
 
   // Trial expired → open the upgrade modal (no redirect, user picks how to pay)
   useEffect(() => {
@@ -10646,7 +10647,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       if (idx >= ranked.length) {
         console.warn('[DL] all variants exhausted', { track: track.title, tried: ranked.length })
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: `Sin éxito en ${ranked.length} variantes` } }))
-        markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection })
+        (window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
         wsRef.current?.removeEventListener('message', handler)
         return
       }
@@ -10712,7 +10713,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       console.info(`[DL] search_results via=${source}`, { track: track.title, total: results.length, viable: viable.length, ranked: ranked.length })
       if (ranked.length === 0) {
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
-        markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection })
+        (window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
         wsRef.current?.removeEventListener('message', handler)
         return
       }
@@ -10796,7 +10797,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         if (curr?.status === 'searching') {
           wsRef.current?.removeEventListener('message', handler)
           clearVariantWatchdog()
-          markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection })
+          (window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
           return { ...prev, [track.id]: { status: 'not_found', message: 'No encontrado' } }
         }
         return prev
