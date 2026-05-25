@@ -8596,9 +8596,10 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain" />
+          <div className="flex items-baseline gap-2">
+            <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain self-center" />
             <span className="font-semibold text-base text-[var(--text-primary)] hidden lg:inline">DJ Free App</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] tracking-tight" title="Versión UI">v{__APP_VERSION__}</span>
           </div>
           <div className="hidden md:flex gap-1">
             {[
