@@ -10676,9 +10676,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result: best, app_user: authUser?.name || '', collection }))
       }
 
-      // downloadMode='local' forces WS path (file lands on this device).
-      // Otherwise prefer the agent path when reachable.
-      const useAgent = downloadMode !== 'local' && agentConnected && agentHasSlsk
+      // Si hay agente con aioslsk, SIEMPRE bajamos por agente — el server
+      // (Heroku) sufre el mismo problema NAT que en search (peers no contestan
+      // → timeouts y "ghost peers"). downloadMode 'local' antes forzaba WS,
+      // pero el agente baja a la misma PC, así que es equivalente sin NAT.
+      const useAgent = agentConnected && agentHasSlsk
       if (useAgent) {
         console.info('[DL] via=agent', { filename: best.filename, mode: downloadMode })
         agentFetch('slsk-download', {
