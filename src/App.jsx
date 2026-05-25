@@ -1221,14 +1221,18 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     }
   }
 
-  const openFolder = async (folder) => {
+  const openFolder = async (folder, file) => {
+    // Si pasamos `file`, el agente hace `explorer /select,"path\file"` (Windows)
+    // o `open -R` (mac) — abre la carpeta CON el archivo resaltado.
+    // Sin `file` solo abre la carpeta sin marcar nada.
+    const fileQs = file ? `&file=${encodeURIComponent(file)}` : ''
     if (agentConnected) {
-      await agentFetch(`open-folder?folder=${encodeURIComponent(folder || '')}`)
+      await agentFetch(`open-folder?folder=${encodeURIComponent(folder || '')}${fileQs}`)
     } else {
       await fetch(`${API_BASE}/api/open-folder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: folder || '' }),
+        body: JSON.stringify({ folder: folder || '', file: file || '' }),
       })
     }
   }
@@ -2337,7 +2341,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               Preview continuo (30s c/u)
             </button>
             <button
-              onClick={() => { openFolder(ctxMenu.file?.subfolder || ctxMenu.file?.genre || ''); setCtxMenu(null) }}
+              onClick={() => { openFolder(ctxMenu.file?.subfolder || ctxMenu.file?.genre || '', ctxMenu.file?.filename || ctxMenu.file?.name || ''); setCtxMenu(null) }}
               className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
