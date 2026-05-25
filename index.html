@@ -28,6 +28,24 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
+      // ONE-TIME nuke del Service Worker viejo de la PWA. La logica antigua
+      // cacheaba bundles pre-2026-05-25 y no se autoactualizaba bien. Esta
+      // bandera "sw_nuked_v3" lo unregistra una sola vez por dispositivo,
+      // recarga y deja paso al SW nuevo (auto-update). No hace nada en
+      // visitas siguientes.
+      if ('serviceWorker' in navigator && !localStorage.getItem('sw_nuked_v3')) {
+        localStorage.setItem('sw_nuked_v3', '1')
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          if (regs.length === 0) return
+          return Promise.all(regs.map((r) => r.unregister())).then(() => {
+            if ('caches' in window) {
+              return caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+            }
+          }).then(() => window.location.reload())
+        }).catch(() => {})
+      }
+    </script>
+    <script>
       // Register service worker for PWA install support + auto-update.
       // El cliente JAMÁS debería tener que "unregister" o "clear storage"
       // para ver una versión nueva. Esto detecta updates y recarga solo.
