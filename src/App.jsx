@@ -9990,26 +9990,41 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         })
         if (hit) return hit
       }
-      // 2) Title-only exact
-      if (titleWords.has(t)) {
-        const hit = findInFilenames((fn, filename, meta) => norm(meta.title || '') === t)
-        if (hit) return hit
+      // De aca en adelante, exigimos que el artist del track aparezca en el
+      // filename o en meta.artist. Sin esto el matching laxo (substring o
+      // token overlap) genera FALSOS POSITIVOS cuando dos temas distintos
+      // comparten parte del titulo — ej "Hardt Antoine - Sing It Back" vs
+      // "Moloko - Sing It Back (Hardt Antoine Edit)". El user veia
+      // "Descargado" en Discover y al ir a la biblioteca no estaba.
+      if (!a) return null  // sin artist no podemos validar
+
+      const artistMatches = (filename, meta) => {
+        const ma = norm(meta?.artist || '')
+        if (ma && ma === a) return true
+        // Permitimos que el artist aparezca como substring del filename
+        // norm (cubre casos "Artist - Title.mp3" y "Title (Artist Edit).mp3")
+        const fn = norm(filename)
+        return fn.includes(a)
       }
-      // 3) artist+title concatenated matches any full filename
-      if (a) {
-        const hit = findInFilenames((fn) => fn === a + t || fn.includes(a + t))
-        if (hit) return hit
-      }
-      // 4) Substring: title of length ≥ 4 appearing inside any filename
+
+      // 2) artist+title concatenated matches filename norm
+      const hit3 = findInFilenames((fn, filename, meta) =>
+        artistMatches(filename, meta) && (fn === a + t || fn.includes(a + t))
+      )
+      if (hit3) return hit3
+      // 3) Substring: title ≥ 4 chars in filename AND artist tambien
       if (t.length >= 4) {
-        const hit = findInFilenames((fn) => fn.includes(t))
+        const hit = findInFilenames((fn, filename, meta) =>
+          fn.includes(t) && artistMatches(filename, meta)
+        )
         if (hit) return hit
       }
-      // 5) Token overlap: title+artist words with ≥ 70% matching any filename tokens
+      // 4) Token overlap ≥ 70% pero exigiendo artist match
       const trackTokens = [...tokens(track.artist || ''), ...tokens(track.title || '')]
       if (trackTokens.length >= 2) {
         const needed = Math.max(2, Math.ceil(trackTokens.length * 0.7))
-        for (const filename of Object.keys(libraryManifest)) {
+        for (const [filename, meta] of Object.entries(libraryManifest)) {
+          if (!artistMatches(filename, meta)) continue
           const fnTokens = new Set(tokens(filename))
           const matches = trackTokens.filter(w => fnTokens.has(w)).length
           if (matches >= needed) return filename
