@@ -10662,7 +10662,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           .catch(() => clearDiscoverAudio())
       }
       audio.play().catch(() => {
-        audio.onerror()
+        if (typeof audio.onerror === 'function') audio.onerror()
+        else clearDiscoverAudio()
       })
       setDiscoverAudio(audio, track)
     }
