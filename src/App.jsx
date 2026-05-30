@@ -6950,6 +6950,35 @@ function App() {
     return () => clearInterval(interval)
   }, [authUser])
 
+  // Auto-update del agente: cuando detectamos que la version local del
+  // agente es menor que la del manifest en djfreeapp.ar/agent/version.json,
+  // disparamos /api/restart al agente via tunel. El agente baja el .exe
+  // nuevo y se reinstala solo. Sin esto el cliente tenia que clickear
+  // manualmente 'Actualizar' en el menu del tray icon.
+  const autoUpdateFiredRef = useRef(false)
+  useEffect(() => {
+    if (!agentConnected || !agentVersion) return
+    if (autoUpdateFiredRef.current) return
+    const cmpVer = (a, b) => {
+      const aa = String(a).replace(/^v/, '').split('.').map(n => parseInt(n) || 0)
+      const bb = String(b).replace(/^v/, '').split('.').map(n => parseInt(n) || 0)
+      for (let i = 0; i < Math.max(aa.length, bb.length); i++) {
+        if ((aa[i] || 0) !== (bb[i] || 0)) return (aa[i] || 0) - (bb[i] || 0)
+      }
+      return 0
+    }
+    fetch('https://djfreeapp.ar/agent/version.json', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(m => {
+        if (!m?.version) return
+        if (cmpVer(m.version, agentVersion) <= 0) return
+        autoUpdateFiredRef.current = true
+        console.info('[AGENT-UPDATE]', { current: agentVersion, latest: m.version })
+        agentFetch('restart', { method: 'POST' }).catch(() => {})
+      })
+      .catch(() => {})
+  }, [agentConnected, agentVersion])
+
   // Decide initial download mode for this device once we know what's available.
   // - If the user has a registered agent AND the browser supports FSA → ask.
   // - If only one option is viable → pick it silently.
