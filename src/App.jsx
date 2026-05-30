@@ -11993,6 +11993,30 @@ function ShareView() {
       return null
     }
 
+    // Deezer cubre electronica / sets / Beatport que iTunes no tiene.
+    // Devuelve un shape compatible (previewUrl + artworkUrl + artist/track).
+    const tryDeezer = async () => {
+      const baseQ = slugQuery || `${artist} ${title}`.trim()
+      if (!baseQ) return null
+      const cleaned = stripSuffixes(baseQ)
+      const queries = cleaned && cleaned !== baseQ ? [baseQ, cleaned] : [baseQ]
+      for (const q of queries) {
+        try {
+          const res = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=1`)
+          const d = await res.json()
+          if (cancelled) return null
+          const r = d?.data?.[0]
+          if (r) return {
+            previewUrl: r.preview || '',
+            artworkUrl100: r.album?.cover_xl || r.album?.cover_big || r.album?.cover_medium || '',
+            artistName: r.artist?.name || '',
+            trackName: r.title || '',
+          }
+        } catch { /* try next */ }
+      }
+      return null
+    }
+
     const slugFromPathRaw = path.startsWith('/s/') ? decodeURIComponent(path.slice(3)) : ''
 
     const run = async () => {
@@ -12012,8 +12036,9 @@ function ShareView() {
           }
         } catch { /* fall through to iTunes */ }
       }
-      // 2) Fallback to iTunes lookup.
-      const r = await tryItunes()
+      // 2) Fallback iTunes -> Deezer. Deezer agarra electronica/Beatport
+      // que iTunes muchas veces no tiene.
+      const r = (await tryItunes()) || (await tryDeezer())
       if (cancelled || !r) { setLoadingPreview(false); return }
       if (!previewFromUrl && r.previewUrl) setPreviewUrl(r.previewUrl)
       if (!artwork && r.artworkUrl100) setArtwork(r.artworkUrl100.replace('100x100', '600x600'))
@@ -12111,11 +12136,18 @@ function ShareView() {
           <audio ref={audioRef} src={previewUrl || undefined} onEnded={() => setIsPlaying(false)} preload="auto" />
 
           <a
-            href={appUrl}
-            className="mt-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 text-white text-sm font-semibold flex items-center gap-2 transition-all duration-200 active:scale-95"
+            href="https://djfreeapp.ar/precios.html"
+            className="mt-2 px-6 py-3.5 rounded-xl text-white text-sm font-bold flex items-center gap-2 transition-all duration-200 active:scale-95 shadow-xl shadow-purple-900/40 hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #3b82f6, #a855f7, #ec4899)' }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-            Abrí DJ Free App
+            Empezá gratis con DJ Free App
+          </a>
+          <a
+            href={appUrl}
+            className="text-xs text-gray-400 hover:text-white underline underline-offset-4 transition-colors"
+          >
+            Ya tengo cuenta — entrar a la app
           </a>
         </div>
       </main>
