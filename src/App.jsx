@@ -10850,7 +10850,22 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       }).catch(err => {
         // Fallback al server si el agente falla
         console.warn('[SEARCH] agent failed, falling back to server', err?.message || err)
-        wsRef.current?.send(JSON.stringify({ type: 'search_slsk', username, password, query }))
+        const ws = wsRef.current
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'search_slsk', username, password, query }))
+        } else if (ws) {
+          // Esperar a que abra (max 5s) antes de mandar — evita
+          // InvalidStateError cuando el WS esta en CONNECTING.
+          const t0 = Date.now()
+          const waiter = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              clearInterval(waiter)
+              ws.send(JSON.stringify({ type: 'search_slsk', username, password, query }))
+            } else if (Date.now() - t0 > 5000 || ws.readyState >= 2) {
+              clearInterval(waiter)
+            }
+          }, 100)
+        }
       })
     }
 
