@@ -8066,24 +8066,24 @@ function App() {
     }
   }
 
-  // Auto-mostrar el tutorial UNA sola vez por sesion cuando un user logueado
-  // entra sin agente. Ref previene re-dispararse cuando dismissTutorial hace
-  // setAuthUser (auto-login as demo) o cuando agentConnected flapea — eso
-  // hacia que la ventana del tutorial reapareciera varias veces seguidas.
+  // Auto-mostrar el tutorial UNA vez por sesion al primer authUser.
+  // Solo deps=[authUser] — si poniamos agentConnected, el polling lo hacia
+  // oscilar y cancelaba el timer antes de los 3s, asi nunca se mostraba.
+  // Chequeamos agentConnectedRef.current al final del timer para no mostrarlo
+  // si en esos 3s el agente se llego a conectar.
   const tutorialShownThisSessionRef = useRef(false)
   useEffect(() => {
     if (!authUser) return
     if (IS_MOBILE_DEVICE) return
-    if (agentConnected) return
     if (tutorialShownThisSessionRef.current) return
     const t = setTimeout(() => {
-      if (!agentConnectedRef.current && !tutorialShownThisSessionRef.current) {
-        tutorialShownThisSessionRef.current = true
-        setShowTutorial(true)
-      }
+      if (tutorialShownThisSessionRef.current) return
+      if (agentConnectedRef.current) return  // se conecto en los 3s -> no spam
+      tutorialShownThisSessionRef.current = true
+      setShowTutorial(true)
     }, 3000)
     return () => clearTimeout(t)
-  }, [authUser, agentConnected])
+  }, [authUser])
 
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
