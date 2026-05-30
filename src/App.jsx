@@ -11976,45 +11976,23 @@ function ShareView() {
       .replace(/\s+/g, ' ')
       .trim()
 
-    const tryItunes = async () => {
-      const baseQ = slugQuery || `${artist} ${title}`.trim()
-      if (!baseQ) return null
-      const cleaned = stripSuffixes(baseQ)
-      const queries = cleaned && cleaned !== baseQ ? [baseQ, cleaned] : [baseQ]
-      for (const q of queries) {
-        try {
-          const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=1`)
-          const d = await res.json()
-          if (cancelled) return null
-          const r = d.results?.[0]
-          if (r) return r
-        } catch { /* try next */ }
-      }
-      return null
-    }
-
-    // Deezer cubre electronica / sets / Beatport que iTunes no tiene.
-    // Devuelve un shape compatible (previewUrl + artworkUrl + artist/track).
-    const tryDeezer = async () => {
-      const baseQ = slugQuery || `${artist} ${title}`.trim()
-      if (!baseQ) return null
-      const cleaned = stripSuffixes(baseQ)
-      const queries = cleaned && cleaned !== baseQ ? [baseQ, cleaned] : [baseQ]
-      for (const q of queries) {
-        try {
-          const res = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=1`)
-          const d = await res.json()
-          if (cancelled) return null
-          const r = d?.data?.[0]
-          if (r) return {
-            previewUrl: r.preview || '',
-            artworkUrl100: r.album?.cover_xl || r.album?.cover_big || r.album?.cover_medium || '',
-            artistName: r.artist?.name || '',
-            trackName: r.title || '',
-          }
-        } catch { /* try next */ }
-      }
-      return null
+    // Server-side resolve: el server prueba iTunes y despues Deezer.
+    // Deezer no tiene CORS abierto y sus URLs caducan, asi que el browser
+    // no las puede usar directo — el server las re-genera fresh cada vez.
+    const tryServerResolve = async (a, t) => {
+      try {
+        const q = new URLSearchParams({ artist: a || '', title: t || '' }).toString()
+        const res = await fetch(`${API_BASE}/api/share-preview-resolve?${q}`)
+        if (!res.ok) return null
+        const d = await res.json()
+        if (!d.ok) return null
+        return {
+          previewUrl: d.preview_url || '',
+          artworkUrl100: d.artwork_url || '',
+          artistName: d.artist || '',
+          trackName: d.title || '',
+        }
+      } catch { return null }
     }
 
     const slugFromPathRaw = path.startsWith('/s/') ? decodeURIComponent(path.slice(3)) : ''
@@ -12036,9 +12014,11 @@ function ShareView() {
           }
         } catch { /* fall through to iTunes */ }
       }
-      // 2) Fallback iTunes -> Deezer. Deezer agarra electronica/Beatport
-      // que iTunes muchas veces no tiene.
-      const r = (await tryItunes()) || (await tryDeezer())
+      // 2) Server-side fallback (iTunes -> Deezer con URL fresca).
+      // Pasamos el artist/title del meta si los tenemos, sino del slug.
+      const a = artist || slugQuery
+      const t = title || slugQuery
+      const r = await tryServerResolve(a, t)
       if (cancelled || !r) { setLoadingPreview(false); return }
       if (!previewFromUrl && r.previewUrl) setPreviewUrl(r.previewUrl)
       if (!artwork && r.artworkUrl100) setArtwork(r.artworkUrl100.replace('100x100', '600x600'))
