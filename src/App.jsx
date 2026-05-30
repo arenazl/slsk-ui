@@ -8015,29 +8015,67 @@ function App() {
   // or "Empezar a usar la app" auto-logins as demo. The legacy `Tutorial`
   // slide-deck is still available from the user menu "Ver tutorial".
   const [showTutorial, setShowTutorial] = useState(false)
+  // Highlight ring sobre el boton del agente (Windows o Mac segun SO) tras
+  // terminar el tutorial — para que el user nuevo vea de donde rebajar el
+  // .exe si la descarga automatica fue bloqueada por el browser.
+  const [agentBtnPulse, setAgentBtnPulse] = useState(false)
+  const isMacOS = /mac/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
   const dismissTutorial = async () => {
     setShowTutorial(false)
-    // If the user is already logged in (re-watching the demo from the menu),
-    // don't re-login — they keep their current session.
-    if (authUser) return
-    // After tutorial, auto-login as demo + mark trial start.
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: demoUser, password: demoPass }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        if (!localStorage.getItem('trial_start')) {
-          localStorage.setItem('trial_start', String(Date.now()))
+    localStorage.setItem('tutorial_seen', '1')
+
+    // Auto-login as demo si todavia no esta logueado.
+    if (!authUser) {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: demoUser, password: demoPass }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+          if (!localStorage.getItem('trial_start')) {
+            localStorage.setItem('trial_start', String(Date.now()))
+          }
+          localStorage.setItem('auth_token', data.token)
+          localStorage.setItem('auth_user', JSON.stringify(data))
+          setAuthUser(data)
         }
-        localStorage.setItem('auth_token', data.token)
-        localStorage.setItem('auth_user', JSON.stringify(data))
-        setAuthUser(data)
-      }
-    } catch {}
+      } catch {}
+    }
+
+    // Disparar descarga del agente segun SO (excepto mobile donde no aplica).
+    if (!IS_MOBILE_DEVICE && !agentConnected) {
+      const url = isMacOS
+        ? 'https://djfreeapp.ar/GrooveSyncAgent-macOS.zip'
+        : 'https://djfreeapp.ar/GrooveSyncAgent.exe'
+      try {
+        const a = document.createElement('a')
+        a.href = url
+        a.rel = 'noopener'
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+      } catch {}
+      setAgentBtnPulse(true)
+      setTimeout(() => setAgentBtnPulse(false), 10000)
+    }
   }
+
+  // Auto-mostrar el tutorial cada vez que un usuario logueado entra SIN el
+  // agente corriendo. El detect del agente es async (poll a localhost:9900),
+  // por eso esperamos 3s antes de decidir — si en ese plazo se conecta, no
+  // mostramos tutorial. Si pasa el plazo sin conectarse, se muestra. Sin el
+  // delay parpadearia el tutorial cada refresh aun teniendo agente OK.
+  useEffect(() => {
+    if (!authUser) return
+    if (IS_MOBILE_DEVICE) return
+    if (agentConnected) return
+    const t = setTimeout(() => {
+      if (!agentConnectedRef.current) setShowTutorial(true)
+    }, 3000)
+    return () => clearTimeout(t)
+  }, [authUser, agentConnected])
 
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -8664,7 +8702,7 @@ function App() {
             <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mr-1">Cliente Descargas</span>
             <a
               href="https://djfreeapp.ar/GrooveSyncAgent.exe"
-              className="relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
+              className={`relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 ${agentBtnPulse && !isMacOS ? 'ring-2 ring-blue-400 animate-pulse' : ''}`}
               title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows) — Click derecho para ver instrucciones'}
               onContextMenu={(e) => { e.preventDefault(); setAgentInstallOpen(true) }}
             >
@@ -8675,7 +8713,7 @@ function App() {
             </a>
             <a
               href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
-              className="relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
+              className={`relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 ${agentBtnPulse && isMacOS ? 'ring-2 ring-blue-400 animate-pulse' : ''}`}
               title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Mac) - Click derecho para Mac viejo'}
               onContextMenu={(e) => {
                 e.preventDefault()
