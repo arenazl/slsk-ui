@@ -7093,7 +7093,7 @@ function App() {
             fetch(`${API_BASE}/api/pending/remove`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user: username, tracks: [{ artist: data.track.artist, title: data.track.title }] }),
+              body: JSON.stringify({ user: authUser?.name, tracks: [{ artist: data.track.artist, title: data.track.title }] }),
             }).catch(() => {})
           }
         }
@@ -7187,7 +7187,7 @@ function App() {
             fetch(`${API_BASE}/api/pending/remove`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user: username, tracks: toRemove }),
+              body: JSON.stringify({ user: authUser?.name, tracks: toRemove }),
             }).catch(() => {})
           }
         }
@@ -7276,17 +7276,21 @@ function App() {
       } catch {}
       return
     }
-    fetch(`${API_BASE}/api/favorites?user=${encodeURIComponent(username)}`)
+    if (!authUser?.name) return
+    fetch(`${API_BASE}/api/favorites?user=${encodeURIComponent(authUser.name)}`)
       .then(r => r.json())
       .then(arr => { if (Array.isArray(arr)) setFavoriteTracks(arr) })
       .catch(() => {})
-  }, [username])
+  }, [authUser?.name])
 
-  // Load pending tracks from Cloudinary on mount, filter out ones already in library
+  // Load pending tracks from Cloudinary on mount, filter out ones already in library.
+  // CRITICO: usar authUser.name (Padula/Look/Rober), NO username (slsk-user
+  // hardcoded "arenazl" compartido). Antes el server devolvia los pending
+  // globales del arenazl -> padula veia los de Look y viceversa.
   useEffect(() => {
-    if (!username || !authUser?.name) return
+    if (!authUser?.name) return
     Promise.all([
-      fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(username)}`).then(r => r.json()).catch(() => []),
+      fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(authUser.name)}`).then(r => r.json()).catch(() => []),
       fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser.name)}&collection=${collection || 'edm'}`).then(r => r.json()).catch(() => ({})),
     ]).then(([pending, metadata]) => {
       if (!Array.isArray(pending)) return
@@ -7322,18 +7326,18 @@ function App() {
         fetch(`${API_BASE}/api/pending/remove`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user: username, tracks: dropped }),
+          body: JSON.stringify({ user: authUser?.name, tracks: dropped }),
         }).catch(() => {})
       }
     })
-  }, [username, authUser?.name, collection])
+  }, [authUser?.name, collection])
 
   const savePending = (tracks) => {
     setPendingTracks(tracks)
     fetch(`${API_BASE}/api/pending`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: username, tracks }),
+      body: JSON.stringify({ user: authUser?.name, tracks }),
     }).catch(() => {})
   }
 
@@ -7354,7 +7358,7 @@ function App() {
     fetch(`${API_BASE}/api/pending/add`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: username, track: entry }),
+      body: JSON.stringify({ user: authUser?.name, track: entry }),
     }).catch(() => {})
   }
 
@@ -7365,7 +7369,7 @@ function App() {
       fetch(`${API_BASE}/api/pending/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: username, tracks: [{ artist: target.artist, title: target.title }] }),
+        body: JSON.stringify({ user: authUser?.name, tracks: [{ artist: target.artist, title: target.title }] }),
       }).catch(() => {})
     }
   }
@@ -7393,7 +7397,7 @@ function App() {
         }
         fetch(`${API_BASE}/api/pending/add`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user: username, track: entry }),
+          body: JSON.stringify({ user: authUser?.name, track: entry }),
         }).catch(() => {})
         return [...prev, entry]
       }
@@ -7401,7 +7405,7 @@ function App() {
       if (next >= MAX_PENDING_ATTEMPTS) {
         fetch(`${API_BASE}/api/pending/remove`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user: username, tracks: [{ artist: prev[idx].artist, title: prev[idx].title }] }),
+          body: JSON.stringify({ user: authUser?.name, tracks: [{ artist: prev[idx].artist, title: prev[idx].title }] }),
         }).catch(() => {})
         toast(`No encontrado tras ${MAX_PENDING_ATTEMPTS} intentos: ${prev[idx].artist} - ${prev[idx].title}`, 'warning', 4000)
         return prev.filter((_, i) => i !== idx)
@@ -7413,14 +7417,14 @@ function App() {
   // Favorites: heart toggle on Discover rows. Used for filtering in Biblioteca —
   // never triggers a download. Persisted in Cloudinary per user, or localStorage for guests.
   const persistFavorites = (tracks) => {
-    if (!username) {
+    if (!authUser?.name) {
       try { localStorage.setItem('guest_favorites', JSON.stringify(tracks)) } catch {}
       return
     }
     fetch(`${API_BASE}/api/favorites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: username, tracks }),
+      body: JSON.stringify({ user: authUser.name, tracks }),
     }).catch(() => {})
   }
 
@@ -7492,7 +7496,7 @@ function App() {
       fetch(`${API_BASE}/api/pending/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: username, tracks: [{ artist: track.artist, title: track.title }] }),
+        body: JSON.stringify({ user: authUser?.name, tracks: [{ artist: track.artist, title: track.title }] }),
       }).catch(() => {})
     }
   }
@@ -8062,17 +8066,21 @@ function App() {
     }
   }
 
-  // Auto-mostrar el tutorial cada vez que un usuario logueado entra SIN el
-  // agente corriendo. El detect del agente es async (poll a localhost:9900),
-  // por eso esperamos 3s antes de decidir — si en ese plazo se conecta, no
-  // mostramos tutorial. Si pasa el plazo sin conectarse, se muestra. Sin el
-  // delay parpadearia el tutorial cada refresh aun teniendo agente OK.
+  // Auto-mostrar el tutorial UNA sola vez por sesion cuando un user logueado
+  // entra sin agente. Ref previene re-dispararse cuando dismissTutorial hace
+  // setAuthUser (auto-login as demo) o cuando agentConnected flapea — eso
+  // hacia que la ventana del tutorial reapareciera varias veces seguidas.
+  const tutorialShownThisSessionRef = useRef(false)
   useEffect(() => {
     if (!authUser) return
     if (IS_MOBILE_DEVICE) return
     if (agentConnected) return
+    if (tutorialShownThisSessionRef.current) return
     const t = setTimeout(() => {
-      if (!agentConnectedRef.current) setShowTutorial(true)
+      if (!agentConnectedRef.current && !tutorialShownThisSessionRef.current) {
+        tutorialShownThisSessionRef.current = true
+        setShowTutorial(true)
+      }
     }, 3000)
     return () => clearTimeout(t)
   }, [authUser, agentConnected])
@@ -10129,11 +10137,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       next.add(t.id)
       return next
     })
-    if (t.artist && t.title && username) {
+    if (t.artist && t.title && authUser?.name) {
       fetch(`${API_BASE}/api/pending/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: username, tracks: [{ artist: t.artist, title: t.title }] }),
+        body: JSON.stringify({ user: authUser.name, tracks: [{ artist: t.artist, title: t.title }] }),
       }).catch(() => {})
     }
     toast?.('Limpiado', 'success', 1200)
