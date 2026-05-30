@@ -11527,7 +11527,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           ref={discoverCtxRef}
           data-discover-ctx="1"
           className="hidden md:block fixed z-50 bg-[var(--bg-panel)] border border-gray-700 rounded-lg shadow-2xl py-1 min-w-48"
-          style={{ left: Math.min(discoverCtx.x, window.innerWidth - 220), top: Math.min(discoverCtx.y, window.innerHeight - 200) }}
+          style={{ left: Math.min(discoverCtx.x, window.innerWidth - 220), top: Math.min(discoverCtx.y, Math.max(8, window.innerHeight - 460)) }}
         >
           <div className="px-3 py-1.5 text-xs text-gray-500 border-b border-[var(--border-color)] truncate">
             {discoverCtx.track?.artist} - {discoverCtx.track?.title}
