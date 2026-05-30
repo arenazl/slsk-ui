@@ -8662,16 +8662,17 @@ function App() {
               only for the icon/border, never as a solid fill. */}
           <div className="hidden xl:flex items-center h-8 gap-1 px-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 flex-shrink-0">
             <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mr-1">Cliente Descargas</span>
-            <button
-              onClick={() => setAgentInstallOpen(true)}
+            <a
+              href="https://djfreeapp.ar/GrooveSyncAgent.exe"
               className="relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
-              title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows)'}
+              title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows) — Click derecho para ver instrucciones'}
+              onContextMenu={(e) => { e.preventDefault(); setAgentInstallOpen(true) }}
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
               </svg>
               <span className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
-            </button>
+            </a>
             <a
               href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
               className="relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
