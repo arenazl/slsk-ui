@@ -8189,6 +8189,7 @@ function App() {
   }, [authUser?.name])
   useEffect(() => {
     if (!authUser) return
+    if (localStorage.getItem('tutorial_seen')) return  // ya entró antes: no repetir el banner/tutorial
     if (IS_MOBILE_DEVICE) return
     if (tutorialShownThisSessionRef.current) return
     const t = setTimeout(() => {
@@ -8220,6 +8221,7 @@ function App() {
     if (!authUser) return
     if (agentConnected) return
     if (IS_MOBILE_DEVICE) return // en mobile no hay agente
+    if (localStorage.getItem('tutorial_seen')) return  // usuario que ya entró antes: sin auto-prompt de agente
     if (localStorage.getItem('agent_install_shown')) return
     const t = setTimeout(() => {
       setAgentInstallAuto(true)
