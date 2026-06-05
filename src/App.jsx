@@ -322,7 +322,7 @@ function TrackRow({ track, onCancel }) {
   )
 }
 
-const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://slsk-backend-7da97b8a965d.herokuapp.com'
+const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.southamerica-east1.run.app'
 
 // Stable per-browser device id + human label. Used para que el banner de
 // "temas en cola desde otros dispositivos" solo cuente los que realmente
@@ -402,7 +402,7 @@ function getAudioUrl(file, useAgent) {
 
 async function createAudioElement(file, useAgent) {
   // Prefer FSA: file lives on user's local disk via a directory handle.
-  // Heroku's /audio/ has no files (downloads land on the agent or in FSA),
+  // Cloud Run's /audio/ has no files (downloads land on the agent or in FSA),
   // so when the agent path is disabled (FSA-ready desktop), this is the only
   // way <audio> can actually find the bytes.
   if (await fsaBackend.ready()) {
@@ -1018,7 +1018,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       }).catch(() => {})
     }
     try {
-      // Fetch metadata from Heroku (Cloudinary = source of truth)
+      // Fetch metadata from Cloud Run (Cloudinary = source of truth)
       const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
       const metadata = await metaRes.json()
 
@@ -1060,7 +1060,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
       if (localFiles) {
         // Show EVERY file in the user's local storage, even if it's not in
-        // Heroku metadata. Metadata enriches title/artist/rating/key when
+        // Cloud Run metadata. Metadata enriches title/artist/rating/key when
         // available; otherwise we fall back to the filename so nothing gets
         // silently hidden (which caused Discover/Biblioteca inconsistencies).
         const merged = localFiles.map(f => {
@@ -1093,7 +1093,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         })
         if (id === fetchIdRef.current) setFiles(merged)
       } else {
-        // No FSA, no agent: fall back to Heroku metadata (read-only view)
+        // No FSA, no agent: fall back to Cloud Run metadata (read-only view)
         const libRes = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
         const data = await libRes.json()
         if (id === fetchIdRef.current) setFiles(data)
@@ -1206,7 +1206,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           body: JSON.stringify({ filename: file.filename }),
         })
       }
-      // Delete from Heroku manifest (Cloudinary)
+      // Delete from Cloud Run manifest (Cloudinary)
       await fetch(`${API_BASE}/api/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1292,14 +1292,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const detectKeys = async () => {
     setDetectingKeys(true)
     try {
-      // Get list of tracks without key from Heroku (Cloudinary manifest)
+      // Get list of tracks without key from Cloud Run (Cloudinary manifest)
       const res = await fetch(`${API_BASE}/api/detect-keys`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: authUser?.name || '' }) })
       const data = await res.json()
       const toDetect = data.to_detect || []
       if (toDetect.length === 0) { fetchLibrary(); return }
 
-      // For each track, fetch audio from agent and send to Heroku for analysis
-      // Heroku's detect-key endpoint now also updates Cloudinary manifest
+      // For each track, fetch audio from agent and send to Cloud Run for analysis
+      // Cloud Run's detect-key endpoint now also updates Cloudinary manifest
       let detected = 0
       for (const fname of toDetect) {
         try {
@@ -1331,7 +1331,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     setDeletingDupes(true)
     let agentDeleted = 0
     try {
-      // Agent removes the actual files locally; Heroku updates the Cloudinary
+      // Agent removes the actual files locally; Cloud Run updates the Cloudinary
       // manifest. Files added directly to disk may not be in the manifest, so
       // refresh whenever EITHER side reports a delete.
       if (agentConnected) {
@@ -1378,7 +1378,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         fetchLibrary() // Revert on error
         return
       }
-      // Update genre metadata on Heroku (Cloudinary)
+      // Update genre metadata on Cloud Run (Cloudinary)
       await fetch(`${API_BASE}/api/move-file`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -6701,7 +6701,7 @@ function App() {
     setDownloadModeState(m)
     try { if (m) localStorage.setItem('download_mode', m); else localStorage.removeItem('download_mode') } catch {}
   }
-  // Whether the logged-in user has a registered agent (probed via Heroku proxy).
+  // Whether the logged-in user has a registered agent (probed via Cloud Run proxy).
   const [agentRegistered, setAgentRegistered] = useState(false)
   const [agentCheckDone, setAgentCheckDone] = useState(false)
 
@@ -6901,7 +6901,7 @@ function App() {
     if (!authUser) return
     AGENT_USER = authUser.name
     const connectAgent = async (mode, statusUrl, configFn) => {
-      // Timeout 8s: Heroku → Tailscale Funnel → agent local puede tardar ~2-3s,
+      // Timeout 8s: Cloud Run → Tailscale Funnel → agent local puede tardar ~2-3s,
       // y queremos ser tolerantes en redes lentas. Antes 3s, fallaba seguido.
       const res = await fetch(statusUrl, { signal: AbortSignal.timeout(8000) })
       if (res.ok) {
@@ -6918,7 +6918,7 @@ function App() {
       window.__agentDebug = { connected: false, reason: `status ${res.status}`, mode }
       return false
     }
-    // The proxy check is server-to-server (Heroku → agent), so it works from
+    // The proxy check is server-to-server (Cloud Run → agent), so it works from
     // ANY device — desktop, tablet, iPhone. We always run it for logged-in
     // users so we know whether the account has a registered Windows agent.
     const configBody = JSON.stringify({ username: authUser.name })
@@ -7064,7 +7064,7 @@ function App() {
   const [previewMode, setPreviewMode] = useState(false)
 
   // Playback mode for Library/Set tracks:
-  // - 'local':   stream the actual file (via agent or Heroku /audio/) — needs the file to exist where we can reach it
+  // - 'local':   stream the actual file (via agent or Cloud Run /audio/) — needs the file to exist where we can reach it
   // - 'preview': search iTunes by artist+title and play its 30s preview — works on any device, even mobile without local file
   // Mobile: forced to 'preview' (they can't reach the PC's files).
   // Desktop: default 'local', can toggle to 'preview'.
@@ -7081,7 +7081,7 @@ function App() {
     localStorage.setItem('playback_mode', mode)
   }
   // On mobile: auto-switch to 'local' when the agent comes online so the
-  // user hears the actual track (via Heroku proxy → Funnel → agent), not the
+  // user hears the actual track (via Cloud Run proxy → Funnel → agent), not the
   // iTunes substitute. Only flip if the user hasn't explicitly chosen.
   useEffect(() => {
     if (!IS_MOBILE_DEVICE) return
@@ -7116,7 +7116,7 @@ function App() {
       reconnectTimer.current = null
     }
 
-    const wsHost = ['5173', '5174', '5175'].includes(window.location.port) ? 'localhost:8899' : 'slsk-backend-7da97b8a965d.herokuapp.com'
+    const wsHost = ['5173', '5174', '5175'].includes(window.location.port) ? 'localhost:8899' : 'djfreeapp-api-730989854717.southamerica-east1.run.app'
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${protocol}//${wsHost}/ws`)
     wsRef.current = ws
@@ -7156,15 +7156,21 @@ function App() {
       // y eso disparaba effects del audio que rebotaban sync de vuelta y
       // cortaban la reproduccion en el otro device.
       if (data.type === 'sync_player') {
-        if (data.filename) {
+        // Otro device del mismo user reportó su now-playing. Si está tocando
+        // algo lo guardamos para el cartel "Sonando en tu PC"; si paró
+        // (filename vacío o is_playing=false) limpiamos para que el cartel
+        // no quede pegado mostrando un tema que ya no suena.
+        if (data.filename && data.is_playing) {
           setRemoteNowPlaying({
             filename: data.filename,
             title: data.title || '',
             artist: data.artist || '',
             device: data.device || '',
-            is_playing: !!data.is_playing,
+            is_playing: true,
             ts: data.ts || 0,
           })
+        } else {
+          setRemoteNowPlaying(null)
         }
       }
 
@@ -7191,10 +7197,10 @@ function App() {
           }
         }
         if (data.track.status === 'completed' && data.track.filename) {
-          // Transfer file from Heroku to local disk: prefer FSA (browser-native),
+          // Transfer file from Cloud Run to local disk: prefer FSA (browser-native),
           // fallback to agent if FSA not available/ready.
           fetch(`${API_BASE}/audio/${encodeURIComponent(data.track.filename)}`)
-            .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
+            .then(r => { if (!r.ok) throw new Error(`Cloud Run audio ${r.status}`); return r.blob() })
             .then(async (blob) => {
               if (await fsaBackend.ready()) {
                 await fsaBackend.saveFile(data.track.filename, blob, data.track.genre || '')
@@ -7209,7 +7215,7 @@ function App() {
                 await r.json()
                 libraryRef.current?.refresh()
               } else {
-                console.log('Sin FSA ni agent — archivo queda solo en Heroku')
+                console.log('Sin FSA ni agent — archivo queda solo en Cloud Run')
               }
             })
             .catch(e => console.error('Failed to save file locally:', e))
@@ -7286,7 +7292,7 @@ function App() {
         }
         if (data.status === 'completed' && data.filename) {
           // Si el download lo hizo el agente local, el archivo ya está en tu
-          // disco — no hay que hacer fetch a Heroku (que daría 404). Solo
+          // disco — no hay que hacer fetch a Cloud Run (que daría 404). Solo
           // refresh para que la library se entere.
           if (data.via === 'agent') {
             libraryRef.current?.refresh()
@@ -7294,13 +7300,13 @@ function App() {
           } else {
             // Use the real on-disk name (server may have renamed it) — fetching
             // /audio/<original_search_name> returns 404 when the peer's file had
-            // a different name, leaving the file orphaned on Heroku.
+            // a different name, leaving the file orphaned on Cloud Run.
             const markError = (reason) => setSearchDlStatus(prev => ({
               ...prev,
               [data.filename]: { ...(prev[data.filename] || {}), status: 'error', error: reason },
             }))
             fetch(`${API_BASE}/audio/${encodeURIComponent(localName)}`)
-              .then(r => { if (!r.ok) throw new Error(`Heroku audio ${r.status}`); return r.blob() })
+              .then(r => { if (!r.ok) throw new Error(`Cloud Run audio ${r.status}`); return r.blob() })
               .then(async (blob) => {
                 if (await fsaBackend.ready()) {
                   await fsaBackend.saveFile(localName, blob, '')
@@ -7315,7 +7321,7 @@ function App() {
                   libraryRef.current?.refresh()
                   window.dispatchEvent(new Event('library-changed'))
                 } else {
-                  // No local storage available — file stays on Heroku only.
+                  // No local storage available — file stays on Cloud Run only.
                   // Surface this so the badge does NOT claim "Descargado".
                   markError('no_local_storage')
                 }
@@ -7902,8 +7908,8 @@ function App() {
     if (!ensureCanDownload()) return
     setSearchDlStatus(prev => ({ ...prev, [result.filename]: { status: 'downloading' } }))
     // Si el agente está conectado y tiene aioslsk, delegar el download a él:
-    // corre en tu home network, sin los bugs de NAT de Heroku, peers-ghost
-    // dejan de ghostear. El agent postea progress a Heroku que lo rebota por WS.
+    // corre en tu home network, sin los bugs de NAT de Cloud Run, peers-ghost
+    // dejan de ghostear. El agent postea progress a Cloud Run que lo rebota por WS.
     // downloadMode='local' fuerza el path WS (archivo a este dispositivo).
     if (downloadMode !== 'local' && agentConnected && agentHasSlsk) {
       agentFetch('slsk-download', {
@@ -7918,7 +7924,7 @@ function App() {
           collection,
         }),
       }).catch(e => {
-        console.error('agent slsk-download failed, fallback to heroku:', e)
+        console.error('agent slsk-download failed, fallback to Cloud Run:', e)
         wsRef.current?.send(JSON.stringify({ type: 'download_single', username, password, result, app_user: authUser?.name || '', collection }))
       })
       return
@@ -9615,7 +9621,7 @@ function App() {
                       // the file (under its real on-disk name, possibly renamed by
                       // the peer) is in the user's local storage. The server's
                       // `completed` event alone is not enough — /audio fetch +
-                      // FSA save can still fail and leave it on Heroku only.
+                      // FSA save can still fail and leave it on Cloud Run only.
                       const localName = dlInfo?.local_name || filename
                       const isLocal = localFilesSet.has(localName) || localFilesSet.has(filename)
                       return (
@@ -9843,6 +9849,30 @@ function App() {
         </div>
       )}
 
+      {/* Cross-device now-playing (Spotify-Connect-like): lo que está sonando
+          en OTRO device del mismo user. Solo se muestra cuando ESTE device no
+          está tocando nada local — si vos ya estás reproduciendo, no tiene
+          sentido el cartel. El dato llega por WS (sync_player) desde el server. */}
+      {remoteNowPlaying && !nowPlaying && (
+        <div className="flex-shrink-0 flex items-center gap-2.5 px-4 py-2 bg-green-500/10 border-t border-green-500/20">
+          <span className="relative flex h-2 w-2 flex-shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-60" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+          </span>
+          <svg className="w-3.5 h-3.5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 12a7 7 0 0114 0M8.5 12a3.5 3.5 0 017 0" />
+            <circle cx="12" cy="12" r="1" fill="currentColor" />
+          </svg>
+          <span className="text-xs text-green-200/90 truncate">
+            Sonando en <span className="font-semibold text-green-100">{remoteNowPlaying.device || 'tu otro equipo'}</span>
+            <span className="text-green-300/60"> · </span>
+            <span className="font-semibold text-green-100">
+              {[remoteNowPlaying.artist, remoteNowPlaying.title].filter(Boolean).join(' — ') || remoteNowPlaying.filename}
+            </span>
+          </span>
+        </div>
+      )}
+
       {/* Global audio player */}
       <AudioPlayerBar
         file={nowPlaying}
@@ -9986,7 +10016,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   useEffect(() => {
     // Library manifest = files that ACTUALLY EXIST in user's local storage.
-    // Heroku metadata is used only to enrich title/artist for those files;
+    // Cloud Run metadata is used only to enrich title/artist for those files;
     // it never adds entries on its own (otherwise empty folders would still
     // mark Discover tracks as "Descargado").
     const loadLibrary = async () => {
@@ -10015,7 +10045,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         merged[f.filename] = { title: '', artist: '', genre: f.subfolder || '' }
       }
 
-      // 2. Enrich with Heroku/Cloudinary metadata (title, artist, key, etc.)
+      // 2. Enrich with Cloud Run/Cloudinary metadata (title, artist, key, etc.)
       //    — only for filenames that exist in local storage
       try {
         const meta = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json())
@@ -10627,12 +10657,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     if (discoverSource === 'beatport') {
       loadChart(selectedGenre)
     } else {
+      // Listas PÚBLICAS: el backend las lee sin login (embed/api/curl fallback).
+      // NO forzamos el OAuth de Spotify — antes este redirect pateaba a TODOS
+      // (incluidos clientes) al login. Solo refrescamos el flag informativo.
       fetch(`${API_BASE}/api/spotify/status`).then(r => r.json()).then(data => {
         setSpotifyConnected(data.connected)
-        if (!data.connected) {
-          window.location.href = `${API_BASE}/api/spotify/login`
-          return
-        }
       }).catch(() => {})
       // Pick first playlist whose category matches the current collection
       const firstInCategory = spotifyCategories.find(c => (c.category || 'pop') === collection)
@@ -10854,7 +10883,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       }
 
       // Si hay agente con aioslsk, SIEMPRE bajamos por agente — el server
-      // (Heroku) sufre el mismo problema NAT que en search (peers no contestan
+      // (Cloud Run) sufre el mismo problema NAT que en search (peers no contestan
       // → timeouts y "ghost peers"). downloadMode 'local' antes forzaba WS,
       // pero el agente baja a la misma PC, así que es equivalente sin NAT.
       const useAgent = agentConnected && agentHasSlsk
@@ -10914,9 +10943,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     }
 
     // Path 1 (preferido): si hay agente conectado, hacer search por el agente.
-    // Ve los peers que Heroku no alcanza por NAT — mismos resultados que Nicotine+.
+    // Ve los peers que Cloud Run no alcanza por NAT — mismos resultados que Nicotine+.
     // NO depende de downloadMode: el search siempre conviene por agente; a dónde
-    // baja el archivo (FSA local / agente / Heroku) se decide después en dispatchPick.
+    // baja el archivo (FSA local / agente / Cloud Run) se decide después en dispatchPick.
     const useAgentSearch = agentConnected && agentHasSlsk
     if (useAgentSearch) {
       console.info('[SEARCH] via=agent', { query, filename: track.title })
@@ -11116,20 +11145,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                     </button>
-                    {!spotifyConnected && (
-                      <a href={`${API_BASE}/api/spotify/login`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#1DB954] text-white hover:bg-[#1ed760] transition-all active:scale-95"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-                        Conectar Spotify
-                      </a>
-                    )}
-                    {spotifyConnected && (
-                      <span className="flex items-center gap-1 text-xs text-[#1DB954]">
-                        <span className="w-2 h-2 rounded-full bg-[#1DB954]" />
-                        Conectado
-                      </span>
-                    )}
+                    {/* Login de Spotify eliminado: las listas son públicas y se
+                        leen sin OAuth. El token de usuario vivía solo en memoria
+                        y se perdía en cada reinicio del dyno → no aportaba nada. */}
                   </>
                 )}
               </div>
