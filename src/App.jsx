@@ -344,6 +344,11 @@ function getDeviceInfo() {
   return { id, name }
 }
 const DEVICE = typeof window !== 'undefined' ? getDeviceInfo() : { id: 'server', name: 'Server' }
+// Scope module-level para que TODOS los componentes (App, DiscoverPage,
+// SetBuilder, etc.) lo puedan referenciar. Antes estaba solo en App y al
+// usarlo en DiscoverPage tiraba ReferenceError y crasheaba la app entera.
+const IS_MOBILE_DEVICE = typeof navigator !== 'undefined' &&
+  /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
 let AGENT_BASE = 'http://localhost:9900'
 let AGENT_MODE = 'local' // 'local' = direct, 'proxy' = through server
 let AGENT_USER = ''
