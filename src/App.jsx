@@ -7027,6 +7027,30 @@ function App() {
   const [previewLoading, setPreviewLoading] = useState(null)
   const [playingFile, setPlayingFile] = useState(null)
   const [nowPlaying, setNowPlaying] = useState(null)
+  // Refs para cross-device sync. nowPlayingRef refleja el ultimo nowPlaying
+  // (para chequear en handlers sin tener que ponerlo de dep). syncRemoteUpdate
+  // marca cuando el ultimo set vino del otro device para evitar el loop
+  // de mandar sync_player de vuelta.
+  const nowPlayingRef = useRef(null)
+  const syncRemoteUpdateRef = useRef(false)
+  useEffect(() => { nowPlayingRef.current = nowPlaying }, [nowPlaying])
+  useEffect(() => {
+    if (syncRemoteUpdateRef.current) { syncRemoteUpdateRef.current = false; return }
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    if (!authUser?.name) return
+    try {
+      wsRef.current.send(JSON.stringify({
+        type: 'sync_player',
+        app_user: authUser.name,
+        filename: nowPlaying?.filename || '',
+        title: nowPlaying?.title || '',
+        artist: nowPlaying?.artist || '',
+        is_playing: !!nowPlaying,
+        device: DEVICE?.name || '',
+        ts: Date.now(),
+      }))
+    } catch {}
+  }, [nowPlaying?.filename])
   const [isAudioPlaying, setIsAudioPlaying] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
 
@@ -7088,7 +7112,20 @@ function App() {
     const ws = new WebSocket(`${protocol}//${wsHost}/ws`)
     wsRef.current = ws
 
-    ws.onopen = () => setConnected(true)
+    ws.onopen = () => {
+      setConnected(true)
+      // Cross-device sync: avisamos al server quien somos para que nos
+      // ponga en el room del user. El server nos manda de vuelta el
+      // ultimo sync_player conocido (Spotify-like: ves al instante que
+      // esta sonando en tu otro device).
+      try {
+        ws.send(JSON.stringify({
+          type: 'hello',
+          app_user: authUser?.name || '',
+          device: DEVICE?.name || '',
+        }))
+      } catch {}
+    }
     ws.onclose = () => {
       setConnected(false)
       // Only reconnect if this is still the current ws
@@ -7102,6 +7139,23 @@ function App() {
 
       if (data.type === 'tracks_parsed') {
         setTracks(data.tracks)
+      }
+
+      // Cross-device player sync: lo que esta sonando en otro device del
+      // mismo user. Solo refleja UI (no reproduce automaticamente — eso
+      // requiere user gesture en mobile).
+      if (data.type === 'sync_player') {
+        if (data.filename && data.filename !== nowPlayingRef.current?.filename) {
+          syncRemoteUpdateRef.current = true
+          setNowPlaying({
+            filename: data.filename,
+            title: data.title || '',
+            artist: data.artist || '',
+            isRemote: true,
+            device: data.device || '',
+          })
+          setPlayingFile(data.filename)
+        }
       }
 
       // Server-authoritative pending list. Filtered by user so multi-user server
