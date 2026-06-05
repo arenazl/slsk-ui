@@ -7032,6 +7032,10 @@ function App() {
   const [previewLoading, setPreviewLoading] = useState(null)
   const [playingFile, setPlayingFile] = useState(null)
   const [nowPlaying, setNowPlaying] = useState(null)
+  // State SEPARADO: lo que esta sonando en OTRO device del mismo user.
+  // Bandera para no contaminar el player local. Solo se usa en el badge
+  // "tu celu esta tocando: X" del topbar.
+  const [remoteNowPlaying, setRemoteNowPlaying] = useState(null)
   // Refs para cross-device sync. nowPlayingRef refleja el ultimo nowPlaying
   // (para chequear en handlers sin tener que ponerlo de dep). syncRemoteUpdate
   // marca cuando el ultimo set vino del otro device para evitar el loop
@@ -7146,20 +7150,21 @@ function App() {
         setTracks(data.tracks)
       }
 
-      // Cross-device player sync: lo que esta sonando en otro device del
-      // mismo user. Solo refleja UI (no reproduce automaticamente — eso
-      // requiere user gesture en mobile).
+      // Cross-device player sync: lo que esta sonando en OTRO device del
+      // mismo user va a un state SEPARADO (remoteNowPlaying) para que NO
+      // toque el player local — antes tocabamos setNowPlaying con isRemote
+      // y eso disparaba effects del audio que rebotaban sync de vuelta y
+      // cortaban la reproduccion en el otro device.
       if (data.type === 'sync_player') {
-        if (data.filename && data.filename !== nowPlayingRef.current?.filename) {
-          syncRemoteUpdateRef.current = true
-          setNowPlaying({
+        if (data.filename) {
+          setRemoteNowPlaying({
             filename: data.filename,
             title: data.title || '',
             artist: data.artist || '',
-            isRemote: true,
             device: data.device || '',
+            is_playing: !!data.is_playing,
+            ts: data.ts || 0,
           })
-          setPlayingFile(data.filename)
         }
       }
 
