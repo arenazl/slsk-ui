@@ -324,55 +324,6 @@ function TrackRow({ track, onCancel }) {
 
 const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.southamerica-east1.run.app'
 
-// Logging del cliente → backend, para debuggear desde mobile (sin consola del
-// browser). Best-effort: loguea en consola Y manda al server, nunca bloquea ni
-// rompe si falla. Se leen con `gcloud run services logs read` (prefijo [CLIENT]).
-function clientLog(msg, level = 'info') {
-  const line = typeof msg === 'string' ? msg : (() => { try { return JSON.stringify(msg) } catch { return String(msg) } })()
-  try { (level === 'error' ? console.error : level === 'warn' ? console.warn : console.log)(line) } catch {}
-  try {
-    fetch(`${API_BASE}/api/client-log`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ msg: line.slice(0, 1000), level }),
-      keepalive: true,
-    }).catch(() => {})
-  } catch {}
-}
-
-// YouTube IFrame Player API loader — idempotente. Resuelve cuando window.YT.Player
-// está disponible. Solo inyecta el <script> una vez; concurrentes esperan la misma
-// promesa. Usado por el preview POP/LATIN (ver YouTubePreviewCard) para tener
-// progreso real + avance confiable (en vez de un <iframe> opaco + setTimeout).
-let _ytApiPromise = null
-function ensureYouTubeAPI() {
-  if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
-  if (window.YT && window.YT.Player) return Promise.resolve()
-  if (_ytApiPromise) return _ytApiPromise
-  _ytApiPromise = new Promise((resolve, reject) => {
-    // Encadenar con cualquier callback previo por si otra cosa ya lo definió.
-    const prev = window.onYouTubeIframeAPIReady
-    window.onYouTubeIframeAPIReady = () => {
-      try { if (typeof prev === 'function') prev() } catch {}
-      clientLog('[YT] iframe_api ready')
-      resolve()
-    }
-    const existing = document.querySelector('script[data-yt-iframe-api]')
-    if (existing) {
-      // Script ya inyectado pero YT aún no listo → el callback de arriba lo cubre.
-      return
-    }
-    const tag = document.createElement('script')
-    tag.src = 'https://www.youtube.com/iframe_api'
-    tag.async = true
-    tag.setAttribute('data-yt-iframe-api', '1')
-    tag.onerror = () => { _ytApiPromise = null; reject(new Error('failed to load iframe_api')) }
-    document.head.appendChild(tag)
-    clientLog('[YT] injecting iframe_api script')
-  })
-  return _ytApiPromise
-}
-
 // Stable per-browser device id + human label. Used para que el banner de
 // "temas en cola desde otros dispositivos" solo cuente los que realmente
 // vienen de OTRO device, no los que vos mismo agregaste acá.
@@ -10015,185 +9966,6 @@ function SwipeableRow({ children, onReveal }) {
   )
 }
 
-// YouTubePreviewCard — preview POP/LATIN vía la IFrame Player API (no <iframe> crudo).
-// Reemplaza el iframe opaco + setTimeout "a ciegas" por un YT.Player real para:
-//   - progreso real: alimenta la barra global (AudioPlayerBar) seteando audioRef.current
-//     a un proxy audio-like (currentTime/duration/paused/play/pause/seek) que lee del player;
-//   - avance confiable: avanza cuando getCurrentTime() >= duración elegida
-//     (previewDurationRef.current, leída en cada tick → respeta cambios 30/60/90/120 al vuelo)
-//     o cuando onStateChange reporta ENDED. El avance llama ytAdvanceRef.current?.() una sola
-//     vez por tema (guard ytAdvancedRef). En play individual ytAdvanceRef.current es null → solo corta.
-// El player se monta sobre un <div> que la API reemplaza por su propio iframe. Se mantiene
-// montado mientras hay tema (audio sigue sonando); youtubeVisible solo mueve la card on/offscreen.
-function YouTubePreviewCard({ embed, visible, onToggleVisible, onMinimize, previewDurationRef, ytAdvanceRef, audioRef, setIsAudioPlaying }) {
-  const hostRef = useRef(null)        // div que la API reemplaza por el iframe
-  const playerRef = useRef(null)      // instancia YT.Player
-  const intervalRef = useRef(null)    // tick de progreso/avance (~500ms)
-  const advancedRef = useRef(false)   // guard: avanzar una sola vez por tema
-  const destroyedRef = useRef(false)
-  const videoId = embed?.videoId
-  const title = embed?.track?.title || ''
-
-  // (Re)montar el player cada vez que cambia el videoId. Destruye el anterior.
-  useEffect(() => {
-    if (!videoId) return
-    destroyedRef.current = false
-    advancedRef.current = false
-    let cancelled = false
-
-    const clearTick = () => {
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
-    }
-
-    // Proxy audio-like → la barra global lee currentTime/duration/paused de acá.
-    // src vacío: AudioPlayerBar salta el fetch de waveform y usa la barrita simple.
-    const makeProxy = () => ({
-      src: '',
-      paused: false,
-      get currentTime() { try { return playerRef.current?.getCurrentTime?.() || 0 } catch { return 0 } },
-      set currentTime(v) { try { playerRef.current?.seekTo?.(v, true) } catch {} },
-      get duration() {
-        // Tope la duración mostrada al target del preview, así la barra refleja el corte.
-        let real = 0
-        try { real = playerRef.current?.getDuration?.() || 0 } catch {}
-        const target = previewDurationRef?.current || 0
-        if (real > 0 && target > 0) return Math.min(real, target)
-        return real || target || 0
-      },
-      play() { try { playerRef.current?.playVideo?.(); this.paused = false } catch {} },
-      pause() { try { playerRef.current?.pauseVideo?.(); this.paused = true } catch {} },
-      // killAudio() / handleAppStop() setean estos handlers → tolerá las asignaciones.
-      onended: null, onerror: null, oncanplaythrough: null,
-    })
-
-    const advance = (reason) => {
-      if (advancedRef.current) return
-      advancedRef.current = true
-      clearTick()
-      clientLog(`[YT] avanzar (${reason}) "${title}"`)
-      try { ytAdvanceRef?.current?.() } catch (e) { clientLog(`[YT] advance error ${e}`, 'error') }
-    }
-
-    const onReady = (e) => {
-      if (cancelled || destroyedRef.current) return
-      clientLog(`[YT] ready "${title}"`)
-      try { e.target.playVideo() } catch {}
-      // Exponer el proxy en audioRef → progreso real en la barra global.
-      try { audioRef.current = makeProxy() } catch {}
-      try { setIsAudioPlaying(true) } catch {}
-      clearTick()
-      intervalRef.current = setInterval(() => {
-        if (cancelled || destroyedRef.current) return
-        let cur = 0, dur = 0
-        try { cur = playerRef.current?.getCurrentTime?.() || 0 } catch {}
-        try { dur = playerRef.current?.getDuration?.() || 0 } catch {}
-        const target = previewDurationRef?.current || 0  // leído en cada tick → dinámico
-        // tick SOLO a consola (no al backend): 2/s × 120s = 240 req/tema saturaría
-        // el server (mismo efecto que la avalancha anterior). Los eventos clave
-        // (ready/playing/avanzar/error) sí van al backend vía clientLog.
-        try { console.log(`[YT] tick cur=${cur.toFixed(1)}/dur=${dur.toFixed(1)} target=${target}`) } catch {}
-        if (target > 0 && cur >= target) advance('llegó a target')
-      }, 500)
-    }
-
-    const onStateChange = (e) => {
-      if (cancelled || destroyedRef.current) return
-      const YTns = window.YT
-      if (!YTns) return
-      if (e.data === YTns.PlayerState.PLAYING) {
-        clientLog(`[YT] playing "${title}"`)
-        try { if (audioRef.current) audioRef.current.paused = false } catch {}
-        try { setIsAudioPlaying(true) } catch {}
-      } else if (e.data === YTns.PlayerState.PAUSED) {
-        try { if (audioRef.current) audioRef.current.paused = true } catch {}
-      } else if (e.data === YTns.PlayerState.ENDED) {
-        advance('ended')
-      }
-    }
-
-    const onError = (e) => {
-      clientLog(`[YT] player error code=${e?.data}`, 'error')
-      advance('error')
-    }
-
-    ensureYouTubeAPI().then(() => {
-      if (cancelled || destroyedRef.current || !hostRef.current) return
-      try {
-        playerRef.current = new window.YT.Player(hostRef.current, {
-          videoId,
-          playerVars: {
-            autoplay: 1, playsinline: 1, controls: 1, rel: 0,
-            modestbranding: 1, origin: window.location.origin, enablejsapi: 1,
-          },
-          events: { onReady, onStateChange, onError },
-        })
-      } catch (e) {
-        clientLog(`[YT] new Player failed ${e}`, 'error')
-      }
-    }).catch((e) => clientLog(`[YT] ensureAPI failed ${e}`, 'error'))
-
-    return () => {
-      cancelled = true
-      destroyedRef.current = true
-      clearTick()
-      clientLog('[YT] destroy')
-      try { playerRef.current?.destroy?.() } catch {}
-      playerRef.current = null
-    }
-  }, [videoId])
-
-  return (
-    <>
-      {/* Toggle — flota justo arriba del AudioPlayerBar. */}
-      <button
-        onClick={onToggleVisible}
-        className={`fixed bottom-20 right-4 z-[71] w-11 h-11 flex items-center justify-center rounded-full shadow-xl shadow-black/40 ring-1 transition-all duration-200 active:scale-95 ${
-          visible
-            ? 'bg-red-600 ring-red-400/40 text-white hover:bg-red-500'
-            : 'bg-[var(--bg-panel)] ring-[var(--border-color)] text-red-500 hover:text-red-400 hover:bg-[var(--bg-hover)]'
-        }`}
-        title={visible ? 'Ocultar video' : 'Ver video de YouTube'}
-      >
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-        </svg>
-      </button>
-
-      {/* Card visible OR parkeada offscreen. Parking via left/top (no display:none)
-          mantiene el player sonando sin throttling del browser. */}
-      <div
-        className={`z-[70] bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden ${
-          visible
-            ? 'fixed bottom-20 right-4 w-80 max-w-[calc(100vw-2rem)] animate-fade-in'
-            : 'fixed w-1 h-1 opacity-0 pointer-events-none'
-        }`}
-        style={visible ? undefined : { left: '-9999px', top: '-9999px' }}
-      >
-        {visible && (
-          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{embed.track?.title}</div>
-              <div className="text-[10px] text-[var(--text-muted)] truncate">{embed.track?.artist} • YouTube Music</div>
-            </div>
-            <button
-              onClick={onMinimize}
-              className="ml-2 w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90"
-              title="Minimizar"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13H5" /></svg>
-            </button>
-          </div>
-        )}
-        {/* El <div> es reemplazado por el iframe de YT.Player. Keyed por videoId
-            para forzar un host fresco en cada tema. */}
-        <div className={visible ? 'w-full aspect-video' : 'w-full h-full'}>
-          <div key={videoId} ref={hostRef} className="w-full h-full" />
-        </div>
-      </div>
-    </>
-  )
-}
-
 
 function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary }) {
   const toast = useToast()
@@ -10535,10 +10307,6 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
   // Close context menu on outside click
   const previewIntervalRef = useRef(null)
-  // Avance del preview de YouTube (POP/LATIN). En autoplay, playNext setea acá
-  // la lógica de "siguiente tema"; el YouTubePreviewCard la llama al llegar al
-  // target o al ENDED. En play individual queda null → solo corta, no avanza.
-  const ytAdvanceRef = useRef(null)
   // Auto-preview duration per track (30 / 60 / 90 / 120 s). Default 30.
   const [previewDuration, setPreviewDuration] = useState(() => {
     const saved = parseInt(localStorage.getItem('preview_duration') || '30', 10)
@@ -10591,12 +10359,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     if (autoplayCancelRef) {
       autoplayCancelRef.current = () => {
         if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
-        ytAdvanceRef.current = null  // matar el avance del YouTubePreviewCard (no avanzar tras Stop)
         try { sessionAudio.onended = null } catch {}
         try { sessionAudio.onerror = null } catch {}
         try { sessionAudio.pause() } catch {}
         try { sessionAudio.src = '' } catch {}
-        try { setYoutubeEmbed(null) } catch {}  // POP/LATIN: destruir el YT.Player del autoplay (unmount del card)
       }
     }
 
@@ -10665,50 +10431,6 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         }).catch(() => { current++; playNext() })
       }
 
-      // POP/LATIN: el preview es el tema COMPLETO de YouTube, cortado por TU
-      // duración (el sample de Spotify/iTunes dura 30s y se acababa antes del
-      // timer). Si YouTube NO resuelve, cae al sample directo en vez de saltar:
-      // saltar en cascada recorría toda la lista y saturaba el backend con
-      // requests a youtube-resolve. Lee previewDurationRef en cada track → el
-      // swipe de duración aplica al siguiente tema (igual que EDM).
-      if (collection === 'pop' || collection === 'latin') {
-        if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
-        try { sessionAudio.pause() } catch {}  // pausar sample EDM previo (NO tocar .src → dispara onerror)
-        setPlayingFile(`discover-preview-${current}`)
-        setPlayingId(t.id)
-        lastPlayedTrackRef.current = t
-        setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
-        setIsAudioPlaying(true)
-        setupMediaSession(t)
-        const secs = previewDurationRef.current
-        const q = `${t.artist || ''} ${t.title || ''}`.trim()
-        let videoId = null
-        try {
-          const res = await fetch(`${API_BASE}/api/youtube-resolve?q=${encodeURIComponent(q)}`)
-          const data = res.ok ? await res.json() : null
-          videoId = data?.videoId || null
-        } catch (e) { console.warn('[autoplay POP] youtube-resolve fallo', e) }
-        console.log(`[autoplay POP] #${current} "${t.artist} - ${t.title}" videoId=${videoId || 'NULL'} secs=${secs}`)
-        if (videoId) {
-          // El avance lo dispara el YouTubePreviewCard (real, vía la IFrame API):
-          // al llegar a previewDurationRef.current o al ENDED llama ytAdvanceRef.current.
-          // Ya NO usamos setTimeout a ciegas (el iframe opaco no daba progreso real).
-          ytAdvanceRef.current = () => { current++; playNext() }
-          setYoutubeEmbed({ videoId, track: t })
-          setYoutubeVisible(false)
-        } else {
-          // Fallback: sample/preview directo (30s). Suena el tema en vez de
-          // saltarlo en cascada. setYoutubeEmbed(null) por si quedó un iframe.
-          ytAdvanceRef.current = null  // este path usa <audio> + setTimeout, no el card
-          setYoutubeEmbed(null)
-          const directUrl = t.sample_url || t.preview_url
-          if (directUrl) { console.log('[autoplay POP] sin videoId → fallback sample 30s'); startAudio(directUrl) }
-          else { console.warn('[autoplay POP] sin videoId ni sample → salto', t.title); current++; playNext() }
-        }
-        return
-      }
-
-      // EDM: sample largo de Beatport → iTunes fallback
       // 1) Use track's own preview URL (Beatport sample_url or Spotify preview_url)
       const directUrl = t.sample_url || t.preview_url
       if (directUrl) {
@@ -10957,8 +10679,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     setPlayingFile(null)
     setNowPlaying(null)
     setIsAudioPlaying(false)
-    ytAdvanceRef.current = null  // sin avance pendiente del YouTubePreviewCard
-    setYoutubeEmbed(null)        // unmount del card → destroy del YT.Player
+    setYoutubeEmbed(null)
   }
 
   const setDiscoverAudio = (audio, track) => {
@@ -11011,7 +10732,6 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // POP / LATIN → YouTube Music embed (full track, much higher quality than
     // iTunes 30s clips). EDM stays on Beatport sample → iTunes fallback.
     if (collection === 'pop' || collection === 'latin') {
-      ytAdvanceRef.current = null  // play individual: el card NO debe avanzar al siguiente
       setPlayingId(track.id)
       lastPlayedTrackRef.current = track
       setPlayingFile(`discover-${track.id}`)
@@ -12312,22 +12032,63 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         )
       })()}
 
-      {/* YouTube preview — POP/LATIN. Usa la IFrame Player API (YT.Player) en vez
-          de un <iframe> crudo → progreso real en la barra global + avance confiable
-          (al llegar al target o ENDED, vía ytAdvanceRef). El audio es primario (footer);
-          el video queda oculto/parkeado offscreen hasta que el user lo abre. */}
+      {/* YouTube Music embed — POP/LATIN preview. Audio is primary (via footer);
+          video is hidden by default and toggled with the YT button sitting
+          just above the AudioPlayerBar. The iframe is ALWAYS rendered while a
+          track is active so audio keeps flowing; only its position changes. */}
       {youtubeEmbed && (
-        <YouTubePreviewCard
-          key={youtubeEmbed.videoId}
-          embed={youtubeEmbed}
-          visible={youtubeVisible}
-          onToggleVisible={() => setYoutubeVisible(v => !v)}
-          onMinimize={() => setYoutubeVisible(false)}
-          previewDurationRef={previewDurationRef}
-          ytAdvanceRef={ytAdvanceRef}
-          audioRef={audioRef}
-          setIsAudioPlaying={setIsAudioPlaying}
-        />
+        <>
+          {/* Toggle button — floats just above the global AudioPlayerBar.
+              The footer has h-14 (≈3.5rem) so we sit at bottom-20 with a small gap. */}
+          <button
+            onClick={() => setYoutubeVisible(v => !v)}
+            className={`fixed bottom-20 right-4 z-[71] w-11 h-11 flex items-center justify-center rounded-full shadow-xl shadow-black/40 ring-1 transition-all duration-200 active:scale-95 ${
+              youtubeVisible
+                ? 'bg-red-600 ring-red-400/40 text-white hover:bg-red-500'
+                : 'bg-[var(--bg-panel)] ring-[var(--border-color)] text-red-500 hover:text-red-400 hover:bg-[var(--bg-hover)]'
+            }`}
+            title={youtubeVisible ? 'Ocultar video' : 'Ver video de YouTube'}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+          </button>
+
+          {/* Iframe — visible card OR parked offscreen. Parking via `left/top` (not
+              display:none) keeps the iframe playing without browser throttling. */}
+          <div
+            className={`z-[70] bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden ${
+              youtubeVisible
+                ? 'fixed bottom-20 right-4 w-80 max-w-[calc(100vw-2rem)] animate-fade-in'
+                : 'fixed w-1 h-1 opacity-0 pointer-events-none'
+            }`}
+            style={youtubeVisible ? undefined : { left: '-9999px', top: '-9999px' }}
+          >
+            {youtubeVisible && (
+              <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{youtubeEmbed.track?.title}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] truncate">{youtubeEmbed.track?.artist} • YouTube Music</div>
+                </div>
+                <button
+                  onClick={() => setYoutubeVisible(false)}
+                  className="ml-2 w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-90"
+                  title="Minimizar"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13H5" /></svg>
+                </button>
+              </div>
+            )}
+            <iframe
+              key={youtubeEmbed.videoId}
+              src={`https://www.youtube-nocookie.com/embed/${youtubeEmbed.videoId}?autoplay=1&modestbranding=1&rel=0`}
+              title="YouTube preview"
+              className={youtubeVisible ? 'w-full aspect-video border-0' : 'w-full h-full border-0'}
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </>
       )}
     </div>
   )
