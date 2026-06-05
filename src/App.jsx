@@ -7746,6 +7746,11 @@ function App() {
     }
 
     const file = list[idx]
+    // Actualizar UI INMEDIATAMENTE — antes era despues del await y el celu
+    // se quedaba mostrando el tema anterior mientras el siguiente cargaba.
+    setPlayingFile(file.filename)
+    setNowPlaying(file)
+    setIsAudioPlaying(true)
     try {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
