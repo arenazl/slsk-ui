@@ -11075,7 +11075,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                   </span>
                 )}
                 {loading && <span className="text-sm text-white/40">Cargando...</span>}
-                {!loading && discoverSource === 'beatport' && !IS_MOBILE_DEVICE && (
+                {!loading && discoverSource === 'beatport' && !IS_MOBILE_DEVICE && isAdmin && (
                   <button
                     onClick={async () => {
                       if (agentConnected) {
