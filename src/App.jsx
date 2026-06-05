@@ -10363,6 +10363,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         try { sessionAudio.onerror = null } catch {}
         try { sessionAudio.pause() } catch {}
         try { sessionAudio.src = '' } catch {}
+        try { setYoutubeEmbed(null) } catch {}  // POP/LATIN: cortar el iframe de YouTube del autoplay
       }
     }
 
@@ -10407,6 +10408,35 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     const playNext = async () => {
       if (current >= playlist.length) return
       const t = playlist[current]
+
+      // POP/LATIN: el preview es el tema COMPLETO de YouTube, cortado por TU
+      // duración. El sample de Spotify/iTunes dura 30s y se acababa antes del
+      // timer (por eso cortaba a 30 aunque eligieras 120). Con YouTube el tema es
+      // largo y el timer corta a 30/60/90/120. Lee previewDurationRef en cada
+      // track → el swipe que cambia la duración aplica al siguiente tema (igual
+      // que EDM con Beatport). En mobile el 1er tema pide tu toque; el resto sigue
+      // solo. (EDM cae al sessionAudio de abajo: Beatport ya da samples largos.)
+      if (collection === 'pop' || collection === 'latin') {
+        if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
+        try { sessionAudio.pause(); sessionAudio.src = '' } catch {}
+        setPlayingFile(`discover-preview-${current}`)
+        setPlayingId(t.id)
+        lastPlayedTrackRef.current = t
+        setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
+        setIsAudioPlaying(true)
+        setupMediaSession(t)
+        const q = `${t.artist || ''} ${t.title || ''}`.trim()
+        try {
+          const res = await fetch(`${API_BASE}/api/youtube-resolve?q=${encodeURIComponent(q)}`)
+          const data = res.ok ? await res.json() : null
+          if (data?.videoId) {
+            setYoutubeEmbed({ videoId: data.videoId, track: t })
+            setYoutubeVisible(false)
+            previewIntervalRef.current = setTimeout(() => { current++; playNext() }, previewDurationRef.current * 1000)
+          } else { current++; playNext() }
+        } catch { current++; playNext() }
+        return
+      }
 
       const startAudio = (url) => {
         // Cancel any pending advance — we're starting fresh with this src.
