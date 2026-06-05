@@ -10729,34 +10729,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // a EDM y dar play seguían sonando los dos a la vez.
     setYoutubeEmbed(null)
 
-    // POP / LATIN → YouTube Music embed (full track, much higher quality than
-    // iTunes 30s clips). EDM stays on Beatport sample → iTunes fallback.
-    if (collection === 'pop' || collection === 'latin') {
-      setPlayingId(track.id)
-      lastPlayedTrackRef.current = track
-      setPlayingFile(`discover-${track.id}`)
-      setNowPlaying({ filename: `discover-${track.id}`, title: track.title, artist: track.artist, isPreview: true })
-      setIsAudioPlaying(true)
-      const q = `${track.artist || ''} ${track.title || ''}`.trim()
-      fetch(`${API_BASE}/api/youtube-resolve?q=${encodeURIComponent(q)}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.videoId) {
-            setYoutubeEmbed({ videoId: data.videoId, track })
-            setYoutubeVisible(false) // primary UI is the footer; video stays hidden until user opens it
-          } else {
-            toast('No se encontró video en YouTube', 'warning', 2500)
-            clearDiscoverAudio()
-          }
-        })
-        .catch(() => {
-          toast('Error buscando en YouTube', 'warning', 2500)
-          clearDiscoverAudio()
-        })
-      return
-    }
+    // POP/LATIN va por audio directo IGUAL que EDM (sin iframe de YouTube). El
+    // iframe se plantaba en mobile en el 2do tema, dejaba un 2do audio sonando
+    // (no cortaba el anterior → "suenan los 2 juntos") y metía el botón de
+    // YouTube minimizado. Un solo mecanismo (new Audio) = sin doble audio, sin
+    // video, sin botón. Cae al tryPlay de abajo (sample_url → iTunes).
 
-    // Try Beatport sample_url first, then iTunes
+    // Try Beatport/Spotify sample_url first, then iTunes
     const tryPlay = (url) => {
       const audio = new Audio(url)
       audio.onended = () => { clearDiscoverAudio(); audioRef.current = null }
