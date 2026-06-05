@@ -10409,35 +10409,6 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       if (current >= playlist.length) return
       const t = playlist[current]
 
-      // POP/LATIN: el preview es el tema COMPLETO de YouTube, cortado por TU
-      // duración. El sample de Spotify/iTunes dura 30s y se acababa antes del
-      // timer (por eso cortaba a 30 aunque eligieras 120). Con YouTube el tema es
-      // largo y el timer corta a 30/60/90/120. Lee previewDurationRef en cada
-      // track → el swipe que cambia la duración aplica al siguiente tema (igual
-      // que EDM con Beatport). En mobile el 1er tema pide tu toque; el resto sigue
-      // solo. (EDM cae al sessionAudio de abajo: Beatport ya da samples largos.)
-      if (collection === 'pop' || collection === 'latin') {
-        if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
-        try { sessionAudio.pause(); sessionAudio.src = '' } catch {}
-        setPlayingFile(`discover-preview-${current}`)
-        setPlayingId(t.id)
-        lastPlayedTrackRef.current = t
-        setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
-        setIsAudioPlaying(true)
-        setupMediaSession(t)
-        const q = `${t.artist || ''} ${t.title || ''}`.trim()
-        try {
-          const res = await fetch(`${API_BASE}/api/youtube-resolve?q=${encodeURIComponent(q)}`)
-          const data = res.ok ? await res.json() : null
-          if (data?.videoId) {
-            setYoutubeEmbed({ videoId: data.videoId, track: t })
-            setYoutubeVisible(false)
-            previewIntervalRef.current = setTimeout(() => { current++; playNext() }, previewDurationRef.current * 1000)
-          } else { current++; playNext() }
-        } catch { current++; playNext() }
-        return
-      }
-
       const startAudio = (url) => {
         // Cancel any pending advance — we're starting fresh with this src.
         if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
@@ -10461,6 +10432,46 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         }).catch(() => { current++; playNext() })
       }
 
+      // POP/LATIN: el preview es el tema COMPLETO de YouTube, cortado por TU
+      // duración (el sample de Spotify/iTunes dura 30s y se acababa antes del
+      // timer). Si YouTube NO resuelve, cae al sample directo en vez de saltar:
+      // saltar en cascada recorría toda la lista y saturaba el backend con
+      // requests a youtube-resolve. Lee previewDurationRef en cada track → el
+      // swipe de duración aplica al siguiente tema (igual que EDM).
+      if (collection === 'pop' || collection === 'latin') {
+        if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
+        try { sessionAudio.pause() } catch {}  // pausar sample EDM previo (NO tocar .src → dispara onerror)
+        setPlayingFile(`discover-preview-${current}`)
+        setPlayingId(t.id)
+        lastPlayedTrackRef.current = t
+        setNowPlaying({ filename: `discover-preview-${current}`, title: t.title, artist: t.artist, isPreview: true })
+        setIsAudioPlaying(true)
+        setupMediaSession(t)
+        const secs = previewDurationRef.current
+        const q = `${t.artist || ''} ${t.title || ''}`.trim()
+        let videoId = null
+        try {
+          const res = await fetch(`${API_BASE}/api/youtube-resolve?q=${encodeURIComponent(q)}`)
+          const data = res.ok ? await res.json() : null
+          videoId = data?.videoId || null
+        } catch (e) { console.warn('[autoplay POP] youtube-resolve fallo', e) }
+        console.log(`[autoplay POP] #${current} "${t.artist} - ${t.title}" videoId=${videoId || 'NULL'} secs=${secs}`)
+        if (videoId) {
+          setYoutubeEmbed({ videoId, track: t })
+          setYoutubeVisible(false)
+          previewIntervalRef.current = setTimeout(() => { console.log('[autoplay POP] timer fin, avanzo'); current++; playNext() }, secs * 1000)
+        } else {
+          // Fallback: sample/preview directo (30s). Suena el tema en vez de
+          // saltarlo en cascada. setYoutubeEmbed(null) por si quedó un iframe.
+          setYoutubeEmbed(null)
+          const directUrl = t.sample_url || t.preview_url
+          if (directUrl) { console.log('[autoplay POP] sin videoId → fallback sample 30s'); startAudio(directUrl) }
+          else { console.warn('[autoplay POP] sin videoId ni sample → salto', t.title); current++; playNext() }
+        }
+        return
+      }
+
+      // EDM: sample largo de Beatport → iTunes fallback
       // 1) Use track's own preview URL (Beatport sample_url or Spotify preview_url)
       const directUrl = t.sample_url || t.preview_url
       if (directUrl) {
