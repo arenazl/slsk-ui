@@ -10724,6 +10724,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       try { audioRef.current.pause() } catch {}
       try { audioRef.current.src = '' } catch {}
     }
+    // Cambio de tema: el <audio> HTML5 ya se pausó arriba; falta matar el iframe
+    // de YouTube (preview POP/LATIN) del tema anterior. Sin esto, al pasar de POP
+    // a EDM y dar play seguían sonando los dos a la vez.
+    setYoutubeEmbed(null)
 
     // POP / LATIN → YouTube Music embed (full track, much higher quality than
     // iTunes 30s clips). EDM stays on Beatport sample → iTunes fallback.
