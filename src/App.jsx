@@ -7750,19 +7750,29 @@ function App() {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
       let started = false
-      audio.oncanplaythrough = () => {
-        if (started) return // prevent double-fire
+      const begin = () => {
+        if (started) return
         started = true
         const startTime = audio.duration > 120 ? 60 : audio.duration * 0.3
-        audio.currentTime = startTime
+        if (!Number.isNaN(startTime) && Number.isFinite(startTime)) {
+          try { audio.currentTime = startTime } catch {}
+        }
         audio.play().catch(() => {})
-        // Start 30s timer only after playback begins
         previewTimerRef.current = setTimeout(() => {
           playPreviewTrack(list, idx + 1)
         }, 30000)
       }
-      audio.onended = () => playPreviewTrack(list, idx + 1)
-      audio.onerror = () => playPreviewTrack(list, idx + 1)
+      // iOS Safari muchas veces NO dispara canplaythrough — usamos canplay
+      // (mas confiable) y loadedmetadata como fallback. Si en 8s ninguno
+      // disparo (audio no carga), avanzamos al siguiente para no quedar
+      // colgado en el preview continuo.
+      audio.oncanplay = begin
+      audio.onloadedmetadata = begin
+      const watchdog = setTimeout(() => {
+        if (!started) playPreviewTrack(list, idx + 1)
+      }, 8000)
+      audio.onended = () => { clearTimeout(watchdog); playPreviewTrack(list, idx + 1) }
+      audio.onerror = () => { clearTimeout(watchdog); playPreviewTrack(list, idx + 1) }
       audioRef.current = audio
       setPlayingFile(file.filename)
       setNowPlaying(file)
