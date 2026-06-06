@@ -1477,7 +1477,15 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   // Filter by search
   const q = search.toLowerCase().trim()
   const searchFiltered = q
-    ? genreFiltered.filter(f => (f.title || f.filename).toLowerCase().includes(q) || (f.artist || '').toLowerCase().includes(q) || (f.genre || '').toLowerCase().includes(q))
+    // Chequear SIEMPRE el filename (no solo cuando falta title): "Ir a la
+    // biblioteca" setea el buscador con el nombre COMPLETO del archivo
+    // ("Artista - Tema (Original Mix)"), que nunca está contenido en un title
+    // corto de metadata → antes no matcheaba y no te llevaba al tema.
+    ? genreFiltered.filter(f =>
+        (f.filename || '').toLowerCase().includes(q) ||
+        (f.title || '').toLowerCase().includes(q) ||
+        (f.artist || '').toLowerCase().includes(q) ||
+        (f.genre || '').toLowerCase().includes(q))
     : genreFiltered
 
   // Filter by stars (multi-select)
