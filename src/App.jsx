@@ -7090,64 +7090,56 @@ function App() {
   const [remotePlayPrompt, setRemotePlayPrompt] = useState(null)
   const remotePlayCheckRef = useRef(null)
   // ─── Spotify-Connect: dispositivo de salida ───────────────────────────
-  // devices: lista de devices online del mismo user (la manda el server).
-  // outputDeviceId: cuál es el "device de salida" elegido. Default = este
-  // device. Si != este, los controles de reproducción se RUTEAN a ese device
-  // (remote_command) en vez de sonar acá.
+  // devices: lista de equipos online del mismo user (la manda el server).
   const [devices, setDevices] = useState([])
-  const [outputDeviceId, setOutputDeviceId] = useState(() => {
-    try { return localStorage.getItem('output_device_id') || DEVICE.id } catch { return DEVICE.id }
-  })
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
-  const isRemoteOutput = !!outputDeviceId && outputDeviceId !== DEVICE.id
+  // El dispositivo "activo" (donde suena) se DERIVA de la reproducción real, NO
+  // de una elección local persistida — eso hacía que cada equipo se mostrara a
+  // sí mismo como seleccionado aunque sonara otro. Si suena acá → este equipo;
+  // si suena en otro → ese (remoteNowPlaying.device_id); si nada → este.
+  const playingDeviceId = nowPlaying ? DEVICE.id : (remoteNowPlaying?.device_id || DEVICE.id)
+  // Output remoto = suena en OTRO equipo y acá no → los controles se rutean allá.
+  const isRemoteOutput = !nowPlaying && !!remoteNowPlaying?.device_id
   const isRemoteOutputRef = useRef(isRemoteOutput)
   useEffect(() => { isRemoteOutputRef.current = isRemoteOutput }, [isRemoteOutput])
+  // Para TODO el audio local de ESTE equipo. autoplayCancelRef mata el motor de
+  // "preview continuo" de Discovery (+ su timer); killAudio para el <audio>; y el
+  // evento global hace que DiscoverPage mate cualquier otra vía (preview
+  // individual, iframe YouTube legacy, timers sueltos).
+  const stopAllLocalAudio = () => {
+    autoplayCancelRef.current?.()
+    autoplayCancelRef.current = null
+    killAudio(audioRef.current)
+    audioRef.current = null
+    setPlayingFile(null)
+    setNowPlaying(null)
+    setIsAudioPlaying(false)
+    try { window.dispatchEvent(new Event('groovesync-force-stop')) } catch {}
+  }
   const selectOutputDevice = (id) => {
-    const next = id || DEVICE.id
-    const isRemote = !!next && next !== DEVICE.id
-    // Spotify-Connect (PUSH): si elegís OTRO equipo y hay algo sonando acá,
-    // transferimos la reproducción a ese equipo y paramos local. El target
-    // arranca el tema (completo si tiene el archivo, preview online si no —
-    // misma lógica que tocar un tema). NOTA: un iPhone receptor puede bloquear
-    // el autoplay si su pantalla no tuvo interacción reciente (límite de iOS web).
-    // nowPlayingRef = lo que SUENA ahora mismo (evita un nowPlaying viejo del
-    // closure; el preview continuo de Discovery cambia el tema cada ~30s).
-    const current = nowPlayingRef.current || nowPlaying
-    if (isRemote) {
-      if (current) {
-        const t = current
-        try {
-          wsRef.current?.send(JSON.stringify({
-            type: 'remote_command',
-            app_user: authUser?.name || '',
-            target_device_id: next,
-            from_device: DEVICE.name,
-            action: 'play_track',
-            track: {
-              filename: t.filename || '', title: t.title || '', artist: t.artist || '',
-              sample_url: t.sample_url, preview_url: t.preview_url, collection: t.collection || collection,
-            },
-          }))
-        } catch {}
-      }
-      // Parar TODO el audio local de ESTE equipo (suena en el otro ahora).
-      // autoplayCancelRef mata el motor de "preview continuo" de Discovery (y su
-      // timer de avance); killAudio para el <audio> de audioRef; y el evento
-      // global 'groovesync-force-stop' hace que DiscoverPage mate cualquier otra
-      // vía (preview individual, iframe YouTube legacy, timers sueltos). Sin esto
-      // el origen seguía sonando → "suena en los dos lados".
-      autoplayCancelRef.current?.()
-      autoplayCancelRef.current = null
-      killAudio(audioRef.current)
-      audioRef.current = null
-      setPlayingFile(null)
-      setNowPlaying(null)
-      setIsAudioPlaying(false)
-      try { window.dispatchEvent(new Event('groovesync-force-stop')) } catch {}
-    }
-    setOutputDeviceId(next)
-    try { localStorage.setItem('output_device_id', next) } catch {}
     setDeviceMenuOpen(false)
+    const next = id || DEVICE.id
+    if (next === playingDeviceId) return  // ya suena ahí — nada que hacer
+    const sendTo = (target, payload) => {
+      try {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !authUser?.name || !target) return
+        wsRef.current.send(JSON.stringify({ type: 'remote_command', app_user: authUser.name, target_device_id: target, from_device: DEVICE.name, ...payload }))
+      } catch {}
+    }
+    const slim = (t) => ({ filename: t.filename || '', title: t.title || '', artist: t.artist || '', sample_url: t.sample_url, preview_url: t.preview_url, collection: t.collection || collection })
+    if (next === DEVICE.id) {
+      // PULL: traer la reproducción ACÁ. Callamos el equipo remoto y tocamos local.
+      const t = remoteNowPlaying
+      if (t?.device_id) sendTo(t.device_id, { action: 'stop' })
+      if (t) handleAppPlay({ filename: t.filename, title: t.title, artist: t.artist })
+      return
+    }
+    // PUSH a otro equipo: le mandamos lo que suena (local o remoto), callamos el
+    // origen remoto si era otro, y dejamos de sonar acá.
+    const src = nowPlayingRef.current || remoteNowPlaying
+    if (src) sendTo(next, { action: 'play_track', track: slim(src) })
+    if (remoteNowPlaying?.device_id && remoteNowPlaying.device_id !== next) sendTo(remoteNowPlaying.device_id, { action: 'stop' })
+    stopAllLocalAudio()
   }
   // DiscoverPage registra acá su motor de preview para que el RECEPTOR pueda
   // dispararlo cuando llega un remote_command (la PC/celu controla al otro).
@@ -7161,7 +7153,7 @@ function App() {
       wsRef.current.send(JSON.stringify({
         type: 'remote_command',
         app_user: authUser.name,
-        target_device_id: outputDeviceId,
+        target_device_id: remoteNowPlaying?.device_id,
         from_device: DEVICE.name,
         ...cmd,
       }))
@@ -7188,6 +7180,7 @@ function App() {
         artist: nowPlaying?.artist || '',
         is_playing: !!nowPlaying,
         device: DEVICE?.name || '',
+        device_id: DEVICE?.id || '',
         ts: Date.now(),
       }))
     } catch {}
@@ -7299,26 +7292,23 @@ function App() {
             title: data.title || '',
             artist: data.artist || '',
             device: data.device || '',
+            device_id: data.device_id || '',
             is_playing: true,
             ts: data.ts || 0,
           })
+          // Single-playback (Spotify): si OTRO equipo empezó a tocar, callamos lo
+          // nuestro — solo UN equipo suena a la vez. (El server no nos manda
+          // nuestro propio sync_player, así que esto siempre viene de otro.)
+          if (nowPlayingRef.current) stopAllLocalAudio()
         } else {
           setRemoteNowPlaying(null)
         }
       }
 
       // Spotify-Connect: lista de devices online del mismo user (para el
-      // selector "dispositivo de salida"). Si el device de salida elegido ya
-      // no está, volvemos a "este device".
+      // selector). El "activo" se deriva de la reproducción real, no de acá.
       if (data.type === 'devices' && Array.isArray(data.devices)) {
         setDevices(data.devices)
-        setOutputDeviceId(prev => {
-          if (!prev || prev === DEVICE.id) return prev
-          const stillOnline = data.devices.some(d => d.id === prev)
-          if (stillOnline) return prev
-          try { localStorage.setItem('output_device_id', DEVICE.id) } catch {}
-          return DEVICE.id
-        })
       }
 
       // Spotify-Connect: ESTE device es el target de un comando remoto (el
@@ -9202,14 +9192,14 @@ function App() {
                     ? 'border-green-500/50 bg-green-500/15 text-green-400'
                     : 'border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
-                title={isRemoteOutput ? `Reproduciendo en ${(devices.find(d => d.id === outputDeviceId)?.name) || 'otro equipo'}` : 'Elegir dispositivo de salida'}
+                title={isRemoteOutput ? `Reproduciendo en ${(devices.find(d => d.id === playingDeviceId)?.name) || 'otro equipo'}` : 'Elegir dispositivo de salida'}
               >
                 {/* icono cast/dispositivos (SVG, sin emojis) */}
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a3 3 0 01-3 3H4m0-4a6 6 0 016 6m-6-10a10 10 0 0110 10M4 5h16a1 1 0 011 1v3M4 9V6a1 1 0 011-1m13 8h.01M16 17h4a1 1 0 001-1v-3" />
                 </svg>
                 <span className="text-[10px] font-semibold uppercase tracking-wider hidden md:inline max-w-[7rem] truncate">
-                  {isRemoteOutput ? ((devices.find(d => d.id === outputDeviceId)?.name) || 'Otro') : 'Salida'}
+                  {isRemoteOutput ? ((devices.find(d => d.id === playingDeviceId)?.name) || 'Otro') : 'Salida'}
                 </span>
               </button>
               {deviceMenuOpen && (
@@ -9221,7 +9211,7 @@ function App() {
                     </div>
                     {devices.map(d => {
                       const isSelf = d.id === DEVICE.id
-                      const active = d.id === outputDeviceId
+                      const active = d.id === playingDeviceId
                       return (
                         <button
                           key={d.id}
@@ -10263,7 +10253,7 @@ function App() {
           isRemoteOutput={isRemoteOutput}
           sendRemoteCommand={sendRemoteCommand}
           discoverRemoteRef={discoverRemoteRef}
-          outputDeviceName={(devices.find(d => d.id === outputDeviceId)?.name) || 'otro equipo'}
+          outputDeviceName={(devices.find(d => d.id === playingDeviceId)?.name) || 'otro equipo'}
         />
       </div>
 
@@ -10938,24 +10928,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     console.log('[PreviewContinuo] startIdx=', startIdx, 'listLen=', activeList.length)
     if (startIdx === -1) return
     const playlist = activeList.slice(startIdx)
-    // Spotify-Connect: si el "dispositivo de salida" es OTRO device, RUTEAMOS
-    // la reproducción a ese device en vez de sonar acá. Mandamos la playlist
-    // (slim) y el otro corre el mismo motor.
-    if (isRemoteOutput && sendRemoteCommand) {
-      const slim = playlist.map(t => ({
-        id: t.id, title: t.title, artist: t.artist,
-        sample_url: t.sample_url, preview_url: t.preview_url,
-        artwork_url: t.artwork_url, label: t.label, genre: t.genre,
-      }))
-      const ok = sendRemoteCommand({ action: 'preview', playlist: slim, startIdx: 0, duration: previewDurationRef.current })
-      if (ok) {
-        toast(`Reproduciendo en ${outputDeviceName}`, 'info', 2500)
-        // Reflejar localmente lo que mandamos a tocar (badge + barra).
-        setNowPlaying({ filename: `remote-${startTrack.id}`, title: startTrack.title, artist: startTrack.artist, isPreview: true, isRemote: true })
-        return
-      }
-      // Si falló el envío por WS, caemos a reproducción local como fallback.
-    }
+    // Tocar SIEMPRE suena acá. El casting a otro equipo se hace con el selector
+    // de salida (PUSH); cuando este equipo arranca, el otro se calla solo por la
+    // regla de single-playback (sync_player). Antes, si "isRemoteOutput", esto
+    // ruteaba al otro device y confundía (tocabas en la PC y sonaba en el celu).
     startPreviewEngine(playlist, 0)
   }
 
