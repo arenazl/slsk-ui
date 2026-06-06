@@ -6926,7 +6926,23 @@ function App() {
     const configHeaders = { 'Content-Type': 'application/json' }
 
     const checkAgent = async () => {
+      // 1) LOCAL primero: si el agente corre en ESTA misma PC (localhost:9900) lo
+      //    detectamos directo y lo CONFIGURAMOS para el usuario logueado → se
+      //    re-vincula a esa cuenta (ej. logueás Ariel con el agente prendido y
+      //    queda como agente de Ariel). En mobile localhost no existe → connection
+      //    refused inmediato → cae al proxy, sin esperar el timeout.
       try {
+        if (await connectAgent('local', `${AGENT_BASE}/api/status`,
+          () => agentFetch('config', { method: 'POST', headers: configHeaders, body: configBody })
+        )) {
+          setAgentRegistered(true)
+          setAgentCheckDone(true)
+          return
+        }
+      } catch { /* sin agente local en esta PC */ }
+      // 2) PROXY (por usuario, vía Cloud Run) — para mobile u otra PC.
+      try {
+        AGENT_MODE = 'proxy'
         const proxyStatus = `${API_BASE}/api/agent/proxy/status?u=${encodeURIComponent(authUser.name)}`
         if (await connectAgent('proxy',
           proxyStatus,
@@ -8912,7 +8928,7 @@ function App() {
                 ? 'border-green-500/40 bg-green-500/10 text-green-400'
                 : agentRegistered
                   ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400'
-                  : 'border-red-500/40 bg-red-500/10 text-red-400'
+                  : 'border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
             }`}
             title={agentConnected ? `Agente v${agentVersion} conectado` : agentRegistered ? 'Agente instalado pero apagado — prendelo en tu PC' : 'Agente sin instalar — tocá para descargar'}
           >
