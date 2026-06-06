@@ -30,11 +30,11 @@
     <script>
       // ONE-TIME nuke del Service Worker viejo de la PWA. La logica antigua
       // cacheaba bundles pre-2026-05-25 y no se autoactualizaba bien. Esta
-      // bandera "sw_nuked_v3" lo unregistra una sola vez por dispositivo,
+      // bandera "sw_nuked_v4" lo unregistra una sola vez por dispositivo,
       // recarga y deja paso al SW nuevo (auto-update). No hace nada en
       // visitas siguientes.
-      if ('serviceWorker' in navigator && !localStorage.getItem('sw_nuked_v3')) {
-        localStorage.setItem('sw_nuked_v3', '1')
+      if ('serviceWorker' in navigator && !localStorage.getItem('sw_nuked_v4')) {
+        localStorage.setItem('sw_nuked_v4', '1')
         navigator.serviceWorker.getRegistrations().then((regs) => {
           if (regs.length === 0) return
           return Promise.all(regs.map((r) => r.unregister())).then(() => {
