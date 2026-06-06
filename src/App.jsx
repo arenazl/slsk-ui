@@ -8047,6 +8047,15 @@ function App() {
       const token = localStorage.getItem('auth_token')
       if (!token) return null
       const res = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      if (res.status === 401) {
+        // Sesión inválida (el server reinició y perdió el token, o la cuenta fue
+        // borrada/reseteada): echar al login en vez de quedar "logueado" falso con
+        // el localStorage. Sin esto, F5 te dejaba adentro con una sesión muerta.
+        try { localStorage.removeItem('auth_token'); localStorage.removeItem('auth_user') } catch {}
+        setAuthUser(null)
+        setUserStatus(null)
+        return null
+      }
       if (!res.ok) return null
       const data = await res.json()
       setUserStatus(data)
@@ -8419,6 +8428,68 @@ function App() {
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-[var(--text-primary)] mb-4">Configuración</h2>
             <div className="space-y-4">
+              {/* Apariencia y app — controles movidos del topbar para que entre en ~1300px */}
+              <div>
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Apariencia y app</div>
+                <div className="space-y-2">
+                  {/* Tema claro/oscuro */}
+                  <button
+                    onClick={toggleTheme}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] transition-all active:scale-[0.99]"
+                  >
+                    <span className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
+                      {theme === 'dark' ? (
+                        <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                      )}
+                      Tema
+                    </span>
+                    <span className="text-xs font-medium text-[var(--text-muted)]">{theme === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'}</span>
+                  </button>
+                  {/* Instalar app (PWA) — misma condición que tenía en el topbar */}
+                  {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
+                    <button
+                      onClick={() => { setSettingsOpen(false); handleInstall() }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] transition-all active:scale-[0.99] text-sm text-[var(--text-primary)]"
+                      title="Instalar esta web como app en tu equipo (NO es el agente de descargas)"
+                    >
+                      <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <rect x="4" y="3" width="16" height="18" rx="3.5" strokeWidth={1.6} />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8.5v6m-3-3h6" />
+                      </svg>
+                      Instalar app
+                    </button>
+                  )}
+                  {/* Carpeta de descargas (File System Access) */}
+                  {fsaReady ? (
+                    <button
+                      onClick={forgetStorageFolder}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[var(--color-accent)]/30 bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] transition-all active:scale-[0.99]"
+                      title={`Carpeta: ${fsaFolderName} (click para cambiar)`}
+                    >
+                      <span className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
+                        <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                        Carpeta de descargas
+                      </span>
+                      <span className="text-xs font-medium text-[var(--color-accent)] truncate max-w-[10rem]">{fsaFolderName}</span>
+                    </button>
+                  ) : (fsaBackend.supported && !agentConnected && (
+                    <button
+                      onClick={() => { setSettingsOpen(false); setShowFolderModal(true) }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-yellow-500/30 bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] transition-all active:scale-[0.99] text-sm text-[var(--text-primary)]"
+                      title="Elegir carpeta de descargas"
+                    >
+                      <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                      Elegir carpeta
+                    </button>
+                  ))}
+                </div>
+              </div>
               {!IS_MOBILE_DEVICE && (
                 <div>
                   <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Modo de reproducción</div>
@@ -8850,27 +8921,34 @@ function App() {
               {agentConnected ? 'Agente ON' : agentRegistered ? 'Apagado' : 'Instalar'}
             </span>
           </button>
-          {/* Unified topbar icon row: every control shares h-8 + rounded-lg +
-              border + subtle bg + same hover. Status icons use semantic color
-              only for the icon/border, never as a solid fill. */}
-          <div className="hidden xl:flex items-center h-8 gap-1 px-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 flex-shrink-0">
-            <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mr-1">Cliente Descargas</span>
+          {/* Compact "Descargar agente" — single button (Windows .exe) + a small
+              secondary Mac icon. Left-click downloads, right-click opens the
+              install instructions modal. Always visible from md up so it never
+              relies on the xl breakpoint that used to overflow at ~1300px. */}
+          <div className={`hidden md:flex items-center h-8 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 flex-shrink-0 overflow-hidden ${agentBtnPulse ? 'ring-2 ring-blue-400 animate-pulse' : ''}`}>
             <a
-              href="https://djfreeapp.ar/GrooveSyncAgent.exe"
-              className={`relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 ${agentBtnPulse && !isMacOS ? 'ring-2 ring-blue-400 animate-pulse' : ''}`}
-              title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Windows) — Click derecho para ver instrucciones'}
+              href={isMacOS
+                ? 'https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip'
+                : 'https://djfreeapp.ar/GrooveSyncAgent.exe'}
+              className="h-full flex items-center gap-1.5 px-2.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
+              title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar agente — Click derecho para instrucciones'}
               onContextMenu={(e) => { e.preventDefault(); setAgentInstallOpen(true) }}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+              <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              <span className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
+              <span className="hidden lg:inline">Descargar agente</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${agentConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
             </a>
+            {/* Secondary platform link — the OS not auto-detected above */}
             <a
-              href="https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip"
-              className={`relative w-6 h-6 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 ${agentBtnPulse && isMacOS ? 'ring-2 ring-blue-400 animate-pulse' : ''}`}
-              title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar Agente (Mac) - Click derecho para Mac viejo'}
+              href={isMacOS
+                ? 'https://djfreeapp.ar/GrooveSyncAgent.exe'
+                : 'https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip'}
+              className="h-full w-7 flex items-center justify-center border-l border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
+              title={isMacOS ? 'Descargar agente (Windows)' : 'Descargar agente (Mac) — Click derecho para Mac viejo'}
               onContextMenu={(e) => {
+                if (isMacOS) return
                 e.preventDefault()
                 copyToClipboard(
                   'curl -sL https://bootstrap.pypa.io/get-pip.py | python3 && python3 -m pip install pystray pillow aiohttp cloudinary && curl -sL https://raw.githubusercontent.com/arenazl/slsk-agent/master/agent.py -o /tmp/agent.py && python3 /tmp/agent.py',
@@ -8880,7 +8958,11 @@ function App() {
               }}
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+                {isMacOS ? (
+                  <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+                ) : (
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+                )}
               </svg>
             </a>
           </div>
@@ -8899,21 +8981,7 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-          <button
-            onClick={toggleTheme}
-            className="w-8 h-8 hidden md:flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
-            title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}
-          >
-            {theme === 'dark' ? (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            ) : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-              </svg>
-            )}
-          </button>
+          {/* Theme toggle moved to Configuración → "Apariencia y app". */}
           {/* Global panic-stop: kills every audio element on the page (HTML5
               <audio> + autoplay session in Discover) so any "doble tema"
               that snuck through can be silenced in one tap. Only shown when
@@ -8939,66 +9007,9 @@ function App() {
               </svg>
             </button>
           )}
-          {!isStandalone && (installPrompt || /iPhone|iPad|iPod/i.test(navigator.userAgent)) && (
-            <button
-              onClick={handleInstall}
-              className="h-8 hidden lg:flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
-              title="Instalar esta web como app en tu equipo (NO es el agente de descargas)"
-            >
-              <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <rect x="4" y="3" width="16" height="18" rx="3.5" strokeWidth={1.6} />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8.5v6m-3-3h6" />
-              </svg>
-              <span className="hidden sm:inline">Instalar app</span>
-            </button>
-          )}
-          <button
-            onClick={() => window.location.reload()}
-            className="w-8 h-8 hidden md:flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0"
-            title="Recargar versión nueva"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-          <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-            <span
-              className={`w-8 h-8 flex items-center justify-center rounded-lg border bg-[var(--bg-input)]/40 ${connected ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'}`}
-              title={connected ? (isRunning ? 'Buscando / descargando…' : 'Búsqueda — backend SoulSeek conectado') : 'Backend SoulSeek desconectado'}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m2.1-5.4a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" />
-              </svg>
-            </span>
-            <span
-              className={`w-8 h-8 flex items-center justify-center rounded-lg border bg-[var(--bg-input)]/40 ${agentConnected ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'}`}
-              title={agentConnected ? `Descargas — agente ${agentVersion} conectado (${AGENT_MODE === 'local' ? 'local' : AGENT_BASE.includes('ts.net') ? 'Tailscale' : 'proxy cloud'})` : 'Descargas — agente local no conectado'}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            </span>
-            {fsaReady && (
-              <button
-                onClick={forgetStorageFolder}
-                className="h-8 flex items-center gap-1.5 px-2.5 rounded-lg border border-[var(--color-accent)]/30 bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
-                title={`Carpeta: ${fsaFolderName} (click para cambiar)`}
-              >
-                <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
-                <span className="text-xs font-medium text-[var(--color-accent)] hidden sm:inline truncate max-w-24">{fsaFolderName}</span>
-              </button>
-            )}
-            {fsaBackend.supported && !fsaReady && !agentConnected && (
-              <button
-                onClick={() => setShowFolderModal(true)}
-                className="h-8 flex items-center gap-1.5 px-2.5 rounded-lg border border-yellow-500/30 bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
-                title="Elegir carpeta de descargas"
-              >
-                <svg className="w-3.5 h-3.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
-                <span className="text-xs font-medium text-yellow-400 hidden sm:inline">Elegir carpeta</span>
-              </button>
-            )}
-          </div>
+          {/* "Instalar app", recargar, los 2 status icons (lupa SoulSeek +
+              flecha agente) y la carpeta FSA se movieron a Configuración →
+              "Apariencia y app". El estado del agente vive en el badge "AGENTE ON". */}
           {authUser && (
             <div className="relative">
               <button
