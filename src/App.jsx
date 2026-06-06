@@ -1236,7 +1236,13 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     // Sin `file` solo abre la carpeta sin marcar nada.
     const fileQs = file ? `&file=${encodeURIComponent(file)}` : ''
     if (agentConnected) {
-      await agentFetch(`open-folder?folder=${encodeURIComponent(folder || '')}${fileQs}`)
+      const r = await agentFetch(`open-folder?folder=${encodeURIComponent(folder || '')}${fileQs}`).catch(() => null)
+      // Un tema recién bajado vive en la RAÍZ (todavía sin organizar en su
+      // subcarpeta de género). Si la subcarpeta da 404, reintentamos en la raíz
+      // para resaltarlo igual en vez de fallar.
+      if (file && folder && (!r || !r.ok)) {
+        await agentFetch(`open-folder?file=${encodeURIComponent(file)}`).catch(() => {})
+      }
     } else {
       await fetch(`${API_BASE}/api/open-folder`, {
         method: 'POST',
@@ -2358,7 +2364,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               Preview continuo (30s c/u)
             </button>
             <button
-              onClick={() => { openFolder(ctxMenu.file?.subfolder || ctxMenu.file?.genre || '', ctxMenu.file?.filename || ctxMenu.file?.name || ''); setCtxMenu(null) }}
+              onClick={() => { openFolder(ctxMenu.file?.subfolder || '', ctxMenu.file?.filename || ctxMenu.file?.name || ''); setCtxMenu(null) }}
               className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -12106,7 +12112,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               <button
                 onClick={() => {
                   const loc = isInLibrary.findLocation(discoverCtx.track) || { folder: '', file: '' }
-                  agentFetch(`open-folder?folder=${encodeURIComponent(loc.folder)}&file=${encodeURIComponent(loc.file)}`).catch(() => {})
+                  ;(async () => {
+                    // folder = género de la IA; un tema sin organizar vive en la
+                    // raíz → si da 404, reintentar en la raíz para resaltarlo.
+                    const r = await agentFetch(`open-folder?folder=${encodeURIComponent(loc.folder)}&file=${encodeURIComponent(loc.file)}`).catch(() => null)
+                    if (loc.file && (!r || !r.ok)) await agentFetch(`open-folder?file=${encodeURIComponent(loc.file)}`).catch(() => {})
+                  })()
                   setDiscoverCtx(null)
                 }}
                 className="w-full text-left px-3 py-2 text-sm text-green-400 hover:bg-[var(--bg-hover)] hover:text-green-300 transition-colors flex items-center gap-2"
@@ -12212,7 +12223,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 <button
                   onClick={() => {
                     const loc = isInLibrary.findLocation(discoverCtx.track) || { folder: '', file: '' }
-                    agentFetch(`open-folder?folder=${encodeURIComponent(loc.folder)}&file=${encodeURIComponent(loc.file)}`).catch(() => {})
+                    ;(async () => {
+                    // folder = género de la IA; un tema sin organizar vive en la
+                    // raíz → si da 404, reintentar en la raíz para resaltarlo.
+                    const r = await agentFetch(`open-folder?folder=${encodeURIComponent(loc.folder)}&file=${encodeURIComponent(loc.file)}`).catch(() => null)
+                    if (loc.file && (!r || !r.ok)) await agentFetch(`open-folder?file=${encodeURIComponent(loc.file)}`).catch(() => {})
+                  })()
                     setDiscoverCtx(null)
                   }}
                   className="w-full text-left px-4 py-3 rounded-xl text-sm text-green-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]"
