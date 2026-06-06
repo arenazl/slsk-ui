@@ -7099,6 +7099,32 @@ function App() {
   useEffect(() => { isRemoteOutputRef.current = isRemoteOutput }, [isRemoteOutput])
   const selectOutputDevice = (id) => {
     const next = id || DEVICE.id
+    const isRemote = !!next && next !== DEVICE.id
+    // Spotify-Connect (PUSH): si elegís OTRO equipo y hay algo sonando acá,
+    // transferimos la reproducción a ese equipo y paramos local. El target
+    // arranca el tema (completo si tiene el archivo, preview online si no —
+    // misma lógica que tocar un tema). NOTA: un iPhone receptor puede bloquear
+    // el autoplay si su pantalla no tuvo interacción reciente (límite de iOS web).
+    if (isRemote && nowPlaying) {
+      const t = nowPlaying
+      try {
+        wsRef.current?.send(JSON.stringify({
+          type: 'remote_command',
+          app_user: authUser?.name || '',
+          target_device_id: next,
+          from_device: DEVICE.name,
+          action: 'play_track',
+          track: {
+            filename: t.filename || '', title: t.title || '', artist: t.artist || '',
+            sample_url: t.sample_url, preview_url: t.preview_url, collection: t.collection || collection,
+          },
+        }))
+      } catch {}
+      killAudio(audioRef.current)
+      audioRef.current = null
+      setNowPlaying(null)
+      setIsAudioPlaying(false)
+    }
     setOutputDeviceId(next)
     try { localStorage.setItem('output_device_id', next) } catch {}
     setDeviceMenuOpen(false)
@@ -7293,6 +7319,12 @@ function App() {
           r.next()
         } else if (act === 'prev' && r?.prev) {
           r.prev()
+        } else if (act === 'play_track' && data.track) {
+          // Spotify-Connect (PUSH): otro equipo nos transfirió su reproducción.
+          // handleAppPlay decide solo: tema completo si tenemos el archivo
+          // (agente/FSA) o preview online si no. Vía ref para no usar una
+          // versión vieja (el handler WS es closure de la 1ra render).
+          handleAppPlayRef.current?.(data.track)
         }
       }
 
@@ -7916,6 +7948,11 @@ function App() {
       setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
     }
   }
+  // Ref siempre-fresco a handleAppPlay: el handler de WS es closure de la 1ra
+  // render (connectWs tiene deps []), así que llamarlo directo usaría
+  // agentConnected/playbackMode viejos. Vía ref siempre corre la última versión.
+  const handleAppPlayRef = useRef(null)
+  handleAppPlayRef.current = handleAppPlay
 
   const handleAppPlayPause = () => {
     // Spotify-Connect: si el output es otro device, ruteamos el play/pause allá.
