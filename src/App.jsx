@@ -6895,6 +6895,7 @@ function App() {
 
   const [agentConnected, setAgentConnected] = useState(false)
   const agentConnectedRef = useRef(false)
+  const agentFailRef = useRef(0)  // fallos consecutivos del polling — tolerar cold start de Cloud Run
   const [agentVersion, setAgentVersion] = useState('')
   const [agentHasSlsk, setAgentHasSlsk] = useState(false)
   useEffect(() => {
@@ -6907,7 +6908,7 @@ function App() {
       if (res.ok) {
         AGENT_MODE = mode
         const status = await res.json()
-        setAgentConnected(true); agentConnectedRef.current = true; AGENT_CONNECTED = true
+        setAgentConnected(true); agentConnectedRef.current = true; AGENT_CONNECTED = true; agentFailRef.current = 0
         setAgentVersion(status.version || '')
         setAgentHasSlsk(!!status.slsk)
         // Expongo en window para debug (F12 → window.__agentDebug)
@@ -6936,7 +6937,13 @@ function App() {
           return
         }
       } catch { /* proxy failed */ }
-      setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
+      // Tolerancia al cold start de Cloud Run (min-instances=0): NO marcar
+      // "apagado" ante UN solo fallo del polling; recién tras 2 seguidos (~60s).
+      // Evita el falso "agente no conectado" con el agente realmente prendido.
+      agentFailRef.current += 1
+      if (agentFailRef.current >= 2) {
+        setAgentConnected(false); agentConnectedRef.current = false; AGENT_CONNECTED = false
+      }
       // Agent isn't reachable RIGHT NOW (private IP, Tailscale, offline, dyno restart),
       // but check Cloudinary for the durable "has ever registered" flag. This lets a
       // tablet/phone on the same account toggle "Mi PC" mode even when the desktop is
@@ -8820,6 +8827,29 @@ function App() {
               </button>
             </div>
           )}
+          {/* Estado del agente — SIEMPRE visible (3 estados, refresca con el
+              polling/heartbeat de 30s; sin sockets). Verde=prendido,
+              amarillo=instalado pero apagado, rojo=sin instalar (tocá → descargar). */}
+          <button
+            onClick={() => {
+              if (agentConnected) toast(`Agente v${agentVersion} prendido y listo`, 'success', 2500)
+              else if (agentRegistered) toast('Tu agente está apagado — abrilo en tu PC para poder descargar', 'warning', 4500)
+              else setAgentInstallOpen(true)
+            }}
+            className={`h-8 flex items-center gap-1.5 px-2.5 rounded-lg border transition-all duration-200 active:scale-95 flex-shrink-0 ${
+              agentConnected
+                ? 'border-green-500/40 bg-green-500/10 text-green-400'
+                : agentRegistered
+                  ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400'
+                  : 'border-red-500/40 bg-red-500/10 text-red-400 animate-pulse'
+            }`}
+            title={agentConnected ? `Agente v${agentVersion} conectado` : agentRegistered ? 'Agente instalado pero apagado — prendelo en tu PC' : 'Agente sin instalar — tocá para descargar'}
+          >
+            <span className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-500' : agentRegistered ? 'bg-yellow-500' : 'bg-red-500'}`} />
+            <span className="text-[10px] font-semibold uppercase tracking-wider hidden sm:inline">
+              {agentConnected ? 'Agente ON' : agentRegistered ? 'Apagado' : 'Instalar'}
+            </span>
+          </button>
           {/* Unified topbar icon row: every control shares h-8 + rounded-lg +
               border + subtle bg + same hover. Status icons use semantic color
               only for the icon/border, never as a solid fill. */}
