@@ -7886,6 +7886,20 @@ function App() {
     setPlayingFile(file.filename)
     setNowPlaying(file)
     setIsAudioPlaying(true)
+    // Sin forma de alcanzar el archivo real (no hay agente conectado) caemos al
+    // preview online (iTunes por artista+título), igual que Discovery — así la
+    // biblioteca SUENA en tablet/iPhone sin agente, donde antes "no andaba nada".
+    // En mobile/Safari `fsaBackend.supported` es false → el ternario NO ejecuta
+    // el await, preservando el gesto de autoplay de iOS. En desktop con FSA
+    // chequeamos si hay carpeta local antes de decidir.
+    if (!agentConnected) {
+      const reachable = fsaBackend.supported ? await fsaBackend.ready() : false
+      if (!reachable) {
+        setNowPlaying({ ...file, isPreview: true })
+        playLibraryPreview(file)
+        return
+      }
+    }
     try {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
