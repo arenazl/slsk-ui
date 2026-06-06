@@ -8912,7 +8912,7 @@ function App() {
                 ? 'border-green-500/40 bg-green-500/10 text-green-400'
                 : agentRegistered
                   ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400'
-                  : 'border-red-500/40 bg-red-500/10 text-red-400 animate-pulse'
+                  : 'border-red-500/40 bg-red-500/10 text-red-400'
             }`}
             title={agentConnected ? `Agente v${agentVersion} conectado` : agentRegistered ? 'Agente instalado pero apagado — prendelo en tu PC' : 'Agente sin instalar — tocá para descargar'}
           >
@@ -8921,11 +8921,11 @@ function App() {
               {agentConnected ? 'Agente ON' : agentRegistered ? 'Apagado' : 'Instalar'}
             </span>
           </button>
-          {/* Compact "Descargar agente" — single button (Windows .exe) + a small
-              secondary Mac icon. Left-click downloads, right-click opens the
-              install instructions modal. Always visible from md up so it never
-              relies on the xl breakpoint that used to overflow at ~1300px. */}
-          <div className={`hidden md:flex items-center h-8 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)]/40 flex-shrink-0 overflow-hidden ${agentBtnPulse ? 'ring-2 ring-blue-400 animate-pulse' : ''}`}>
+          {/* "Descargar agente" — SOLO si el agente NO está conectado (si ya está,
+              sobra: el badge "AGENTE ON" alcanza). Titila fuerte para que un
+              usuario sin agente sepa que es LO que tiene que bajar. */}
+          {!agentConnected && (
+          <div className="hidden md:flex items-center h-8 rounded-lg border border-blue-400/60 bg-blue-500/5 flex-shrink-0 overflow-hidden ring-2 ring-blue-400 animate-pulse">
             <a
               href={isMacOS
                 ? 'https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip'
@@ -8966,6 +8966,7 @@ function App() {
               </svg>
             </a>
           </div>
+          )}
           {/* SoulSeek restart — hidden (duplicate of page-reload icon). Kept for re-enabling. */}
           <button
             onClick={async () => {
