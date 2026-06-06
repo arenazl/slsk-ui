@@ -7084,6 +7084,11 @@ function App() {
   // Bandera para no contaminar el player local. Solo se usa en el badge
   // "tu celu esta tocando: X" del topbar.
   const [remoteNowPlaying, setRemoteNowPlaying] = useState(null)
+  // Spotify-Connect: cuando OTRO equipo nos transfiere su reproducción (push) e
+  // iOS bloquea el autoplay sin gesto, guardamos el tema acá para mostrar un
+  // botón "Tocar para escuchar acá" — un toque desbloquea y reproduce.
+  const [remotePlayPrompt, setRemotePlayPrompt] = useState(null)
+  const remotePlayCheckRef = useRef(null)
   // ─── Spotify-Connect: dispositivo de salida ───────────────────────────
   // devices: lista de devices online del mismo user (la manda el server).
   // outputDeviceId: cuál es el "device de salida" elegido. Default = este
@@ -7324,7 +7329,18 @@ function App() {
           // handleAppPlay decide solo: tema completo si tenemos el archivo
           // (agente/FSA) o preview online si no. Vía ref para no usar una
           // versión vieja (el handler WS es closure de la 1ra render).
-          handleAppPlayRef.current?.(data.track)
+          const track = data.track
+          setRemotePlayPrompt(null)
+          handleAppPlayRef.current?.(track)
+          // iOS bloquea el autoplay sin gesto del usuario. Si tras ~1.8s el
+          // audio no arrancó (sigue paused), mostramos el botón "Tocar para
+          // escuchar acá". En Android/desktop/iOS-ya-desbloqueado arranca solo
+          // y el botón no aparece.
+          if (remotePlayCheckRef.current) clearTimeout(remotePlayCheckRef.current)
+          remotePlayCheckRef.current = setTimeout(() => {
+            const a = audioRef.current
+            if (!a || a.paused) setRemotePlayPrompt(track)
+          }, 1800)
         }
       }
 
@@ -7892,6 +7908,8 @@ function App() {
 
   const handleAppPlay = async (file) => {
     stopPreviewModeApp()
+    setRemotePlayPrompt(null)  // al reproducir algo, sacamos el botón "tocar para escuchar acá"
+    if (remotePlayCheckRef.current) { clearTimeout(remotePlayCheckRef.current); remotePlayCheckRef.current = null }
     if (playingFile === file.filename) {
       // Toggle pause/resume
       if (audioRef.current?.paused) {
@@ -10248,6 +10266,26 @@ function App() {
             Detener
           </button>
         </div>
+      )}
+
+      {/* Spotify-Connect: otro equipo nos transfirió la reproducción pero iOS
+          bloqueó el autoplay (sin gesto). Un toque acá desbloquea y reproduce. */}
+      {remotePlayPrompt && (
+        <button
+          onClick={() => {
+            const t = remotePlayPrompt
+            setRemotePlayPrompt(null)
+            if (remotePlayCheckRef.current) { clearTimeout(remotePlayCheckRef.current); remotePlayCheckRef.current = null }
+            handleAppPlay(t)
+          }}
+          className="flex-shrink-0 w-full flex items-center gap-2.5 px-4 py-2.5 bg-[var(--color-accent)]/15 border-t border-[var(--color-accent)]/40 text-left active:scale-[0.99] transition-transform"
+        >
+          <svg className="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          <span className="text-xs text-[var(--text-primary)] truncate">
+            Tocar para escuchar acá<span className="text-[var(--text-muted)]"> · </span>
+            <span className="font-semibold">{[remotePlayPrompt.artist, remotePlayPrompt.title].filter(Boolean).join(' — ') || remotePlayPrompt.filename}</span>
+          </span>
+        </button>
       )}
 
       {/* Cross-device now-playing (Spotify-Connect-like): lo que está sonando
