@@ -7113,31 +7113,37 @@ function App() {
     // nowPlayingRef = lo que SUENA ahora mismo (evita un nowPlaying viejo del
     // closure; el preview continuo de Discovery cambia el tema cada ~30s).
     const current = nowPlayingRef.current || nowPlaying
-    if (isRemote && current) {
-      const t = current
-      try {
-        wsRef.current?.send(JSON.stringify({
-          type: 'remote_command',
-          app_user: authUser?.name || '',
-          target_device_id: next,
-          from_device: DEVICE.name,
-          action: 'play_track',
-          track: {
-            filename: t.filename || '', title: t.title || '', artist: t.artist || '',
-            sample_url: t.sample_url, preview_url: t.preview_url, collection: t.collection || collection,
-          },
-        }))
-      } catch {}
-      // Parar TODO el audio local — incluido el motor de "preview continuo" de
-      // Discovery, que se cancela por autoplayCancelRef (limpia su timer de
-      // avance). Sin esto la compu reanudaba a los ~30s y avanzaba de tema, por
-      // eso "seguía sonando" y "no era el mismo tema" tras el switch.
+    if (isRemote) {
+      if (current) {
+        const t = current
+        try {
+          wsRef.current?.send(JSON.stringify({
+            type: 'remote_command',
+            app_user: authUser?.name || '',
+            target_device_id: next,
+            from_device: DEVICE.name,
+            action: 'play_track',
+            track: {
+              filename: t.filename || '', title: t.title || '', artist: t.artist || '',
+              sample_url: t.sample_url, preview_url: t.preview_url, collection: t.collection || collection,
+            },
+          }))
+        } catch {}
+      }
+      // Parar TODO el audio local de ESTE equipo (suena en el otro ahora).
+      // autoplayCancelRef mata el motor de "preview continuo" de Discovery (y su
+      // timer de avance); killAudio para el <audio> de audioRef; y el evento
+      // global 'groovesync-force-stop' hace que DiscoverPage mate cualquier otra
+      // vía (preview individual, iframe YouTube legacy, timers sueltos). Sin esto
+      // el origen seguía sonando → "suena en los dos lados".
       autoplayCancelRef.current?.()
       autoplayCancelRef.current = null
       killAudio(audioRef.current)
       audioRef.current = null
+      setPlayingFile(null)
       setNowPlaying(null)
       setIsAudioPlaying(false)
+      try { window.dispatchEvent(new Event('groovesync-force-stop')) } catch {}
     }
     setOutputDeviceId(next)
     try { localStorage.setItem('output_device_id', next) } catch {}
@@ -11187,6 +11193,23 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     setIsAudioPlaying(false)
     setYoutubeEmbed(null)
   }
+
+  // Stop global: cuando el equipo transfiere la reproducción a otro device
+  // (Spotify-Connect PUSH), App dispara 'groovesync-force-stop' para que ACÁ
+  // matemos TODO el audio de Discovery — preview continuo (autoplayCancelRef +
+  // su timer), preview individual (audioRef), iframe YouTube legacy y cualquier
+  // timer suelto. Garantiza que el origen se calle aunque la vía no sea audioRef.
+  useEffect(() => {
+    const forceStop = () => {
+      try { autoplayCancelRef?.current?.() } catch {}
+      try { if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null } } catch {}
+      try { if (audioRef?.current) { audioRef.current.pause(); audioRef.current.src = '' } } catch {}
+      clearDiscoverAudio()
+    }
+    window.addEventListener('groovesync-force-stop', forceStop)
+    return () => window.removeEventListener('groovesync-force-stop', forceStop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const setDiscoverAudio = (audio, track) => {
     if (audioRef.current && audioRef.current !== audio) {
