@@ -8943,13 +8943,13 @@ function App() {
             <button
               onClick={handleInstall}
               className="h-8 hidden lg:flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border border-[var(--border-color)] bg-[var(--bg-input)]/40 hover:bg-[var(--bg-hover)] text-[var(--text-primary)] transition-all duration-200 active:scale-95 flex-shrink-0"
-              title="Instalar como app"
+              title="Instalar esta web como app en tu equipo (NO es el agente de descargas)"
             >
               <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <rect x="4" y="3" width="16" height="18" rx="3.5" strokeWidth={1.6} />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8.5v6m-3-3h6" />
               </svg>
-              <span className="hidden sm:inline">Instalar</span>
+              <span className="hidden sm:inline">Instalar app</span>
             </button>
           )}
           <button
