@@ -7046,6 +7046,13 @@ function App() {
   const [searchResults, setSearchResults] = useState(null) // null = no search, [] = empty results
   const [searchStatus, setSearchStatus] = useState('idle') // idle, connecting, searching
   const [searchDlStatus, setSearchDlStatus] = useState({}) // { filename: { status, local_name?, ... } }
+  // Progreso de descarga por TEMA (key = artist|||title normalizado) para pintar
+  // la barra de % en la fila de "pendientes" y sacarla de la lista al terminar.
+  // Lo alimenta searchAndDownload (DiscoverPage) vía window.__setDlProgress: el
+  // filename del peer no siempre trae el artista (ej "01 Like It.flac"), así que
+  // matchear por filename era poco confiable — usamos la clave del propio track.
+  const [dlProgress, setDlProgress] = useState({})
+  const pendingKey = (artist, title) => `${(artist || '').toLowerCase().trim()}|||${(title || '').toLowerCase().trim()}`
   // Filenames the user actually has in local storage (FSA / agent / synced).
   // The "Descargado" badge in search results derives from this — not from
   // searchDlStatus.completed — so the badge cannot lie when the server says
@@ -8294,6 +8301,26 @@ function App() {
   // el server) escriba su narrative ahí. Sin esto el panel solo mostraba classify
   // y el user quedaba "ciego" durante la bajada.
   useEffect(() => { window.__addLog = (msg) => setLogs(prev => [...prev.slice(-200), String(msg)]) }, [])
+  // Puente para que la descarga por AGENTE (que corre en DiscoverPage) actualice
+  // la barra de progreso de la fila de "pendientes" (vive acá en App). Al
+  // completar, el tema sale de pendientes (ya está en la biblioteca) tras un
+  // breve check verde.
+  useEffect(() => {
+    window.__setDlProgress = (artist, title, info) => {
+      const key = pendingKey(artist, title)
+      setDlProgress(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...info } }))
+      if (info?.status === 'completed') {
+        fetch(`${API_BASE}/api/pending/remove`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: authUser?.name, tracks: [{ artist, title }] }),
+        }).catch(() => {})
+        setTimeout(() => {
+          setPendingTracks(prev => prev.filter(p => pendingKey(p.artist, p.title) !== key))
+          setDlProgress(prev => { const n = { ...prev }; delete n[key]; return n })
+        }, 1800)
+      }
+    }
+  }, [authUser?.name])
 
   // Trial expired → open the upgrade modal (no redirect, user picks how to pay)
   useEffect(() => {
@@ -9813,9 +9840,37 @@ function App() {
                     Reintentar todos ({pendingTracks.length})
                   </button>
                   <div className="max-h-64 overflow-y-auto space-y-1 overscroll-contain">
-                    {pendingTracks.map((t, idx) => (
+                    {pendingTracks.map((t, idx) => {
+                      // Estado de descarga en curso de ESTE tema (lo alimenta el
+                      // flujo por agente vía window.__setDlProgress). Si está
+                      // activo, mostramos progreso en vez de los botones.
+                      const dl = dlProgress[pendingKey(t.artist, t.title)]
+                      const st = dl?.status
+                      const active = st === 'searching' || st === 'queued' || st === 'downloading' || st === 'completed'
+                      return (
                       <div key={idx} className="flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg bg-[var(--bg-input)] text-xs">
                         <span className="truncate min-w-0 text-[var(--text-primary)]">{t.artist} - {t.title}</span>
+                        {active ? (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {st === 'searching' ? (
+                              <span className="text-yellow-400 animate-pulse">Buscando…</span>
+                            ) : st === 'queued' ? (
+                              <span className="text-yellow-400 animate-pulse truncate max-w-[8rem]">En cola{dl.source ? ` (${dl.source})` : ''}</span>
+                            ) : st === 'downloading' ? (
+                              <>
+                                <div className="w-16 md:w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${dl.pct || 0}%` }} />
+                                </div>
+                                <span className="text-[var(--color-accent)] w-9 text-right">{dl.pct || 0}%</span>
+                              </>
+                            ) : (
+                              <span className="text-green-400 flex items-center gap-1">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                Descargado
+                              </span>
+                            )}
+                          </div>
+                        ) : (
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <button
                             onClick={() => {
@@ -9842,8 +9897,10 @@ function App() {
                             className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
                           >✕</button>
                         </div>
+                        )}
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                   <button
                     onClick={() => savePending([])}
@@ -11147,6 +11204,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     const query = queries[0]   // para logs y fallback WS
     setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'searching', message: `Buscando...` } }))
     window.__addLog?.(`--- ${track.artist} - ${track.title} ---`)
+    window.__setDlProgress?.(track.artist, track.title, { status: 'searching' })
 
     // Ranked list of variants to try in order (calidad → fuentes). Filled
     // when search_results arrives. If a variant fails all its sources,
@@ -11178,6 +11236,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         console.warn('[DL] all variants exhausted', { track: track.title, tried: ranked.length })
         window.__addLog?.(`[DL] Sin éxito tras probar ${ranked.length} fuente(s) — no se pudo bajar`)
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: `Sin éxito en ${ranked.length} variantes` } }))
+        window.__setDlProgress?.(track.artist, track.title, { status: 'failed' });
         (window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
         wsRef.current?.removeEventListener('message', handler)
         return
@@ -11188,6 +11247,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       const bestSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : [best]
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: 'Descargando' } }))
       window.__addLog?.(`[DL] Bajando: ${(best.filename || '').split(/[\\/]/).pop()}${ranked.length > 1 ? ` (opción ${idx + 1}/${ranked.length})` : ''}`)
+      window.__setDlProgress?.(track.artist, track.title, { status: 'downloading', pct: 0 })
 
       const sendViaWs = (reason) => {
         console.info('[DL] via=ws', { reason, filename: best.filename })
@@ -11248,6 +11308,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       window.__addLog?.(`[SEARCH] ${results.length} resultados (${viable.length} con cola viable)`)
       if (ranked.length === 0) {
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
+        window.__setDlProgress?.(track.artist, track.title, { status: 'failed' });
         (window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
         wsRef.current?.removeEventListener('message', handler)
         return
@@ -11285,6 +11346,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       if (idx >= queries.length) {             // agotamos la escalera
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
         window.__addLog?.(`[SEARCH] ${track.artist} - ${track.title}: no encontrado en SoulSeek (${queries.length} variantes)`)
+        window.__setDlProgress?.(track.artist, track.title, { status: 'failed' })
         ;(window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
         wsRef.current?.removeEventListener('message', handler)
         return
@@ -11330,9 +11392,14 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                 console.warn('[DL] variant stuck after status, advancing', { fname, lastStatus: data.status })
                 dispatchPick(rankIdx + 1)
               }, 180000)
+              // Barra de progreso en la fila de "pendientes" (key artist/title).
+              window.__setDlProgress?.(track.artist, track.title, {
+                status: data.status, pct: data.pct, source: data.source, queue: data.queue,
+              })
             } else if (data.status === 'completed') {
               clearVariantWatchdog()
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Descargado' } }))
+              window.__setDlProgress?.(track.artist, track.title, { status: 'completed' })
               fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(setLibraryManifest).catch(() => {})
               wsRef.current.removeEventListener('message', handler)
             } else if (data.status === 'error') {
