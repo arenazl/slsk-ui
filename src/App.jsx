@@ -11396,6 +11396,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               window.__setDlProgress?.(track.artist, track.title, {
                 status: data.status, pct: data.pct, source: data.source, queue: data.queue,
               })
+              // Mismo dato en downloadQueue para la barra de % en la fila de Discover.
+              // Mantenemos status 'downloading' (no 'queued') para no caer al branch
+              // de error en el render; diferenciamos con message/pct.
+              setDownloadQueue(prev => ({ ...prev, [track.id]: data.status === 'downloading'
+                ? { status: 'downloading', message: 'Descargando', pct: data.pct, speed: data.speed }
+                : { status: 'downloading', message: 'En cola', queue: data.queue, source: data.source } }))
             } else if (data.status === 'completed') {
               clearVariantWatchdog()
               setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Descargado' } }))
@@ -11891,10 +11897,19 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     )
                     if (dl.status === 'downloading') return (
                       <div className="flex-shrink-0 flex items-center gap-1">
-                        <span className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-[var(--color-accent)] animate-pulse">
-                          <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                          <span className="hidden sm:inline">Descargando</span>
-                        </span>
+                        {dl.pct != null ? (
+                          <span className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-[var(--color-accent)]">
+                            <div className="w-12 md:w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${dl.pct}%` }} />
+                            </div>
+                            <span className="w-8 text-right">{dl.pct}%</span>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-[var(--color-accent)] animate-pulse">
+                            <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                            <span className="hidden sm:inline">{dl.message === 'En cola' ? `En cola${dl.source ? ` (${dl.source})` : ''}` : 'Descargando'}</span>
+                          </span>
+                        )}
                         {clearBtn}
                       </div>
                     )
@@ -12043,7 +12058,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                           </button>
                         )
                         if (dl.status === 'searching') return <span className="flex-shrink-0 text-xs text-yellow-400 animate-pulse"><span className="hidden sm:inline">Buscando...</span><span className="sm:hidden">...</span></span>
-                        if (dl.status === 'downloading') return <span className="flex-shrink-0 text-xs text-[var(--color-accent)] animate-pulse"><span className="hidden sm:inline">Descargando</span><span className="sm:hidden">...</span></span>
+                        if (dl.status === 'downloading') return dl.pct != null
+                          ? <span className="flex-shrink-0 flex items-center gap-1.5 text-xs text-[var(--color-accent)]"><div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden"><div className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${dl.pct}%` }} /></div><span>{dl.pct}%</span></span>
+                          : <span className="flex-shrink-0 text-xs text-[var(--color-accent)] animate-pulse"><span className="hidden sm:inline">{dl.message === 'En cola' ? 'En cola' : 'Descargando'}</span><span className="sm:hidden">...</span></span>
                         if (dl.status === 'done') return <span className="flex-shrink-0 text-xs text-green-400">Listo</span>
                         if (dl.status === 'not_found') return (
                           <button onClick={() => { setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }); searchAndDownload(t) }}
