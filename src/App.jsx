@@ -7110,8 +7110,11 @@ function App() {
     // arranca el tema (completo si tiene el archivo, preview online si no —
     // misma lógica que tocar un tema). NOTA: un iPhone receptor puede bloquear
     // el autoplay si su pantalla no tuvo interacción reciente (límite de iOS web).
-    if (isRemote && nowPlaying) {
-      const t = nowPlaying
+    // nowPlayingRef = lo que SUENA ahora mismo (evita un nowPlaying viejo del
+    // closure; el preview continuo de Discovery cambia el tema cada ~30s).
+    const current = nowPlayingRef.current || nowPlaying
+    if (isRemote && current) {
+      const t = current
       try {
         wsRef.current?.send(JSON.stringify({
           type: 'remote_command',
@@ -7125,6 +7128,12 @@ function App() {
           },
         }))
       } catch {}
+      // Parar TODO el audio local — incluido el motor de "preview continuo" de
+      // Discovery, que se cancela por autoplayCancelRef (limpia su timer de
+      // avance). Sin esto la compu reanudaba a los ~30s y avanzaba de tema, por
+      // eso "seguía sonando" y "no era el mismo tema" tras el switch.
+      autoplayCancelRef.current?.()
+      autoplayCancelRef.current = null
       killAudio(audioRef.current)
       audioRef.current = null
       setNowPlaying(null)
@@ -10278,12 +10287,12 @@ function App() {
             if (remotePlayCheckRef.current) { clearTimeout(remotePlayCheckRef.current); remotePlayCheckRef.current = null }
             handleAppPlay(t)
           }}
-          className="flex-shrink-0 w-full flex items-center gap-2.5 px-4 py-2.5 bg-[var(--color-accent)]/15 border-t border-[var(--color-accent)]/40 text-left active:scale-[0.99] transition-transform"
+          className="flex-shrink-0 w-full flex items-center gap-2.5 px-4 py-3 bg-[var(--color-accent)] text-[var(--color-accent-text)] text-left active:scale-[0.98] transition-transform shadow-lg"
         >
-          <svg className="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-          <span className="text-xs text-[var(--text-primary)] truncate">
-            Tocar para escuchar acá<span className="text-[var(--text-muted)]"> · </span>
-            <span className="font-semibold">{[remotePlayPrompt.artist, remotePlayPrompt.title].filter(Boolean).join(' — ') || remotePlayPrompt.filename}</span>
+          <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          <span className="text-sm truncate">
+            <span className="font-bold">Tocar para escuchar acá</span>
+            <span className="opacity-75"> · {[remotePlayPrompt.artist, remotePlayPrompt.title].filter(Boolean).join(' — ') || remotePlayPrompt.filename}</span>
           </span>
         </button>
       )}
