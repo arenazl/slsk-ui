@@ -970,6 +970,13 @@ function useQS(key, defaultVal) {
   return [val, set]
 }
 
+// Dedup de auto-classify a NIVEL MÓDULO (no useRef). Si Library se re-monta
+// (cambio de tab, etc.) un useRef se resetea y re-clasifica TODA la biblioteca
+// en loop → martillaba /api/classify y saturaba el server (1 sola instancia),
+// frenando la búsqueda/descarga. A nivel módulo persiste entre montajes, así
+// cada archivo se intenta clasificar UNA sola vez por sesión (post-descarga).
+const _autoClassifyAttempted = new Set()
+
 const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
   const toast = useToast()
   const confirmDialog = useConfirm()
@@ -1109,20 +1116,19 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     fetchLibrary()
   }, [fetchLibrary])
 
-  // Background auto-classify: any track without an AI genre gets sent to
-  // Groq silently. Dedup by filename so we don't re-classify what we already
-  // attempted in this session. Refresh once when a batch lands so the UI
-  // swaps the dimmed folder-estimated genre for the real one.
-  const autoClassifyRef = useRef(new Set())
+  // Auto-classify: corre DESPUÉS de la descarga. Cuando un tema nuevo entra a la
+  // biblioteca (files cambia post-download), se le pone género vía Gemini, UNA
+  // vez (dedup a nivel módulo _autoClassifyAttempted → no re-loopea). La IA nunca
+  // bloquea la descarga: corre sobre archivos YA bajados, best-effort.
   const autoClassifyInflightRef = useRef(false)
   useEffect(() => {
     if (!authUser?.name || autoClassifyInflightRef.current) return
     const candidates = files
       .filter(f => f.genre_estimated || (!f.genre && f.has_metadata !== undefined))
       .map(f => f.filename)
-      .filter(fn => !autoClassifyRef.current.has(fn))
+      .filter(fn => !_autoClassifyAttempted.has(fn))
     if (candidates.length === 0) return
-    candidates.forEach(fn => autoClassifyRef.current.add(fn))
+    candidates.forEach(fn => _autoClassifyAttempted.add(fn))
     autoClassifyInflightRef.current = true
     fetch(`${API_BASE}/api/classify`, {
       method: 'POST',
@@ -1130,9 +1136,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       body: JSON.stringify({ username: authUser.name, filenames: candidates }),
     })
       .then(r => r.json())
-      .then(data => {
-        if (data?.classified > 0) fetchLibrary()
-      })
+      .then(data => { if (data?.classified > 0) fetchLibrary() })
       .catch(() => {})
       .finally(() => { autoClassifyInflightRef.current = false })
   }, [files, authUser, fetchLibrary])
@@ -7059,6 +7063,44 @@ function App() {
   // Bandera para no contaminar el player local. Solo se usa en el badge
   // "tu celu esta tocando: X" del topbar.
   const [remoteNowPlaying, setRemoteNowPlaying] = useState(null)
+  // ─── Spotify-Connect: dispositivo de salida ───────────────────────────
+  // devices: lista de devices online del mismo user (la manda el server).
+  // outputDeviceId: cuál es el "device de salida" elegido. Default = este
+  // device. Si != este, los controles de reproducción se RUTEAN a ese device
+  // (remote_command) en vez de sonar acá.
+  const [devices, setDevices] = useState([])
+  const [outputDeviceId, setOutputDeviceId] = useState(() => {
+    try { return localStorage.getItem('output_device_id') || DEVICE.id } catch { return DEVICE.id }
+  })
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
+  const isRemoteOutput = !!outputDeviceId && outputDeviceId !== DEVICE.id
+  const isRemoteOutputRef = useRef(isRemoteOutput)
+  useEffect(() => { isRemoteOutputRef.current = isRemoteOutput }, [isRemoteOutput])
+  const selectOutputDevice = (id) => {
+    const next = id || DEVICE.id
+    setOutputDeviceId(next)
+    try { localStorage.setItem('output_device_id', next) } catch {}
+    setDeviceMenuOpen(false)
+  }
+  // DiscoverPage registra acá su motor de preview para que el RECEPTOR pueda
+  // dispararlo cuando llega un remote_command (la PC/celu controla al otro).
+  const discoverRemoteRef = useRef(null)
+  // Manda un comando al device de salida elegido. No-op si el target es uno
+  // mismo o no hay WS.
+  const sendRemoteCommand = (cmd) => {
+    try {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return false
+      if (!authUser?.name) return false
+      wsRef.current.send(JSON.stringify({
+        type: 'remote_command',
+        app_user: authUser.name,
+        target_device_id: outputDeviceId,
+        from_device: DEVICE.name,
+        ...cmd,
+      }))
+      return true
+    } catch { return false }
+  }
   // Refs para cross-device sync. nowPlayingRef refleja el ultimo nowPlaying
   // (para chequear en handlers sin tener que ponerlo de dep). syncRemoteUpdate
   // marca cuando el ultimo set vino del otro device para evitar el loop
@@ -7155,6 +7197,7 @@ function App() {
           type: 'hello',
           app_user: authUser?.name || '',
           device: DEVICE?.name || '',
+          device_id: DEVICE?.id || '',
         }))
       } catch {}
     }
@@ -7194,6 +7237,41 @@ function App() {
           })
         } else {
           setRemoteNowPlaying(null)
+        }
+      }
+
+      // Spotify-Connect: lista de devices online del mismo user (para el
+      // selector "dispositivo de salida"). Si el device de salida elegido ya
+      // no está, volvemos a "este device".
+      if (data.type === 'devices' && Array.isArray(data.devices)) {
+        setDevices(data.devices)
+        setOutputDeviceId(prev => {
+          if (!prev || prev === DEVICE.id) return prev
+          const stillOnline = data.devices.some(d => d.id === prev)
+          if (stillOnline) return prev
+          try { localStorage.setItem('output_device_id', DEVICE.id) } catch {}
+          return DEVICE.id
+        })
+      }
+
+      // Spotify-Connect: ESTE device es el target de un comando remoto (el
+      // server solo lo rutea al target). Ejecutamos play/pause/stop/next/prev.
+      if (data.type === 'remote_command') {
+        const r = discoverRemoteRef.current
+        const act = data.action
+        if (act === 'preview' && Array.isArray(data.playlist) && r?.startPreviewEngine) {
+          r.startPreviewEngine(data.playlist, data.startIdx || 0, data.duration || 30)
+        } else if (act === 'pause_toggle') {
+          if (audioRef.current) {
+            if (audioRef.current.paused) { audioRef.current.play().catch(() => {}); setIsAudioPlaying(true) }
+            else { audioRef.current.pause(); setIsAudioPlaying(false) }
+          }
+        } else if (act === 'stop') {
+          handleAppStop()
+        } else if (act === 'next' && r?.next) {
+          r.next()
+        } else if (act === 'prev' && r?.prev) {
+          r.prev()
         }
       }
 
@@ -7290,6 +7368,30 @@ function App() {
           timeout_secs: data.timeout_secs, source_idx: data.source_idx, source_total: data.source_total,
           local_name: localName,
         }}))
+        // Narrativa de descarga en la consola "Logs técnicos". Cuando baja el
+        // AGENTE local, el server NO emite los broadcast({type:'log'}) que
+        // llenaban la consola (solo participa en classify) → el panel quedaba
+        // mudo. Reconstruimos esos logs desde el search_dl_status que el agente
+        // reporta vía callback. Solo via='agent': en el flujo server-side el
+        // propio server ya manda type:'log', no hay que duplicar.
+        if (data.via === 'agent') {
+          const fshort = (data.filename || '').split(/[\\/]/).pop()
+          let line = ''
+          if (data.status === 'queued') {
+            line = data.wait_secs > 0
+              ? `[DL] En cola de ${data.source || '?'} — esperando ${data.wait_secs}s/${data.timeout_secs || '?'}s`
+              : `[DL] En cola de ${data.source || '?'} (q:${data.queue ?? '?'})${data.source_total ? ` · fuente ${data.source_idx}/${data.source_total}` : ''}`
+          } else if (data.status === 'downloading') {
+            const pctR = Math.round((data.pct ?? 0) / 10) * 10  // hitos de 10% para no spamear
+            line = `[DL] Descargando ${fshort} — ${pctR}%${data.speed > 0 ? ` (${data.speed} KB/s)` : ''}`
+          } else if (data.status === 'completed') {
+            line = `[DL] Descargado: ${fshort}`
+          } else if (data.status === 'error' || data.status === 'error_source') {
+            line = `[DL] Error con ${data.source || fshort}${data.message ? `: ${String(data.message).slice(0, 100)}` : ''} — probando siguiente`
+          }
+          // Dedup de líneas idénticas consecutivas (queued repetido, mismo hito %).
+          if (line) setLogs(prev => (prev[prev.length - 1] === line ? prev : [...prev.slice(-200), line]))
+        }
         // When a single download finishes, drop the matching pending entry (logged on click in Discover)
         if (data.status === 'completed' && data.filename) {
           const fnameLower = data.filename.toLowerCase()
@@ -7495,6 +7597,7 @@ function App() {
       }).catch(() => {})
     }
   }
+
 
   // Incrementa el contador de intentos fallidos de un pending. Si llega a
   // MAX_PENDING_ATTEMPTS (3), lo elimina automáticamente del pending — no
@@ -7780,6 +7883,12 @@ function App() {
   }
 
   const handleAppPlayPause = () => {
+    // Spotify-Connect: si el output es otro device, ruteamos el play/pause allá.
+    if (isRemoteOutput) {
+      sendRemoteCommand({ action: 'pause_toggle' })
+      setIsAudioPlaying(p => !p)
+      return
+    }
     if (!audioRef.current) return
     if (audioRef.current.paused) {
       audioRef.current.play()
@@ -7790,7 +7899,28 @@ function App() {
     }
   }
 
+  // Next/Prev globales: en output remoto los ruteamos; localmente avanzan el
+  // motor de Discover (vía discoverRemoteRef que también lo expone localmente).
+  const handleAppNext = () => {
+    if (isRemoteOutput) { sendRemoteCommand({ action: 'next' }); return }
+    discoverRemoteRef.current?.next?.()
+  }
+  const handleAppPrev = () => {
+    if (isRemoteOutput) { sendRemoteCommand({ action: 'prev' }); return }
+    discoverRemoteRef.current?.prev?.()
+  }
+
   const handleAppStop = () => {
+    // Spotify-Connect: si el output es otro device, mandamos el stop allá y
+    // limpiamos el reflejo local. NO seguimos con el stop local (no hay audio
+    // local sonando cuando ruteamos a otro device).
+    if (isRemoteOutput) {
+      sendRemoteCommand({ action: 'stop' })
+      setNowPlaying(null)
+      setIsAudioPlaying(false)
+      setRemoteNowPlaying(null)
+      return
+    }
     autoplayCancelRef.current?.()
     autoplayCancelRef.current = null
     // Manual stop must NOT trigger autoplay-next. The page's effect will
@@ -8037,8 +8167,8 @@ function App() {
 
   // Trial config (editable in Settings, only by admin "look").
   // Default: 2 days, demo/123, $4999 ARS/mes, MP + Cafecito links.
-  const [trialDays, setTrialDays] = useState(() => parseInt(localStorage.getItem('trial_days') || '2', 10))
-  const [trialAmount, setTrialAmount] = useState(() => parseInt(localStorage.getItem('trial_amount') || '4999', 10))
+  const [trialDays, setTrialDays] = useState(() => parseInt(localStorage.getItem('trial_days') || '15', 10))
+  const [trialAmount, setTrialAmount] = useState(() => parseInt(localStorage.getItem('trial_amount') || '30000', 10))
   const [trialMpUrl, setTrialMpUrl] = useState(() => localStorage.getItem('trial_mp_url') || '')
   const [cafecitoUrl, setCafecitoUrl] = useState(() => localStorage.getItem('cafecito_url') || 'https://cafecito.app/djfreeapp')
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
@@ -8046,7 +8176,20 @@ function App() {
   const [demoPass, setDemoPass] = useState(() => localStorage.getItem('demo_pass') || '123')
   // Absolute path to user's music library root (used for client-side m3u
   // exports with full paths so DJ software like Rekordbox / Serato can resolve).
-  const [libraryRoot, setLibraryRoot] = useState(() => localStorage.getItem('library_root') || '')
+  // Se guarda POR-CUENTA (library_root_<user>): era una clave global por-navegador
+  // y mezclaba el path de un usuario con la sesión de otro (ej: el groove-new de
+  // look aparecía logueado como ariel).
+  const [libraryRoot, setLibraryRoot] = useState(() =>
+    (authUser?.user
+      ? localStorage.getItem(`library_root_${authUser.user}`)
+      : localStorage.getItem('library_root')) || ''
+  )
+  // Recargar el path raíz cuando cambia el usuario logueado, para no heredar el
+  // de otra cuenta al cambiar de sesión en el mismo navegador.
+  useEffect(() => {
+    if (!authUser?.user) { setLibraryRoot(''); return }
+    try { setLibraryRoot(localStorage.getItem(`library_root_${authUser.user}`) || '') } catch {}
+  }, [authUser?.user])
 
   const isDemo = !!authUser && authUser.user === demoUser
   const trialStart = parseInt(localStorage.getItem('trial_start') || '0', 10)
@@ -8147,6 +8290,10 @@ function App() {
   // Expose so children (DiscoverPage) can call it without prop drilling 5 layers.
   useEffect(() => { window.__ensureCanDownload = ensureCanDownload }, [userStatus])
   useEffect(() => { window.__markPendingFailure = markPendingFailure }, [pendingTracks, username])
+  // Panel "Logs técnicos": permitir que la descarga por AGENTE (que no pasa por
+  // el server) escriba su narrative ahí. Sin esto el panel solo mostraba classify
+  // y el user quedaba "ciego" durante la bajada.
+  useEffect(() => { window.__addLog = (msg) => setLogs(prev => [...prev.slice(-200), String(msg)]) }, [])
 
   // Trial expired → open the upgrade modal (no redirect, user picks how to pay)
   useEffect(() => {
@@ -8373,7 +8520,7 @@ function App() {
                       const res = await fetch(`${API_BASE}/api/mp/checkout`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user: authUser?.user || authUser?.name }),
+                        body: JSON.stringify({ user: authUser?.user || authUser?.name, amount: trialAmount }),
                       })
                       const data = await res.json()
                       if (data.init_point) window.location.href = data.init_point
@@ -8556,8 +8703,12 @@ function App() {
                 <input
                   type="text"
                   value={libraryRoot}
-                  onChange={e => { setLibraryRoot(e.target.value); localStorage.setItem('library_root', e.target.value) }}
-                  placeholder="C:\Users\look\Music\groove-new"
+                  onChange={e => {
+                    setLibraryRoot(e.target.value)
+                    if (authUser?.user) localStorage.setItem(`library_root_${authUser.user}`, e.target.value)
+                    else localStorage.setItem('library_root', e.target.value)
+                  }}
+                  placeholder={fsaFolderName ? `C:\\Users\\TU_USUARIO\\Music\\${fsaFolderName}` : 'C:\\Users\\TU_USUARIO\\Music\\groove-new'}
                   className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] font-mono"
                 />
                 <div className="text-xs text-[var(--text-muted)] mt-1">Se usa para que los .m3u exportados tengan paths absolutos válidos en Rekordbox / Serato / Traktor.</div>
@@ -8912,6 +9063,70 @@ function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
+            </div>
+          )}
+          {/* Spotify-Connect: selector de "dispositivo de salida". Solo aparece
+              cuando hay MÁS de un device online del mismo user (sino no hay a
+              quién rutear). Verde/accent cuando el output es otro device. */}
+          {devices.length > 1 && (
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={() => setDeviceMenuOpen(v => !v)}
+                className={`h-8 flex items-center gap-1.5 px-2.5 rounded-lg border transition-all duration-200 active:scale-95 ${
+                  isRemoteOutput
+                    ? 'border-green-500/50 bg-green-500/15 text-green-400'
+                    : 'border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+                title={isRemoteOutput ? `Reproduciendo en ${(devices.find(d => d.id === outputDeviceId)?.name) || 'otro equipo'}` : 'Elegir dispositivo de salida'}
+              >
+                {/* icono cast/dispositivos (SVG, sin emojis) */}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a3 3 0 01-3 3H4m0-4a6 6 0 016 6m-6-10a10 10 0 0110 10M4 5h16a1 1 0 011 1v3M4 9V6a1 1 0 011-1m13 8h.01M16 17h4a1 1 0 001-1v-3" />
+                </svg>
+                <span className="text-[10px] font-semibold uppercase tracking-wider hidden md:inline max-w-[7rem] truncate">
+                  {isRemoteOutput ? ((devices.find(d => d.id === outputDeviceId)?.name) || 'Otro') : 'Salida'}
+                </span>
+              </button>
+              {deviceMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setDeviceMenuOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-60 z-50 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-2xl overflow-hidden">
+                    <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-color)]">
+                      Dispositivo de salida
+                    </div>
+                    {devices.map(d => {
+                      const isSelf = d.id === DEVICE.id
+                      const active = d.id === outputDeviceId
+                      return (
+                        <button
+                          key={d.id}
+                          onClick={() => selectOutputDevice(d.id)}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors duration-150 ${
+                            active ? 'bg-green-500/10' : 'hover:bg-[var(--bg-hover)]'
+                          }`}
+                        >
+                          <svg className={`w-4 h-4 flex-shrink-0 ${active ? 'text-green-400' : 'text-[var(--text-muted)]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {/iPhone|iPad|Android/i.test(d.name)
+                              ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a1 1 0 001-1V4a1 1 0 00-1-1H8a1 1 0 00-1 1v16a1 1 0 001 1z" />
+                              : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />}
+                          </svg>
+                          <span className={`flex-1 text-sm truncate ${active ? 'text-green-400 font-semibold' : 'text-[var(--text-primary)]'}`}>
+                            {d.name}{isSelf ? ' (este equipo)' : ''}
+                          </span>
+                          {active && (
+                            <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      )
+                    })}
+                    <div className="px-3 py-2 text-[10px] text-[var(--text-muted)] border-t border-[var(--border-color)] leading-snug">
+                      Elegí dónde suena. Para mandar audio a un celu, su pantalla tiene que estar prendida.
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
           {/* Estado del agente — SIEMPRE visible (3 estados, refresca con el
@@ -9890,6 +10105,10 @@ function App() {
           authUser={authUser}
           collection={collection}
           onGoToLibrary={goToLibraryTrack}
+          isRemoteOutput={isRemoteOutput}
+          sendRemoteCommand={sendRemoteCommand}
+          discoverRemoteRef={discoverRemoteRef}
+          outputDeviceName={(devices.find(d => d.id === outputDeviceId)?.name) || 'otro equipo'}
         />
       </div>
 
@@ -10025,7 +10244,7 @@ function SwipeableRow({ children, onReveal }) {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary, isRemoteOutput, sendRemoteCommand, discoverRemoteRef, outputDeviceName }) {
   const toast = useToast()
   // Per-user genre click tracking with 5-click reorder threshold (server-persisted)
   const beatportClicks = useGenreClicks('beatport_genre_clicks', authUser?.name || '')
@@ -10374,24 +10593,24 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Use a ref so the currently-running preview picks up changes mid-session too
   const previewDurationRef = useRef(previewDuration)
   useEffect(() => { previewDurationRef.current = previewDuration }, [previewDuration])
+  // Duraciones de preview. EDM: samples de Beatport (60-120s). POP/LATIN:
+  // tema COMPLETO vía SoundCloud (proxy /api/sc-audio), así 60/90/120 son
+  // reales. Fallback al clip de 30s de Spotify/iTunes si SC no encuentra el tema.
+  const durationOptions = [30, 60, 90, 120]
 
   // Track the track object the user last started — used by the top "Preview continuo"
   // button to resume autoplay from THAT track instead of falling back to track 1
   // when state lookups race.
   const lastPlayedTrackRef = useRef(null)
 
-  const handlePreviewFromCtx = (startTrack) => {
-    console.log('[PreviewContinuo] click on', startTrack?.artist, '-', startTrack?.title)
-    // Use the list currently visible to the user (label filter switches it)
-    const activeList = labelFilter ? labelTracks : tracks
-    const startIdx = activeList.findIndex(t =>
-      (t.id && startTrack.id && t.id === startTrack.id) ||
-      (t.title === startTrack.title && t.artist === startTrack.artist)
-    )
-    console.log('[PreviewContinuo] startIdx=', startIdx, 'listLen=', activeList.length)
-    if (startIdx === -1) return
-    const playlist = activeList.slice(startIdx)
-    let current = 0
+  // Motor de preview continuo. Reusable: lo usa el click local Y el RECEPTOR
+  // cuando otro device manda un remote_command 'preview' (Spotify-Connect).
+  // playlist: array de tracks; startIndex: desde dónde arranca; durationOverride:
+  // segundos por track (si null usa previewDurationRef del propio device).
+  const startPreviewEngine = (playlist, startIndex = 0, durationOverride = null) => {
+    if (!Array.isArray(playlist) || playlist.length === 0) return
+    let current = startIndex || 0
+    const dur = () => (durationOverride && durationOverride > 0) ? durationOverride : previewDurationRef.current
 
     // Reusar el mismo Audio element durante toda la sesión para que el autoplay
     // policy de Chrome no bloquee los tracks después del primero. new Audio()
@@ -10421,6 +10640,15 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         try { sessionAudio.onerror = null } catch {}
         try { sessionAudio.pause() } catch {}
         try { sessionAudio.src = '' } catch {}
+      }
+    }
+    // Exponer control remoto: si ESTE device es el target, el otro puede
+    // mandar next/prev y los aplicamos sobre el engine activo.
+    if (discoverRemoteRef) {
+      discoverRemoteRef.current = {
+        startPreviewEngine,
+        next: () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); current++; playNext() },
+        prev: () => { if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current); if (current > 0) current--; playNext() },
       }
     }
 
@@ -10466,9 +10694,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       if (current >= playlist.length) return
       const t = playlist[current]
 
-      const startAudio = (url) => {
+      const startAudio = (url, onFail) => {
         // Cancel any pending advance — we're starting fresh with this src.
         if (previewIntervalRef.current) { clearTimeout(previewIntervalRef.current); previewIntervalRef.current = null }
+        // onError per-track: probar el siguiente candidato (SC → sample → iTunes)
+        // antes de saltar de tema, así un fallo de SoundCloud no se come el track.
+        sessionAudio.onerror = () => { if (onFail) onFail(); else { current++; playNext() } }
         sessionAudio.src = url
         setPlayingFile(`discover-preview-${current}`)
         setPlayingId(t.id)
@@ -10485,33 +10716,81 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           // element — iOS keeps the audio session alive across src swaps as
           // long as we never stop. If we pause(), iOS releases the session and
           // the next play() rejects silently in background.
-          previewIntervalRef.current = setTimeout(() => { current++; playNext() }, previewDurationRef.current * 1000)
-        }).catch(() => { current++; playNext() })
+          previewIntervalRef.current = setTimeout(() => { current++; playNext() }, dur() * 1000)
+        }).catch(() => { if (onFail) onFail(); else { current++; playNext() } })
       }
 
-      // 1) Use track's own preview URL (Beatport sample_url or Spotify preview_url)
-      const directUrl = t.sample_url || t.preview_url
-      if (directUrl) {
-        startAudio(directUrl)
-        return
+      // Candidatos en orden. POP/LATIN: SoundCloud (tema COMPLETO vía proxy)
+      // primero → 60/90/120 reales. Si SC no lo encuentra, cae al sample/preview
+      // de 30s y al final a iTunes. EDM: sample de Beatport directo (ya 60-120s).
+      const candidates = []
+      if (collection !== 'edm') {
+        candidates.push(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(`${t.artist} ${t.title}`)}`)
       }
+      if (t.sample_url) candidates.push(t.sample_url)
+      if (t.preview_url && t.preview_url !== t.sample_url) candidates.push(t.preview_url)
 
-      // 2) Fallback: search iTunes
-      const query = `${t.artist} ${t.title}`.trim()
-      try {
-        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=1`)
-        const data = await res.json()
-        if (data.results?.[0]?.previewUrl) {
-          startAudio(data.results[0].previewUrl)
-        } else {
-          current++; playNext()
+      const tryFrom = (idx) => {
+        if (idx < candidates.length) {
+          startAudio(candidates[idx], () => tryFrom(idx + 1))
+          return
         }
-      } catch { current++; playNext() }
+        // Último recurso: iTunes 30s
+        const query = `${t.artist} ${t.title}`.trim()
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=1`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.results?.[0]?.previewUrl) startAudio(data.results[0].previewUrl)
+            else { current++; playNext() }
+          })
+          .catch(() => { current++; playNext() })
+      }
+      tryFrom(0)
     }
     // Stop any existing preview
     if (previewIntervalRef.current) clearTimeout(previewIntervalRef.current)
     playNext()
   }
+
+  const handlePreviewFromCtx = (startTrack) => {
+    console.log('[PreviewContinuo] click on', startTrack?.artist, '-', startTrack?.title)
+    // Use the list currently visible to the user (label filter switches it)
+    const activeList = labelFilter ? labelTracks : tracks
+    const startIdx = activeList.findIndex(t =>
+      (t.id && startTrack.id && t.id === startTrack.id) ||
+      (t.title === startTrack.title && t.artist === startTrack.artist)
+    )
+    console.log('[PreviewContinuo] startIdx=', startIdx, 'listLen=', activeList.length)
+    if (startIdx === -1) return
+    const playlist = activeList.slice(startIdx)
+    // Spotify-Connect: si el "dispositivo de salida" es OTRO device, RUTEAMOS
+    // la reproducción a ese device en vez de sonar acá. Mandamos la playlist
+    // (slim) y el otro corre el mismo motor.
+    if (isRemoteOutput && sendRemoteCommand) {
+      const slim = playlist.map(t => ({
+        id: t.id, title: t.title, artist: t.artist,
+        sample_url: t.sample_url, preview_url: t.preview_url,
+        artwork_url: t.artwork_url, label: t.label, genre: t.genre,
+      }))
+      const ok = sendRemoteCommand({ action: 'preview', playlist: slim, startIdx: 0, duration: previewDurationRef.current })
+      if (ok) {
+        toast(`Reproduciendo en ${outputDeviceName}`, 'info', 2500)
+        // Reflejar localmente lo que mandamos a tocar (badge + barra).
+        setNowPlaying({ filename: `remote-${startTrack.id}`, title: startTrack.title, artist: startTrack.artist, isPreview: true, isRemote: true })
+        return
+      }
+      // Si falló el envío por WS, caemos a reproducción local como fallback.
+    }
+    startPreviewEngine(playlist, 0)
+  }
+
+  // Registrar el motor en el ref apenas monta, así el RECEPTOR puede arrancar
+  // la primera sesión aunque todavía no haya tocado nada localmente.
+  useEffect(() => {
+    if (!discoverRemoteRef) return
+    discoverRemoteRef.current = { ...(discoverRemoteRef.current || {}), startPreviewEngine }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!discoverCtx) return
@@ -10793,51 +11072,37 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // YouTube minimizado. Un solo mecanismo (new Audio) = sin doble audio, sin
     // video, sin botón. Cae al tryPlay de abajo (sample_url → iTunes).
 
-    // Try Beatport/Spotify sample_url first, then iTunes
-    const tryPlay = (url) => {
+    // Candidatos en orden. POP/LATIN: SoundCloud (tema COMPLETO) primero;
+    // después sample/preview; al final iTunes 30s. EDM: sample directo → iTunes.
+    const candidates = []
+    if (collection !== 'edm') {
+      candidates.push(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(`${track.artist} ${track.title}`)}`)
+    }
+    if (track.sample_url) candidates.push(track.sample_url)
+    if (track.preview_url && track.preview_url !== track.sample_url) candidates.push(track.preview_url)
+
+    const playUrl = (url, onFail) => {
+      let failed = false
+      const fail = () => { if (failed) return; failed = true; if (onFail) onFail(); else clearDiscoverAudio() }
       const audio = new Audio(url)
       audio.onended = () => { clearDiscoverAudio(); audioRef.current = null }
-      audio.onerror = () => {
-        // Fallback to iTunes
-        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(`${track.artist} ${track.title}`)}&media=music&limit=1`)
-          .then(r => r.json())
-          .then(data => {
-            if (data.results?.[0]?.previewUrl) {
-              const a2 = new Audio(data.results[0].previewUrl)
-              a2.onended = () => { clearDiscoverAudio(); audioRef.current = null }
-              a2.play().catch(() => clearDiscoverAudio())
-              setDiscoverAudio(a2, track)
-            } else {
-              clearDiscoverAudio()
-            }
-          })
-          .catch(() => clearDiscoverAudio())
-      }
-      audio.play().catch(() => {
-        if (typeof audio.onerror === 'function') audio.onerror()
-        else clearDiscoverAudio()
-      })
+      audio.onerror = fail
+      audio.play().catch(() => fail())
       setDiscoverAudio(audio, track)
     }
 
-    if (track.sample_url) {
-      tryPlay(track.sample_url)
-    } else {
-      // Directly try iTunes
+    const tryFrom = (idx) => {
+      if (idx < candidates.length) { playUrl(candidates[idx], () => tryFrom(idx + 1)); return }
+      // Último recurso: iTunes 30s
       fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(`${track.artist} ${track.title}`)}&media=music&limit=1`)
         .then(r => r.json())
         .then(data => {
-          if (data.results?.[0]?.previewUrl) {
-            const audio = new Audio(data.results[0].previewUrl)
-            audio.onended = () => { clearDiscoverAudio(); audioRef.current = null }
-            audio.play().catch(() => clearDiscoverAudio())
-            setDiscoverAudio(audio, track)
-          } else {
-            clearDiscoverAudio()
-          }
+          if (data.results?.[0]?.previewUrl) playUrl(data.results[0].previewUrl)
+          else clearDiscoverAudio()
         })
         .catch(() => clearDiscoverAudio())
     }
+    tryFrom(0)
   }
 
   const searchAndDownload = (track) => {
@@ -10854,32 +11119,34 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'done', message: 'Agregado a pendientes' } }))
       return
     }
-    // Beatport metadata viene con TODO el casting embedded + suffixes raros:
-    // "Music Is The Answer (Dancin' And Prancin') (Extended) (Dancin' And Prancin')".
-    // Esto rompe la búsqueda en SoulSeek (queries gigantes → pocos peers responden).
-    // Cleanup agresivo:
-    //   - artist: solo el primer (los demás son featurings)
-    //   - title: 1) quitar feat.X, 2) quitar suffixes (Extended Mix/Original Mix/etc),
-    //            3) dedupe grupos parentéticos (consecutivos o no),
-    //            4) quitar apóstrofos+brackets+comillas (rompen tokenizer SoulSeek)
-    const firstArtist = (track.artist || '').split(/\s*(?:,|&|;|\sfeat\.?\s|\sft\.?\s|\sand\s|\sx\s)\s*/i)[0].trim()
-    let cleanedTitle = (track.title || '')
-      .replace(/\s*[\(\[]\s*feat\.?\s+[^)\]]*[\)\]]/gi, '')   // (feat. X) / [feat. X]
-      .replace(/\s+feat\.?\s+[^(\[]+$/i, '')                    // trailing "feat. X..."
-      .replace(/\s*[\(\[]\s*(?:extended|original|radio|club)\s*(?:mix|edit)?\s*[\)\]]/gi, '') // (Extended Mix), (Radio Edit), etc.
-    // Dedupe TODOS los grupos parentéticos iguales (no solo consecutivos)
-    const seenGroups = new Set()
-    cleanedTitle = cleanedTitle.replace(/[\(\[][^)\]]+[\)\]]/g, (m) => {
-      const key = m.toLowerCase().replace(/\s+/g, ' ')
-      if (seenGroups.has(key)) return ''
-      seenGroups.add(key)
-      return m
-    })
-    cleanedTitle = cleanedTitle.replace(/\s+/g, ' ').trim()
-    // Sacar TODO lo que no sea letra/número/espacio (apóstrofos, comillas,
-    // brackets) — el tokenizer AND de SoulSeek trata cada uno como token aparte.
-    const query = `${firstArtist} - ${cleanedTitle}`.replace(/[^\p{L}\p{N}\s\-]/gu, '').replace(/\s+/g, ' ').trim()
+    // Escalera de queries: de la MÁS específica (con el nombre del remix) a la
+    // más genérica. Probamos en orden y nos quedamos con la PRIMERA que trae
+    // resultados → bajamos la versión correcta (no cualquier GrooveJet).
+    // Limpieza: saca , - ( ) [ ] pero MANTIENE el apóstrofo (es parte del nombre).
+    const buildQueryLadder = (artist, title) => {
+      const stripP = (s) => (s || '').replace(/[,()\[\]\-]/g, ' ').replace(/\s+/g, ' ').trim()
+      const full = `${artist || ''} - ${title || ''}`
+      const seen = new Set(); const out = []
+      const add = (s) => { const c = stripP(s); if (c && !seen.has(c.toLowerCase())) { seen.add(c.toLowerCase()); out.push(c) } }
+      add(full)                                                                 // 1) completo (con remix)
+      const l2 = full.replace(/\s*[\(\[][^\]\)]*[\)\]]\s*$/, '')                // 2) sin el último ()
+      add(l2)
+      const l3 = l2.split(/\s+\b(?:feat|ft|featuring)\b/i)[0].trim()           // 3) sin feat...
+      add(l3)
+      const l4 = l3.replace(/\s*[\(\[][^\]\)]*[\)\]]\s*/g, ' ').replace(/\s+/g, ' ').trim()  // 4) sin ningún ()
+      add(l4)
+      const dash = l4.indexOf(' - ')                                           // 5/6) primer artista + tema, y solo tema
+      if (dash >= 0) {
+        const a = l4.slice(0, dash), t = l4.slice(dash + 3)
+        const first = a.split(/\s*(?:,|&|\band\b)\s*/i)[0].trim()
+        add(`${first} ${t}`); add(t)
+      }
+      return out.length ? out : [stripP(`${artist} ${title}`)]
+    }
+    const queries = buildQueryLadder(track.artist, track.title)
+    const query = queries[0]   // para logs y fallback WS
     setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'searching', message: `Buscando...` } }))
+    window.__addLog?.(`--- ${track.artist} - ${track.title} ---`)
 
     // Ranked list of variants to try in order (calidad → fuentes). Filled
     // when search_results arrives. If a variant fails all its sources,
@@ -10909,6 +11176,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       clearVariantWatchdog()
       if (idx >= ranked.length) {
         console.warn('[DL] all variants exhausted', { track: track.title, tried: ranked.length })
+        window.__addLog?.(`[DL] Sin éxito tras probar ${ranked.length} fuente(s) — no se pudo bajar`)
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'error', message: `Sin éxito en ${ranked.length} variantes` } }))
         (window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
         wsRef.current?.removeEventListener('message', handler)
@@ -10919,6 +11187,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       currentFilename = best.filename
       const bestSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : [best]
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: 'Descargando' } }))
+      window.__addLog?.(`[DL] Bajando: ${(best.filename || '').split(/[\\/]/).pop()}${ranked.length > 1 ? ` (opción ${idx + 1}/${ranked.length})` : ''}`)
 
       const sendViaWs = (reason) => {
         console.info('[DL] via=ws', { reason, filename: best.filename })
@@ -10976,6 +11245,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         return 0
       })
       console.info(`[DL] search_results via=${source}`, { track: track.title, total: results.length, viable: viable.length, ranked: ranked.length })
+      window.__addLog?.(`[SEARCH] ${results.length} resultados (${viable.length} con cola viable)`)
       if (ranked.length === 0) {
         setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
         (window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
@@ -10990,37 +11260,57 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // NO depende de downloadMode: el search siempre conviene por agente; a dónde
     // baja el archivo (FSA local / agente / Cloud Run) se decide después en dispatchPick.
     const useAgentSearch = agentConnected && agentHasSlsk
-    if (useAgentSearch) {
-      console.info('[SEARCH] via=agent', { query, filename: track.title })
-      agentFetch('slsk-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, query, wait: 20 }),
-      }).then(async r => {
+    const sendServerSearch = (q) => {
+      const ws = wsRef.current
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'search_slsk', username, password, query: q }))
+      } else if (ws) {
+        // Esperar a que abra (max 5s) — evita InvalidStateError en CONNECTING.
+        const t0 = Date.now()
+        const waiter = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            clearInterval(waiter)
+            ws.send(JSON.stringify({ type: 'search_slsk', username, password, query: q }))
+          } else if (Date.now() - t0 > 5000 || ws.readyState >= 2) {
+            clearInterval(waiter)
+          }
+        }, 100)
+      }
+    }
+    // Escalera: probamos cada variante (específica→genérica) por el agente y
+    // nos quedamos con la PRIMERA que devuelve resultados. 0 resultados → la
+    // siguiente, más genérica. Así enganchamos la versión correcta primero.
+    const runSearchLadder = async (idx) => {
+      if (rankIdx >= 0) return                 // ya estamos bajando
+      if (idx >= queries.length) {             // agotamos la escalera
+        setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
+        window.__addLog?.(`[SEARCH] ${track.artist} - ${track.title}: no encontrado en SoulSeek (${queries.length} variantes)`)
+        ;(window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
+        wsRef.current?.removeEventListener('message', handler)
+        return
+      }
+      const q = queries[idx]
+      console.info('[SEARCH] via=agent', { variant: `${idx + 1}/${queries.length}`, q })
+      window.__addLog?.(`[SEARCH] "${q}" (variante ${idx + 1}/${queries.length})...`)
+      try {
+        const r = await agentFetch('slsk-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, query: q, wait: idx === 0 ? 18 : 14 }),
+        })
         const data = await r.json()
         if (!data.ok) throw new Error(data.error || 'agent search failed')
-        ingestResults(data.results || [], 'agent')
-      }).catch(err => {
-        // Fallback al server si el agente falla
-        console.warn('[SEARCH] agent failed, falling back to server', err?.message || err)
-        const ws = wsRef.current
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'search_slsk', username, password, query }))
-        } else if (ws) {
-          // Esperar a que abra (max 5s) antes de mandar — evita
-          // InvalidStateError cuando el WS esta en CONNECTING.
-          const t0 = Date.now()
-          const waiter = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              clearInterval(waiter)
-              ws.send(JSON.stringify({ type: 'search_slsk', username, password, query }))
-            } else if (Date.now() - t0 > 5000 || ws.readyState >= 2) {
-              clearInterval(waiter)
-            }
-          }, 100)
-        }
-      })
+        const results = data.results || []
+        if (results.length > 0) { ingestResults(results, `agent#${idx + 1}`); return }
+        window.__addLog?.(`[SEARCH] 0 resultados para "${q}" — probando query más amplia`)
+        runSearchLadder(idx + 1)               // 0 resultados → variante más genérica
+      } catch (err) {
+        console.warn('[SEARCH] agent variant failed, server fallback', err?.message || err)
+        sendServerSearch(q)                     // fallback al server con esta variante
+      }
     }
+    if (useAgentSearch) runSearchLadder(0)
+    else sendServerSearch(query)
 
     // Listen for search results + download progress
     const handler = (e) => {
@@ -11323,9 +11613,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               <span className="hidden sm:inline">Preview continuo</span>
               <span className="sm:hidden">Preview</span>
             </button>
-            {/* Duration selector (30/60/90/120 s per track) */}
+            {/* Duration selector. EDM: 30/60/90/120s. POP/LATIN: solo 30s
+                (los previews de Spotify son clips de 30s, no se pueden estirar). */}
             <div className="flex items-center rounded-full bg-[var(--bg-input)] p-0.5">
-              {[30, 60, 90, 120].map(secs => (
+              {durationOptions.map(secs => (
                 <button
                   key={secs}
                   onClick={() => setPreviewDuration(secs)}
@@ -11747,7 +12038,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             </button>
           )}
           <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-t border-[var(--border-color)]">Preview continuo desde este tema</div>
-          {[30, 60, 90, 120].map(secs => (
+          {durationOptions.map(secs => (
             <button
               key={secs}
               onClick={() => { setPreviewDuration(secs); handlePreviewFromCtx(discoverCtx.track); setDiscoverCtx(null) }}
@@ -11868,8 +12159,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               Preview
             </button>
             <div className="px-4 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500">Autoplay desde este tema</div>
-            <div className="grid grid-cols-4 gap-2 px-4 pb-2">
-              {[30, 60, 90, 120].map(secs => (
+            <div className={`grid gap-2 px-4 pb-2 ${durationOptions.length === 1 ? 'grid-cols-1' : 'grid-cols-4'}`}>
+              {durationOptions.map(secs => (
                 <button
                   key={secs}
                   onClick={() => { setPreviewDuration(secs); handlePreviewFromCtx(discoverCtx.track); setDiscoverCtx(null) }}
