@@ -1,7 +1,6 @@
 {
-  "version": "2.10.0",
-  "windows_url": "https://djfreeapp.ar/GrooveSyncAgent.exe",
-  "macos_url": "https://djfreeapp.ar/GrooveSyncAgent-macOS.zip",
-  "released_at": "2026-05-09",
-  "changelog": "DJ Free App branding + djfreeapp.ar in CORS + Netlify-hosted updates"
+  "version": "2.12.8",
+  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.8/GrooveSyncAgent.exe",
+  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.8/GrooveSyncAgent-macOS.zip",
+  "release_notes": "Auto-curacion de metadata al descargar (Beatport + IA + BPM): cada tema baja con artista/titulo/genero/BPM/key reales y ubicado en su carpeta de genero. El drag entre carpetas tambien graba el genero en el tag (para Rekordbox)."
 }
