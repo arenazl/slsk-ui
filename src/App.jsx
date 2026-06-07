@@ -7853,62 +7853,56 @@ function App() {
     autoplayCancelRef.current = null
     killAudio(audioRef.current)
 
-    // FAST PATH (iOS gesture preserved): cached preview_url from manifest.
-    // new Audio(url) + play() in same call frame as click → iOS allows it.
-    if (file.preview_url) {
-      const audio = new Audio(file.preview_url)
-      audio.preload = 'auto'
-      audioRef.current = audio
-      audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-      audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-      audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
-      return
+    const fail = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
+    const fallbackQuery = (file.filename || '').replace(/\.(flac|mp3|wav|m4a|aif|aiff|ogg)$/i, '').replace(/^\d+[\s.\-]+/, '').replace(/_/g, ' ')
+    const query = `${file.artist || ''} ${file.title || ''}`.trim() || fallbackQuery
+
+    // Cascada de fuentes que el <audio> reproduce DIRECTO (sin iframe → suenan
+    // en mobile). Orden: preview_url cacheado (iTunes, instantáneo) → SoundCloud
+    // → YouTube (proxies del server). SoundCloud/YouTube cubren temas que iTunes
+    // NO tiene (artistas under tipo "Ben Van Kuringen"), que antes quedaban mudos.
+    // El primer src se setea SINCRÓNICO dentro del gesto → iOS desbloquea el
+    // elemento; los reintentos (onerror) reusan el mismo elemento ya desbloqueado.
+    const candidates = []
+    if (file.preview_url) candidates.push(file.preview_url)
+    if (query) {
+      candidates.push(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(query)}`)
+      candidates.push(`${API_BASE}/api/yt-audio?q=${encodeURIComponent(query)}`)
     }
 
-    // SLOW PATH (no cached URL yet). Trick to keep iOS gesture alive:
-    // start playing a 1-frame silent MP3 SYNCHRONOUSLY so iOS marks the
-    // element as "user-initiated"; then swap src to the real URL once iTunes
-    // responds. The element stays unlocked across the swap.
-    const SILENT_MP3 = 'data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
-    const audio = new Audio(SILENT_MP3)
+    const audio = new Audio()
     audio.preload = 'auto'
     audioRef.current = audio
-    audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-    audio.onerror = () => {}  // silent.mp3 may error on some browsers — ignore until real src loaded
-    audio.play().catch(() => { /* ignore — keeps iOS unlock attempt */ })
+    audio.onended = fail
 
-    const fallbackQuery = (file.filename || '').replace(/\.(flac|mp3|wav|m4a|wav|aif|aiff|ogg)$/i, '').replace(/^\d+[\s.\-]+/, '').replace(/_/g, ' ')
-    const query = `${file.artist || ''} ${file.title || ''}`.trim() || fallbackQuery
-    if (!query) return
-
-    const swapSrc = (url) => {
-      // Element already unlocked — set the real src and resume playback.
-      audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-      audio.src = url
-      audio.play().catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
+    const playAt = (i) => {
+      if (i < candidates.length) {
+        let done = false
+        const next = () => { if (done) return; done = true; playAt(i + 1) }
+        audio.onerror = next
+        audio.src = candidates[i]
+        audio.play().catch(next)
+        return
+      }
+      // Último recurso: iTunes 30s (necesita fetch async; el elemento ya está
+      // desbloqueado por el primer play() del gesto).
+      if (!query) { fail(); return }
+      const cleanQuery = fallbackQuery.replace(/\b(extended|original|radio|club)\s*mix\b/gi, '').replace(/\s+/g, ' ').trim()
+      const itunes = (q) => fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=1`).then(r => r.json())
+      itunes(query)
+        .then(d => {
+          const u = d.results?.[0]?.previewUrl
+          if (u) { audio.onerror = fail; audio.src = u; audio.play().catch(fail); return null }
+          return (cleanQuery && cleanQuery !== query) ? itunes(cleanQuery) : { results: [] }
+        })
+        .then(d => {
+          if (!d) return
+          const u = d.results?.[0]?.previewUrl
+          if (u) { audio.onerror = fail; audio.src = u; audio.play().catch(fail) } else fail()
+        })
+        .catch(fail)
     }
-
-    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=1`)
-      .then(r => r.json())
-      .then(data => {
-        const url = data.results?.[0]?.previewUrl
-        if (!url) {
-          const cleanQuery = fallbackQuery.replace(/\b(extended|original|radio|club)\s*mix\b/gi, '').replace(/\s+/g, ' ').trim()
-          if (cleanQuery && cleanQuery !== query) {
-            return fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQuery)}&media=music&limit=1`)
-              .then(r => r.json())
-          }
-          return { results: [] }
-        }
-        swapSrc(url)
-      })
-      .then(fallbackData => {
-        if (!fallbackData) return
-        const url = fallbackData.results?.[0]?.previewUrl
-        if (url) swapSrc(url)
-        else { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-      })
-      .catch(() => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) })
+    playAt(0)
   }
 
   const handleAppPlay = async (file) => {
