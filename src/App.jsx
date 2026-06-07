@@ -7935,6 +7935,17 @@ function App() {
     setPlayingFile(file.filename)
     setNowPlaying(file)
     setIsAudioPlaying(true)
+    // Formatos que el <audio> del navegador NO decodifica (AIFF/AIF, WMA): el
+    // archivo está en disco (ej. los .aiff de Ben Van Kuringen) pero el browser
+    // no lo reproduce → silencio. Caemos al preview online (iTunes/SoundCloud/
+    // YouTube por artista+título) para que igual se escuche. Chrome/Edge tocan
+    // mp3/wav/flac/m4a/ogg; aiff/aif/wma no.
+    const _ext = (file.filename || '').split('.').pop().toLowerCase()
+    if (['aif', 'aiff', 'wma'].includes(_ext)) {
+      setNowPlaying({ ...file, isPreview: true })
+      playLibraryPreview(file)
+      return
+    }
     // Sin forma de alcanzar el archivo real (no hay agente conectado) caemos al
     // preview online (iTunes por artista+título), igual que Discovery — así la
     // biblioteca SUENA en tablet/iPhone sin agente, donde antes "no andaba nada".
