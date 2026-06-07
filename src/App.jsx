@@ -8547,7 +8547,14 @@ function App() {
   const showDemoBanner = isDemo
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
+    <div
+      className="h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]"
+      // iOS PWA: 100dvh (viewport dinámico) en vez del 100vh poco confiable; el
+      // h-screen del className queda de fallback donde no haya dvh. paddingBottom
+      // = safe-area del home indicator → la barra del player no queda cortada
+      // abajo (arriba lo maneja el topbar con safe-area-inset-top).
+      style={{ height: '100dvh', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       {loginModalOpen && (
         <LoginScreen
           isModal
