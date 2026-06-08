@@ -1026,6 +1026,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [sortCol, setSortCol] = useQS('sort', 'date')
   const [sortDir, setSortDir] = useQS('dir', 'desc')
   const [showDupes, setShowDupes] = useState(false)
+  const [dupeRemove, setDupeRemove] = useState(() => new Set())
   const [showFilename, setShowFilename] = useState(() => { try { return localStorage.getItem('lib_show_filename') === '1' } catch { return false } })
   const toggleFilename = () => setShowFilename(v => { const n = !v; try { localStorage.setItem('lib_show_filename', n ? '1' : '0') } catch {} return n })
   const [genreFilter, setGenreFilter] = useState([])
@@ -1365,16 +1366,24 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     }
   }
 
-  const deleteDupes = async () => {
-    const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-    if (!toDelete.length) return
-    if (!await confirmDialog({ title: 'Borrar duplicados', message: `Borrar ${toDelete.length} duplicados? Se mantienen los de mejor rating/calidad.` })) return
+  // Abre el panel de duplicados, pre-marcando los "idénticos" (misma copia: mismo
+  // formato + tamaño ~igual) para sacar. Los "dudosos" (otra versión/calidad) los
+  // marca el usuario en el panel.
+  const openDupes = () => {
+    const auto = new Set()
+    dupeGroups.forEach(g => g.identical.forEach(d => auto.add(d.filename)))
+    setDupeRemove(auto)
+    setShowDupes(true)
+  }
+
+  // Saca SOLO los archivos marcados: el agente borra el archivo local y Cloud Run
+  // limpia la entrada del manifest. Refresca si cualquiera de los dos reportó borrado.
+  const applyDupeResolution = async () => {
+    const toDelete = [...dupeRemove]
+    if (!toDelete.length) { setShowDupes(false); return }
     setDeletingDupes(true)
     let agentDeleted = 0
     try {
-      // Agent removes the actual files locally; Cloud Run updates the Cloudinary
-      // manifest. Files added directly to disk may not be in the manifest, so
-      // refresh whenever EITHER side reports a delete.
       if (agentConnected) {
         try {
           const ar = await agentFetch('delete-dupes', {
@@ -1391,13 +1400,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filenames: toDelete, username: authUser?.name || '' }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if ((data.deleted || 0) + agentDeleted > 0) fetchLibrary()
     } catch (e) {
       console.error('Failed to delete dupes', e)
     } finally {
       setDeletingDupes(false)
       setShowDupes(false)
+      setDupeRemove(new Set())
     }
   }
 
@@ -1572,7 +1582,12 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     return dupes
   }, [files])
 
-  // Group duplicates for the Tracks view
+  // Group duplicates for the Tracks view.
+  // Dentro de cada grupo separamos por TAMAÑO+FORMATO:
+  //  - "identical": misma copia (mismo formato y tamaño ~igual) -> se sacan solos.
+  //  - "doubtful": tamaño/formato distinto -> puede ser otra versión (Extended vs
+  //    Original) o distinta calidad -> lo decide el usuario en el panel.
+  const SIZE_TOL = 0.03 // ±3% de tamaño = misma copia
   const dupeGroups = useMemo(() => {
     const groups = {}
     files.forEach(f => {
@@ -1583,13 +1598,19 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     return Object.values(groups)
       .filter(g => g.length > 1)
       .map(g => {
-        // Sort: rated > categorized > format > size
+        // keep = mejor: rated > categorized > format > size
         g.sort((a, b) => dupeScore(b) - dupeScore(a))
-        // Check if all dupes are identical quality (same format+size)
-        const autoClean = g.slice(1).every(d =>
-          dupeScore(g[0]) > dupeScore(d)
-        )
-        return { keep: g[0], dupes: g.slice(1), autoClean }
+        const keep = g[0]
+        const ks = keep.size_mb || 0
+        const identical = []
+        const doubtful = []
+        g.slice(1).forEach(d => {
+          const sameFmt = (d.format || '') === (keep.format || '')
+          const closeSize = ks > 0 && Math.abs((d.size_mb || 0) - ks) / ks <= SIZE_TOL
+          if (sameFmt && closeSize) identical.push(d)
+          else doubtful.push(d)
+        })
+        return { key: normDupe(keep.filename), keep, identical, doubtful, dupes: [...identical, ...doubtful] }
       })
   }, [files])
 
@@ -1730,22 +1751,6 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         </div>
 
         {/* Action buttons - hidden on mobile, shown on md+ */}
-        {view === 'tracks' && dupeGroups.length > 0 && (
-          <button
-            onClick={deleteDupes}
-            disabled={deletingDupes}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 disabled:opacity-50 bg-red-900/50 hover:bg-red-800 text-red-300"
-          >
-            {deletingDupes ? (
-              <div className="w-4 h-4 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            )}
-            {deletingDupes ? 'Borrando...' : `Duplicados (${dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})`}
-          </button>
-        )}
 
         {(() => {
           const toOrganize = files.filter(f => !f.in_subfolder && f.genre).length
@@ -1803,28 +1808,20 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </button>
         )}
 
-        {dupeKeys.size > 0 && (
-          <div className="hidden md:flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={() => setShowDupes(d => !d)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-l-lg text-sm transition-all duration-200 active:scale-95 ${
-                showDupes ? 'bg-red-600 text-[var(--text-primary)] font-semibold' : 'bg-red-900/50 hover:bg-red-800 text-red-300'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Duplicados ({dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})
-            </button>
-            <button
-              onClick={deleteDupes}
-              disabled={deletingDupes}
-              className="px-2 py-1.5 bg-red-700 hover:bg-red-600 disabled:opacity-50 rounded-r-lg text-sm text-[var(--text-primary)] transition-all duration-200 active:scale-95"
-              title="Borrar duplicados (mantiene mejor rating/calidad)"
-            >
-              {deletingDupes ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : '✕'}
-            </button>
-          </div>
+        {view === 'tracks' && dupeGroups.length > 0 && (
+          <button
+            onClick={openDupes}
+            disabled={deletingDupes}
+            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 disabled:opacity-50 ${
+              showDupes ? 'bg-red-600 text-[var(--text-primary)] font-semibold' : 'bg-red-900/50 hover:bg-red-800 text-red-300'
+            }`}
+            title="Revisar y resolver duplicados"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Duplicados ({dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})
+          </button>
         )}
 
         {/* Search - full width on mobile (wraps to new row), inline on desktop */}
@@ -1913,7 +1910,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                     </button>
                   )}
                   {dupeKeys.size > 0 && (
-                    <button onClick={() => { deleteDupes(); setToolsOpen(false) }}
+                    <button onClick={() => { openDupes(); setToolsOpen(false) }}
                       disabled={deletingDupes}
                       className="w-full text-left px-4 py-3 rounded-xl text-sm text-red-400 hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
                       <div className="w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center">
@@ -1923,7 +1920,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                           <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                         )}
                       </div>
-                      {deletingDupes ? 'Borrando...' : `Borrar duplicados (${dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})`}
+                      {deletingDupes ? 'Borrando...' : `Revisar duplicados (${dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})`}
                     </button>
                   )}
                   <button onClick={() => { openFolder(''); setToolsOpen(false) }}
@@ -2004,24 +2001,20 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               </button>
               <div>
                 <div className="text-sm font-semibold text-[var(--text-primary)]">Duplicados</div>
-                <div className="text-xs text-gray-500">{dupeGroups.length} grupos, {dupeGroups.reduce((s, g) => s + g.dupes.length, 0)} a eliminar</div>
+                <div className="text-xs text-gray-500">{dupeGroups.reduce((s,g)=>s+g.identical.length,0)} idénticos · {dupeGroups.reduce((s,g)=>s+g.doubtful.length,0)} dudosos · {dupeRemove.size} marcados</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={async () => {
-                  const toDelete = dupeGroups.flatMap(g => g.dupes.map(d => d.filename))
-                  await agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: toDelete }) })
-                  fetchLibrary()
-                  setShowDupes(false)
-                }}
-                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-sm rounded-lg text-[var(--text-primary)] transition-all duration-200 active:scale-95"
+                onClick={applyDupeResolution}
+                disabled={deletingDupes || dupeRemove.size === 0}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-sm rounded-lg text-[var(--text-primary)] transition-all duration-200 active:scale-95"
               >
-                Limpiar todos ({dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})
+                {deletingDupes ? 'Aplicando...' : `Aplicar (${dupeRemove.size})`}
               </button>
             </div>
           </div>
-          <div className="text-xs text-gray-600 px-1">Se mantiene el de mayor rating, con género asignado, mejor formato y mayor tamaño. Click derecho para borrar manualmente.</div>
+          <div className="text-xs text-gray-600 px-1">Los <span className="text-red-400">idénticos</span> (mismo formato y tamaño) vienen marcados para sacar. Los <span className="text-amber-400">dudosos</span> (otra versión o calidad distinta) los marcás vos. Siempre se mantiene el de mejor rating/calidad.</div>
           {dupeGroups.map((group, gi) => (
               <div key={gi} className="bg-[var(--bg-panel)] rounded-xl border border-[var(--border-color)] overflow-hidden">
                 <div className="px-4 py-2 bg-[var(--bg-surface)] border-b border-[var(--border-color)] flex items-center gap-2">
@@ -2034,26 +2027,18 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 {[group.keep, ...group.dupes].map((f, fi) => {
                   const isBest = fi === 0
                   const isPlaying = playingFile === f.filename
-                  // Build "why keep" tags
-                  const keepReasons = []
-                  if (isBest) {
-                    if (f.rating) keepReasons.push(`★${f.rating}`)
-                    if (f.genre) keepReasons.push(f.genre)
-                    if (FORMAT_SCORE[f.format] >= 85) keepReasons.push(f.format)
-                  }
+                  const isIdentical = group.identical.some(d => d.filename === f.filename)
+                  const marked = dupeRemove.has(f.filename)
+                  const toggleMark = () => setDupeRemove(prev => {
+                    const n = new Set(prev)
+                    n.has(f.filename) ? n.delete(f.filename) : n.add(f.filename)
+                    return n
+                  })
                   return (
                     <div
                       key={f.filename}
-                      onContextMenu={async (e) => {
-                        if (isBest) return
-                        e.preventDefault()
-                        if (await confirmDialog({ title: 'Borrar archivo', message: `Borrar "${f.filename}"?` })) {
-                          agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
-                            .then(() => fetchLibrary())
-                        }
-                      }}
                       className={`flex items-center gap-3 px-4 py-2 border-b border-[var(--border-color)]/30 last:border-b-0 ${
-                        isBest ? 'bg-green-500/5' : 'bg-red-500/5 hover:bg-red-500/10'
+                        isBest ? 'bg-green-500/5' : marked ? 'bg-red-500/10' : 'bg-[var(--bg-surface)]/30'
                       }`}
                     >
                       <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
@@ -2062,10 +2047,12 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                           {f.filename}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
-                          <span className={`font-medium ${isBest ? 'text-green-400' : 'text-red-400/70'}`}>{f.format}</span>
+                          <span className={`font-medium ${isBest ? 'text-green-400' : 'text-gray-400'}`}>{f.format}</span>
                           <span>{f.size_mb} MB</span>
                           {f.genre && <span className="text-purple-400">{f.genre}</span>}
-                          {f.in_subfolder && <span className="text-cyan-400/60">en carpeta</span>}
+                          {!isBest && (isIdentical
+                            ? <span className="text-red-400/80">idéntico</span>
+                            : <span className="text-amber-400/90">¿otra versión?</span>)}
                         </div>
                       </div>
                       <span className={`w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
@@ -2073,18 +2060,18 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                       </div>
                       {isBest ? (
-                        <span className="flex-shrink-0 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded font-medium text-center" title={keepReasons.join(' · ')}>
-                          Mantener
-                        </span>
+                        <span className="flex-shrink-0 w-24 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded font-medium text-center">Mantener</span>
                       ) : (
                         <button
-                          onClick={async () => {
-                            await agentFetch('delete-dupes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: [f.filename] }) })
-                            fetchLibrary()
-                          }}
-                          className="flex-shrink-0 px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded font-medium hover:bg-red-500/40 transition-all duration-200 active:scale-95 text-center"
+                          onClick={toggleMark}
+                          className={`flex-shrink-0 w-24 px-2 py-1 text-xs rounded font-medium transition-all duration-200 active:scale-95 text-center flex items-center justify-center gap-1 ${
+                            marked ? 'bg-red-500/30 text-red-300' : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                          }`}
                         >
-                          Borrar
+                          <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${marked ? 'bg-red-500 border-red-500' : 'border-gray-500'}`}>
+                            {marked && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                          </span>
+                          Sacar
                         </button>
                       )}
                     </div>
