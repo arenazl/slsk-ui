@@ -1006,6 +1006,13 @@ function prettyMeta(f) {
   return { artist, title: title || (f.filename || '') }
 }
 
+// True si el artista falta o el título parece un filename (sucio) -> candidato a curar.
+function isDirtyMeta(f) {
+  const a = (f.artist || '').trim()
+  const t = (f.title || '').trim()
+  return !a || !t || t.includes('_') || t.length > 70 || /^\s*\d{1,3}[.\-_ ]/.test(t)
+}
+
 const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
   const toast = useToast()
   const confirmDialog = useConfirm()
@@ -1023,6 +1030,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [exporting, setExporting] = useState(false)
   const [exportWithTracks, setExportWithTracks] = useState(false)
   const [detectingKeys, setDetectingKeys] = useState(false)
+  const [fixingMeta, setFixingMeta] = useState(false)
   const [sortCol, setSortCol] = useQS('sort', 'date')
   const [sortDir, setSortDir] = useQS('dir', 'desc')
   const [showDupes, setShowDupes] = useState(false)
@@ -1328,6 +1336,25 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     } finally {
       setClassifying(false)
       setOrganizing(false)
+    }
+  }
+
+  // Completa artista/título faltantes (y key/bpm de paso) vía Beatport+IA en el
+  // backend. NUNCA pisa el género ya asignado. Solo toca el manifest (no el archivo).
+  const fixMetatags = async () => {
+    setFixingMeta(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/curate-existing`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: authUser?.name || '' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      toast(`Metatags: ${data.fixed || 0} arreglados`)
+      fetchLibrary()
+    } catch (e) {
+      console.error('fixMetatags failed', e)
+    } finally {
+      setFixingMeta(false)
     }
   }
 
@@ -1793,6 +1820,24 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {detectingKeys ? 'Detectando...' : `Keys (${files.filter(f => !f.key).length})`}
           </button>
         )}
+        {view === 'tracks' && files.some(isDirtyMeta) && (
+          <button
+            onClick={fixMetatags}
+            disabled={fixingMeta}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            style={{ background: 'var(--color-accent)' }}
+            title="Completar artista/título faltantes (Beatport+IA, sin tocar el género)"
+          >
+            {fixingMeta ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            )}
+            {fixingMeta ? 'Arreglando...' : `Metatags (${files.filter(isDirtyMeta).length})`}
+          </button>
+        )}
         {view === 'tracks' && (
           <button
             onClick={toggleFilename}
@@ -1907,6 +1952,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                           : <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" /></svg>}
                       </div>
                       {detectingKeys ? 'Detectando...' : `Detectar Keys (${files.filter(f => !f.key).length})`}
+                    </button>
+                  )}
+                  {files.some(isDirtyMeta) && (
+                    <button onClick={() => { fixMetatags(); setToolsOpen(false) }} disabled={fixingMeta}
+                      className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
+                      <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 flex items-center justify-center">
+                        {fixingMeta ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                          : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}
+                      </div>
+                      {fixingMeta ? 'Arreglando...' : `Arreglar metatags (${files.filter(isDirtyMeta).length})`}
                     </button>
                   )}
                   {dupeKeys.size > 0 && (
