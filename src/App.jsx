@@ -1341,18 +1341,22 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   // Completa artista/título faltantes (y key/bpm de paso) vía Beatport+IA en el
   // backend. NUNCA pisa el género ya asignado. Solo toca el manifest (no el archivo).
+  // Arregla los metatags vía el AGENTE: cura los faltantes (Beatport+IA, sin pisar
+  // género) y ESCRIBE los tags dentro del archivo (mutagen) para que Rekordbox los lea.
   const fixMetatags = async () => {
+    if (!agentConnected) { toast('Necesitás el agente conectado para escribir los tags en los archivos'); return }
     setFixingMeta(true)
     try {
-      const res = await fetch(`${API_BASE}/api/curate-existing`, {
+      const res = await agentFetch('fix-metadata', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: authUser?.name || '' }),
       })
       const data = await res.json().catch(() => ({}))
-      toast(`Metatags: ${data.fixed || 0} arreglados`)
+      toast(`Metatags: ${data.tags_written || 0} archivos escritos${data.fixed_meta ? ` · ${data.fixed_meta} curados` : ''}`)
       fetchLibrary()
     } catch (e) {
       console.error('fixMetatags failed', e)
+      toast('Error arreglando metatags')
     } finally {
       setFixingMeta(false)
     }
@@ -1820,13 +1824,13 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {detectingKeys ? 'Detectando...' : `Keys (${files.filter(f => !f.key).length})`}
           </button>
         )}
-        {view === 'tracks' && files.some(isDirtyMeta) && (
+        {view === 'tracks' && agentConnected && (
           <button
             onClick={fixMetatags}
             disabled={fixingMeta}
             className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
             style={{ background: 'var(--color-accent)' }}
-            title="Completar artista/título faltantes (Beatport+IA, sin tocar el género)"
+            title="Completar artista/título faltantes y escribir los tags en los archivos (para Rekordbox)"
           >
             {fixingMeta ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1835,7 +1839,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             )}
-            {fixingMeta ? 'Arreglando...' : `Metatags (${files.filter(isDirtyMeta).length})`}
+            {fixingMeta ? 'Arreglando...' : 'Metatags'}
           </button>
         )}
         {view === 'tracks' && (
@@ -1954,14 +1958,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       {detectingKeys ? 'Detectando...' : `Detectar Keys (${files.filter(f => !f.key).length})`}
                     </button>
                   )}
-                  {files.some(isDirtyMeta) && (
+                  {agentConnected && (
                     <button onClick={() => { fixMetatags(); setToolsOpen(false) }} disabled={fixingMeta}
                       className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98] disabled:opacity-50">
                       <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 flex items-center justify-center">
                         {fixingMeta ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
                           : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}
                       </div>
-                      {fixingMeta ? 'Arreglando...' : `Arreglar metatags (${files.filter(isDirtyMeta).length})`}
+                      {fixingMeta ? 'Arreglando...' : 'Arreglar metatags'}
                     </button>
                   )}
                   {dupeKeys.size > 0 && (
