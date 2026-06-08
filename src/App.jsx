@@ -1112,8 +1112,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       }).catch(() => {})
     }
     try {
-      // Fetch metadata from Cloud Run (Cloudinary = source of truth)
-      const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
+      // Fetch metadata from Cloud Run (Cloudinary = source of truth).
+      // cache-bust + no-store: sin esto el navegador/SW servía el manifest viejo y
+      // los contadores (ej. "Metatags (N)") no bajaban tras curar.
+      const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}&_=${Date.now()}`, { cache: 'no-store' })
       const metadata = await metaRes.json()
 
       // Local file scan: prefer FSA, fallback to agent. Mobile (no FSA, no agent)
