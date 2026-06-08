@@ -220,6 +220,53 @@ const STATUS_LABELS = {
   error: 'Error',
 }
 
+// Carteles rotativos mientras un tema está en estado "searching" (antes de que
+// el agente arranque la descarga). Reemplazan el estático "Buscando..." por
+// frases dinámicas/motivacionales que rotan con una animación de fade+slide.
+const SEARCHING_MESSAGES = [
+  'Buscando…',
+  'En camino…',
+  'Vamos guacho',
+  'Con este la rompés',
+  'Rastreando la red',
+  'Cazando el tema',
+  'Escarbando SoulSeek',
+  'Ya casi lo tengo',
+  'Afilando la púa',
+  'Esto va a sonar',
+  'Tremendo temazo',
+  'Pateando la pista',
+]
+
+function SearchingLabel({ className = '' }) {
+  // Arranca en un índice random para que filas simultáneas no muestren todas
+  // el mismo cartel sincronizado.
+  const [i, setI] = useState(() => Math.floor(Math.random() * SEARCHING_MESSAGES.length))
+  const [show, setShow] = useState(true)
+  useEffect(() => {
+    let swapTimer
+    const id = setInterval(() => {
+      setShow(false) // fade-out del cartel actual
+      swapTimer = setTimeout(() => {
+        setI(prev => (prev + 1) % SEARCHING_MESSAGES.length)
+        setShow(true) // fade-in del siguiente
+      }, 200)
+    }, 1800)
+    return () => { clearInterval(id); clearTimeout(swapTimer) }
+  }, [])
+  return (
+    <span className={className}>
+      <span
+        className={`inline-block transition-all duration-200 ease-out will-change-transform ${
+          show ? 'opacity-100 translate-y-0 blur-0' : 'opacity-0 -translate-y-1 blur-[1px]'
+        }`}
+      >
+        {SEARCHING_MESSAGES[i]}
+      </span>
+    </span>
+  )
+}
+
 const PLAY_SIZES = {
   xs: { btn: 'w-6 h-6', icon: 'w-3 h-3' },
   sm: { btn: 'w-7 h-7', icon: 'w-3 h-3' },
@@ -1345,6 +1392,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   // género) y ESCRIBE los tags dentro del archivo (mutagen) para que Rekordbox los lea.
   const fixMetatags = async () => {
     if (!agentConnected) { toast('Necesitás el agente conectado para escribir los tags en los archivos'); return }
+    const before = files.filter(isDirtyMeta).length
     setFixingMeta(true)
     try {
       const res = await agentFetch('fix-metadata', {
@@ -1352,7 +1400,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         body: JSON.stringify({ username: authUser?.name || '' }),
       })
       const data = await res.json().catch(() => ({}))
-      toast(`Metatags: ${data.tags_written || 0} archivos escritos${data.fixed_meta ? ` · ${data.fixed_meta} curados` : ''}`)
+      const after = Math.max(0, before - (data.fixed_meta || 0))
+      toast(`Faltantes: ${before} → ${after}  ·  ${data.tags_written || 0} tags escritos en los archivos${data.errors ? ` · ${data.errors} rotos` : ''}`)
       fetchLibrary()
     } catch (e) {
       console.error('fixMetatags failed', e)
@@ -1839,7 +1888,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             )}
-            {fixingMeta ? 'Arreglando...' : 'Metatags'}
+            {fixingMeta ? 'Arreglando...' : `Metatags${files.filter(isDirtyMeta).length ? ` (${files.filter(isDirtyMeta).length})` : ''}`}
           </button>
         )}
         {view === 'tracks' && (
@@ -1965,7 +2014,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         {fixingMeta ? <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
                           : <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}
                       </div>
-                      {fixingMeta ? 'Arreglando...' : 'Arreglar metatags'}
+                      {fixingMeta ? 'Arreglando...' : `Arreglar metatags${files.filter(isDirtyMeta).length ? ` (${files.filter(isDirtyMeta).length})` : ''}`}
                     </button>
                   )}
                   {dupeKeys.size > 0 && (
@@ -10051,7 +10100,7 @@ function App() {
                         {active ? (
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {st === 'searching' ? (
-                              <span className="text-yellow-400 animate-pulse">Buscando…</span>
+                              <span className="text-yellow-400"><SearchingLabel /></span>
                             ) : st === 'queued' ? (
                               <span className="text-yellow-400 animate-pulse truncate max-w-[8rem]">En cola{dl.source ? ` (${dl.source})` : ''}</span>
                             ) : st === 'downloading' ? (
@@ -12109,9 +12158,9 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     )
                     if (dl.status === 'searching') return (
                       <div className="flex-shrink-0 flex items-center gap-1">
-                        <span className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-yellow-400 animate-pulse">
+                        <span className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs text-yellow-400">
                           <div className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                          <span className="hidden sm:inline">Buscando...</span>
+                          <SearchingLabel className="hidden sm:inline" />
                         </span>
                         {clearBtn}
                       </div>
@@ -12278,7 +12327,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                             <span className="hidden sm:inline">Descargar</span>
                           </button>
                         )
-                        if (dl.status === 'searching') return <span className="flex-shrink-0 text-xs text-yellow-400 animate-pulse"><span className="hidden sm:inline">Buscando...</span><span className="sm:hidden">...</span></span>
+                        if (dl.status === 'searching') return <span className="flex-shrink-0 text-xs text-yellow-400"><SearchingLabel className="hidden sm:inline" /><span className="sm:hidden">...</span></span>
                         if (dl.status === 'downloading') return dl.pct != null
                           ? <span className="flex-shrink-0 flex items-center gap-1.5 text-xs text-[var(--color-accent)]"><div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden"><div className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${dl.pct}%` }} /></div><span>{dl.pct}%</span></span>
                           : <span className="flex-shrink-0 text-xs text-[var(--color-accent)] animate-pulse"><span className="hidden sm:inline">{dl.message === 'En cola' ? 'En cola' : 'Descargando'}</span><span className="sm:hidden">...</span></span>
