@@ -977,6 +977,35 @@ function useQS(key, defaultVal) {
 // cada archivo se intenta clasificar UNA sola vez por sesión (post-descarga).
 const _autoClassifyAttempted = new Set()
 
+// Limpia artista/título estilo Rekordbox. Usa los tags; si faltan o el título parece
+// un filename (guiones bajos, muy largo), lo deriva del nombre de archivo: saca la
+// extensión, el prefijo de número de track y los "_", y separa "Artista - Título".
+// Quita el "feat. X" del título cuando X ya está en el artista (redundante).
+const _AUDIO_EXT_RE = /\.(flac|mp3|wav|aif|aiff|m4a|ogg|aac)$/i
+const _stripTrackNo = (s) => s.replace(/^\s*\d{1,3}\s*[-._)\s]+\s*/, '')
+function prettyMeta(f) {
+  let artist = (f.artist || '').trim()
+  let title = (f.title || '').trim()
+  const titleDirty = !title || title.includes('_') || title.length > 70
+  if (!artist || titleDirty) {
+    const base = _stripTrackNo((f.filename || '').replace(_AUDIO_EXT_RE, '').replace(/_/g, ' ').trim())
+    const i = base.indexOf(' - ')
+    if (i > 0) {
+      if (!artist) artist = base.slice(0, i).trim()
+      if (titleDirty) title = base.slice(i + 3).trim()
+    } else if (titleDirty) {
+      title = base
+    }
+  }
+  title = _stripTrackNo(title)
+  const fm = title.match(/\s*\(?feat\.?\s+([^)]+?)\)?\s*$/i)
+  if (fm && artist) {
+    const who = fm[1].split(/[,&]/)[0].trim().toLowerCase()
+    if (who && artist.toLowerCase().includes(who)) title = title.slice(0, fm.index).trim()
+  }
+  return { artist, title: title || (f.filename || '') }
+}
+
 const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
   const toast = useToast()
   const confirmDialog = useConfirm()
@@ -997,6 +1026,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [sortCol, setSortCol] = useQS('sort', 'date')
   const [sortDir, setSortDir] = useQS('dir', 'desc')
   const [showDupes, setShowDupes] = useState(false)
+  const [showFilename, setShowFilename] = useState(() => { try { return localStorage.getItem('lib_show_filename') === '1' } catch { return false } })
+  const toggleFilename = () => setShowFilename(v => { const n = !v; try { localStorage.setItem('lib_show_filename', n ? '1' : '0') } catch {} return n })
   const [genreFilter, setGenreFilter] = useState([])
   const [deletingDupes, setDeletingDupes] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null) // { x, y, file }
@@ -1757,6 +1788,20 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {detectingKeys ? 'Detectando...' : `Keys (${files.filter(f => !f.key).length})`}
           </button>
         )}
+        {view === 'tracks' && (
+          <button
+            onClick={toggleFilename}
+            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 ${
+              showFilename ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-semibold' : 'text-gray-500 hover:text-gray-300 bg-[var(--bg-input)]/40'
+            }`}
+            title="Mostrar/ocultar la columna de nombre de archivo"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            Filename
+          </button>
+        )}
 
         {dupeKeys.size > 0 && (
           <div className="hidden md:flex items-center gap-1 flex-shrink-0">
@@ -2055,7 +2100,9 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--bg-surface)] border-b border-[var(--border-color)] text-xs text-gray-500 uppercase tracking-wider select-none">
             <span className="w-6 md:w-8 text-center">#</span>
             <span className="w-8"></span>
-            <button onClick={() => toggleSort('artist')} className={`flex-1 min-w-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'artist' ? 'text-[var(--color-accent)]' : ''}`}>Artista - Título<SortArrow col="artist" /></button>
+            <button onClick={() => toggleSort('artist')} className={`w-28 sm:w-40 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'artist' ? 'text-[var(--color-accent)]' : ''}`}>Artista<SortArrow col="artist" /></button>
+            <button onClick={() => toggleSort('title')} className={`flex-1 min-w-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'title' ? 'text-[var(--color-accent)]' : ''}`}>Título<SortArrow col="title" /></button>
+            {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-left text-gray-600 normal-case">Filename</span>}
             <button onClick={() => toggleSort('genre')} className={`hidden md:block w-32 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'genre' ? 'text-[var(--color-accent)]' : ''}`}>Género<SortArrow col="genre" /></button>
             <button onClick={() => toggleSort('key')} className={`hidden sm:block w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'key' ? 'text-[var(--color-accent)]' : ''}`}>Key<SortArrow col="key" /></button>
             <button onClick={() => toggleSort('rating')} className={`w-20 md:w-24 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'rating' ? 'text-[var(--color-accent)]' : ''}`}>Rating<SortArrow col="rating" /></button>
@@ -2066,6 +2113,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           <div className="flex-1 min-h-0 overflow-y-auto">
             {finalList.map((f, i) => {
               const isPlaying = playingFile === f.filename
+              const pm = prettyMeta(f)
               return (
                 <div
                   key={`${f.filename}-${i}`}
@@ -2077,14 +2125,18 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 >
                   <span className="w-6 md:w-8 text-center text-xs text-gray-600">{i + 1}</span>
                   <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
+                  <div className="w-28 sm:w-40 flex-shrink-0 min-w-0">
+                    <div className="text-xs md:text-sm truncate text-[var(--text-secondary)]" title={pm.artist}>{pm.artist || '—'}</div>
+                  </div>
                   <div className="flex-1 min-w-0 flex items-center gap-1">
-                    <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
-                      {f.artist ? `${f.artist} - ` : ''}{f.title || f.filename}
+                    <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`} title={pm.title}>
+                      {pm.title}
                     </div>
-                    <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((f.artist || '') + ' ' + (f.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hidden sm:flex flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
+                    <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((pm.artist || '') + ' ' + (pm.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hidden sm:flex flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
                       <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
                     </a>
                   </div>
+                  {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-xs text-gray-600 truncate" title={f.filename}>{f.filename}</span>}
                   <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
                   <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
                   <div className="w-20 md:w-24 flex-shrink-0 flex justify-center">
