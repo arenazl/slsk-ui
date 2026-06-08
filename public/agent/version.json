@@ -1,6 +1,6 @@
 {
-  "version": "2.12.8",
-  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.8/GrooveSyncAgent.exe",
-  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.8/GrooveSyncAgent-macOS.zip",
-  "release_notes": "Auto-curacion de metadata al descargar (Beatport + IA + BPM): cada tema baja con artista/titulo/genero/BPM/key reales y ubicado en su carpeta de genero. El drag entre carpetas tambien graba el genero en el tag (para Rekordbox)."
+  "version": "2.12.10",
+  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.10/GrooveSyncAgent.exe",
+  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.10/GrooveSyncAgent-macOS.zip",
+  "release_notes": "Arreglar metatags: escribe artista/titulo/genero/key/BPM DENTRO del archivo (para Rekordbox), curando los faltantes con Beatport+IA sin pisar el genero. Ademas: duplicados a la Papelera de Windows (reversible) e icono de la bandeja resiliente."
 }
