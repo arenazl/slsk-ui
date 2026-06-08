@@ -6851,6 +6851,34 @@ function App() {
     return () => window.removeEventListener('agent-error', handler)
   }, [toast])
 
+  // Auto-reload cuando se deploya una versión nueva del frontend (sin pedir Ctrl+Shift+R).
+  // Compara el bundle hasheado que está corriendo contra el de index.html del server
+  // (cache-bust). Recarga al volver a la pestaña — o ya mismo si está en 2do plano —
+  // para no cortar el audio en pleno uso.
+  useEffect(() => {
+    const RE = /assets\/index-[A-Za-z0-9_-]+\.js/
+    const loadedScript = Array.from(document.scripts).map(s => s.src).find(s => RE.test(s)) || ''
+    const loaded = (loadedScript.match(RE) || [null])[0]
+    if (!loaded) return
+    let pending = false
+    const check = async () => {
+      try {
+        const html = await fetch(`/index.html?_=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.text() : '')
+        const b = (html.match(RE) || [null])[0]
+        if (b && b !== loaded && !pending) {
+          pending = true
+          if (document.hidden) window.location.reload()
+          else toast('Nueva versión disponible — se actualiza al volver a la pestaña')
+        }
+      } catch {}
+    }
+    const onVis = () => { if (document.hidden) check(); else if (pending) window.location.reload() }
+    const iv = setInterval(check, 60000)
+    document.addEventListener('visibilitychange', onVis)
+    check()
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis) }
+  }, [toast])
+
   // Storage backend (FSA in browser OR agent fallback)
   const [fsaReady, setFsaReady] = useState(false)
   const [fsaFolderName, setFsaFolderName] = useState(null)
