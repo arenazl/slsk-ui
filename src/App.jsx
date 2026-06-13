@@ -2674,7 +2674,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       const res = await fetch(`${API_BASE}/api/generate-set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: selStars.length > 0 ? selStars : undefined, duration: overrideDuration ?? duration, method: useMethod, genres: gens.length > 0 ? gens : undefined, username: authUser?.name || '' }),
+        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: selStars.length > 0 ? selStars : undefined, duration: overrideDuration ?? duration, method: useMethod, genres: gens.length > 0 ? gens : undefined, username: authUser?.name || '', seed: useMethod === 'pro' ? Math.floor(Math.random() * 1e9) : undefined }),
       })
       const data = await res.json()
       setSetTracks(data.tracks || [])
@@ -2948,6 +2948,43 @@ ${playlistEntries}
         </div>
       )}
 
+      {/* Set Pro — armado inteligente (destacado) */}
+      <div className="flex-shrink-0 px-3 md:px-6 py-3 border-b border-[var(--border-color)]" style={{ background: 'linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent)' }}>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+              <span>🧠</span> Set Pro
+              <span className="text-[10px] font-normal text-[var(--text-muted)]">armado inteligente</span>
+            </div>
+            <div className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">
+              {selectedGenres.length > 0
+                ? `${selectedGenres[0]} + afines · mejor en Beatport + más nuevos + clásicos · key ascendente`
+                : 'Marcá un género arriba para empezar'}
+            </div>
+          </div>
+          <button
+            onClick={() => { if (!selectedGenres.length) { toast('Marcá un género arriba primero'); return } generateSet('pro') }}
+            disabled={generating}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-[var(--color-accent-text)] disabled:opacity-50 active:scale-95 transition-all flex-shrink-0"
+            style={{ background: 'var(--color-accent)' }}
+          >
+            {generating && method === 'pro' ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>🧠</span>}
+            Generar Set Pro
+          </button>
+          {method === 'pro' && setTracks.length > 0 && (
+            <button
+              onClick={() => generateSet('pro')}
+              disabled={generating}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-input)]/60 hover:bg-[var(--bg-hover)] disabled:opacity-50 active:scale-95 transition-all flex-shrink-0"
+              title="Otra selección con el mismo criterio"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              Regenerar
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Search results dropdown */}
       <div className="flex-shrink-0">
         {searchQuery.length >= 2 && (() => {
@@ -3040,8 +3077,10 @@ ${playlistEntries}
                   <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(t)} />
                   <span className="w-5 md:w-6 text-center text-xs text-gray-600 font-mono flex-shrink-0">{i + 1}</span>
                   <div className="flex-1 min-w-0">
-                    <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
-                      {t.artist ? `${t.artist} - ` : ''}{t.title || t.filename}
+                    <div className={`text-xs md:text-sm truncate flex items-center gap-1.5 ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
+                      {t.is_classic && <span className="flex-shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/25 text-amber-400">CLÁSICO</span>}
+                      {t.beatport_pos && <span className="flex-shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-green-500/20 text-green-400">BP#{t.beatport_pos}</span>}
+                      <span className="truncate">{t.artist ? `${t.artist} - ` : ''}{t.title || t.filename}</span>
                     </div>
                   </div>
                   <span className="hidden lg:block w-24 flex-shrink-0 text-xs text-gray-500 truncate text-center">{t.genre || '-'}</span>
