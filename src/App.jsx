@@ -7573,20 +7573,26 @@ function App() {
   // if the agent IS connected (via proxy/Funnel) prefer 'local' so the
   // actual track plays instead of an iTunes substitute that may not exist.
   const [playbackMode, setPlaybackModeState] = useState(() => {
-    return localStorage.getItem('playback_mode') || (IS_MOBILE_DEVICE ? 'preview' : 'local')
+    // 'local' solo tiene sentido si se puede acceder a los archivos: FSA (desktop
+    // Chrome) o, ya en runtime, un agente conectado. Sin eso -> 'preview'. NO usar
+    // userAgent: las tablets no se detectan como "mobile" y quedaban en 'local'
+    // sin poder reproducir nada (modo local apuntando a archivos que no existen).
+    return localStorage.getItem('playback_mode') || (fsaBackend.supported ? 'local' : 'preview')
   })
   const setPlaybackMode = (mode) => {
     setPlaybackModeState(mode)
     localStorage.setItem('playback_mode', mode)
   }
-  // On mobile: auto-switch to 'local' when the agent comes online so the
-  // user hears the actual track (via Cloud Run proxy → Funnel → agent), not the
-  // iTunes substitute. Only flip if the user hasn't explicitly chosen.
+  // Ajustar segun capacidad REAL de reproduccion local (agente conectado via proxy,
+  // o FSA en desktop). Respetamos la eleccion del usuario, EXCEPTO un 'local'
+  // imposible (sin agente ni FSA, ej. tablet/celular Android/iPad): ahi forzamos
+  // 'preview' porque si no, no suena nada.
   useEffect(() => {
-    if (!IS_MOBILE_DEVICE) return
-    if (localStorage.getItem('playback_mode')) return  // user-chosen, respect it
-    setPlaybackModeState(agentConnected ? 'local' : 'preview')
-  }, [agentConnected, IS_MOBILE_DEVICE])
+    const saved = localStorage.getItem('playback_mode')
+    const canLocal = agentConnected || fsaBackend.supported
+    if (saved && !(saved === 'local' && !canLocal)) return  // user-chosen valido, respetar
+    setPlaybackModeState(canLocal ? 'local' : 'preview')
+  }, [agentConnected])
   const [mixTracks, setMixTracks] = useState(null) // tracks array for MixEditor
   const previewTimerRef = useRef(null)
   const audioRef = useRef(null)
