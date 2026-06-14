@@ -18,7 +18,9 @@ function MaintenanceGate({ children }) {
 
   const submit = (e) => {
     e.preventDefault()
-    if (user.trim().toLowerCase() === 'look' && pass === '3211') {
+    const u = user.trim().toLowerCase()
+    // usuarios habilitados durante el mantenimiento (misma clave)
+    if (['look', 'jony', 'ari'].includes(u) && pass === '3211') {
       try { localStorage.setItem('maint_ok', '1') } catch {}
       setOk(true)
     } else {
