@@ -2195,7 +2195,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </div>
 
           {/* Table rows */}
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
             {finalList.map((f, i) => {
               const isPlaying = playingFile === f.filename
               const pm = prettyMeta(f)
