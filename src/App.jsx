@@ -8244,11 +8244,15 @@ function App() {
     // El primer src se setea SINCRÓNICO dentro del gesto → iOS desbloquea el
     // elemento; los reintentos (onerror) reusan el mismo elemento ya desbloqueado.
     const candidates = []
-    if (file.preview_url) candidates.push(file.preview_url)
     if (query) {
+      // SoundCloud PRIMERO: tiene la version de DJ (Extended/remix) y, a diferencia
+      // de YouTube, NO bloquea la extraccion desde Cloud Run (datacenter). YouTube
+      // tendria la version exacta pero da 502 desde el server -> queda de fallback.
+      // iTunes (preview_url) suele traer OTRA version -> ultimo recurso.
       candidates.push(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(query)}`)
       candidates.push(`${API_BASE}/api/yt-audio?q=${encodeURIComponent(query)}`)
     }
+    if (file.preview_url) candidates.push(file.preview_url)
 
     const audio = new Audio()
     audio.preload = 'auto'
