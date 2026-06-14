@@ -518,12 +518,12 @@ function ScreenHint({ id, title, tips }) {
           animation: 'hint-shimmer 6s ease-in-out infinite',
         }}
       />
-      <div className="relative flex items-center gap-3 px-3 md:px-6 py-2.5">
+      <div className="relative flex items-center gap-2.5 md:gap-3 px-3 md:px-6 py-1.5 md:py-2.5">
         <div className="flex-shrink-0 relative" style={{ animation: 'hint-float 3.2s ease-in-out infinite' }}>
           <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/40 blur-md animate-pulse" />
           <span
             key={`icon-${activeTip}`}
-            className="relative inline-flex w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-purple-500 items-center justify-center shadow-lg shadow-purple-900/40 ring-1 ring-white/15 overflow-hidden"
+            className="relative inline-flex w-7 h-7 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-purple-500 items-center justify-center shadow-lg shadow-purple-900/40 ring-1 ring-white/15 overflow-hidden"
             style={{ animation: 'hint-tremble 0.7s cubic-bezier(0.36, 0.07, 0.19, 0.97)' }}
           >
             <img src="/logo.png" alt="" className="w-6 h-6 object-contain drop-shadow" />
@@ -2190,7 +2190,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-left text-gray-600 normal-case">Filename</span>}
             <button onClick={() => toggleSort('genre')} className={`hidden md:block w-32 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'genre' ? 'text-[var(--color-accent)]' : ''}`}>Género<SortArrow col="genre" /></button>
             <button onClick={() => toggleSort('key')} className={`hidden sm:block w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'key' ? 'text-[var(--color-accent)]' : ''}`}>Key<SortArrow col="key" /></button>
-            <button onClick={() => toggleSort('rating')} className={`w-20 md:w-24 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'rating' ? 'text-[var(--color-accent)]' : ''}`}>Rating<SortArrow col="rating" /></button>
+            <button onClick={() => toggleSort('rating')} className={`hidden md:block w-20 md:w-24 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'rating' ? 'text-[var(--color-accent)]' : ''}`}>Rating<SortArrow col="rating" /></button>
             <button onClick={() => toggleSort('date')} className={`hidden lg:block w-20 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'date' ? 'text-[var(--color-accent)]' : ''}`}>Fecha<SortArrow col="date" /></button>
           </div>
 
@@ -2230,7 +2230,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-xs text-gray-600 truncate" title={f.filename}>{f.filename}</span>}
                   <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
                   <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
-                  <div className="w-20 md:w-24 flex-shrink-0 flex justify-center" onClick={(e) => e.stopPropagation()}>
+                  <div className="hidden md:flex w-20 md:w-24 flex-shrink-0 justify-center" onClick={(e) => e.stopPropagation()}>
                     <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                   </div>
                   <span className="hidden lg:block w-20 flex-shrink-0 text-center text-xs text-gray-600">{f.date ? new Date(f.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '-'}</span>
@@ -2514,6 +2514,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           <div className="px-5 py-3 flex items-center justify-between border-b border-[var(--border-color)]">
             <span className="text-sm text-[var(--text-secondary)]">Rating</span>
             <StarRating rating={ctxMenu.file?.rating || 0} onRate={(r) => handleRate(ctxMenu.file, r)} />
+          </div>
+          {/* Género (combo) */}
+          <div className="px-5 py-3 flex items-center justify-between gap-3 border-b border-[var(--border-color)]">
+            <span className="text-sm text-[var(--text-secondary)] flex-shrink-0">Género</span>
+            <select value={ctxMenu.file?.genre || ''} onChange={(e) => changeGenre(e.target.value)} className="flex-1 min-w-0 max-w-[62%] px-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]">
+              <option value="">Unsorted</option>
+              {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
           </div>
           {/* Duración + Calidad (info) */}
           <div className="px-5 py-3 flex items-stretch gap-8 border-b border-[var(--border-color)]">
