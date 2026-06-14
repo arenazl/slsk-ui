@@ -2183,7 +2183,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           {/* Table header */}
           <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--bg-surface)] border-b border-[var(--border-color)] text-xs text-gray-500 uppercase tracking-wider select-none">
             <span className="w-6 md:w-8 text-center">#</span>
-            <span className="w-8"></span>
+            <span className="hidden md:block w-8"></span>
             <button onClick={() => toggleSort('artist')} className={`w-28 sm:w-40 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'artist' ? 'text-[var(--color-accent)]' : ''}`}>Artista<SortArrow col="artist" /></button>
             <button onClick={() => toggleSort('title')} className={`flex-1 min-w-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'title' ? 'text-[var(--color-accent)]' : ''}`}>Título<SortArrow col="title" /></button>
             {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-left text-gray-600 normal-case">Filename</span>}
@@ -2201,14 +2201,17 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               return (
                 <div
                   key={`${f.filename}-${i}`}
-                  onDoubleClick={() => handlePlay(f)}
+                  onClick={() => handlePlay(f)}
                   onContextMenu={(e) => handleContextMenu(e, f)}
-                  className={`flex items-center gap-2 px-3 md:px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-default ${
+                  className={`flex items-center gap-2 px-3 md:px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-pointer ${
                     isPlaying ? 'bg-white/5' : ''
                   }`}
                 >
                   <span className="w-6 md:w-8 text-center text-xs text-gray-600">{i + 1}</span>
-                  <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
+                  {/* En mobile el play es tocar la fila; el boton solo en desktop */}
+                  <span className="hidden md:inline-flex flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
+                  </span>
                   <div className="w-28 sm:w-40 flex-shrink-0 min-w-0">
                     <div className="text-xs md:text-sm truncate text-[var(--text-secondary)]" title={pm.artist}>{pm.artist || '—'}</div>
                   </div>
@@ -2223,7 +2226,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-xs text-gray-600 truncate" title={f.filename}>{f.filename}</span>}
                   <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
                   <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
-                  <div className="w-20 md:w-24 flex-shrink-0 flex justify-center">
+                  <div className="w-20 md:w-24 flex-shrink-0 flex justify-center" onClick={(e) => e.stopPropagation()}>
                     <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                   </div>
                   <span className="hidden lg:block w-20 flex-shrink-0 text-center text-xs text-gray-600">{f.date ? new Date(f.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '-'}</span>
@@ -2410,10 +2413,13 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       )}
 
       {/* Context menu for genre change */}
-      {ctxMenu && (
+      {ctxMenu && (<>
+        {/* Backdrop: cierra al tocar fuera (oscurece en mobile) */}
+        <div className="fixed inset-0 z-40 bg-black/50 md:bg-transparent animate-fade-in" onClick={() => setCtxMenu(null)} />
+        {/* Desktop: dropdown posicionado */}
         <div
           ref={ctxRef}
-          className="fixed z-50 bg-[var(--bg-panel)] border border-gray-700 rounded-lg shadow-2xl min-w-56 flex flex-col"
+          className="hidden md:flex fixed z-50 bg-[var(--bg-panel)] border border-gray-700 rounded-lg shadow-2xl min-w-56 flex-col"
           style={{
             left: Math.min(ctxMenu.x, window.innerWidth - 260),
             top: Math.min(ctxMenu.y, window.innerHeight - 500),
@@ -2457,7 +2463,6 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 onChange={e => setCustomGenre(e.target.value)}
                 placeholder="Nuevo género..."
                 className="flex-1 min-w-0 px-2 py-1 bg-[var(--bg-input)] border border-gray-700 rounded text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)]"
-                autoFocus
               />
               <button
                 type="submit"
@@ -2519,7 +2524,47 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             </button>
           </div>
         </div>
-      )}
+
+        {/* Mobile: bottom sheet (formato Discovery) — solo rating, duración, calidad, radio */}
+        <div className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-[var(--bg-panel)] rounded-t-2xl shadow-2xl border-t border-[var(--border-color)] animate-sheet-up">
+          <div className="flex justify-center py-2"><div className="w-10 h-1 rounded-full bg-gray-600" /></div>
+          {/* Header del track */}
+          <div className="px-5 pb-3 border-b border-[var(--border-color)]">
+            <div className="text-sm font-medium text-[var(--text-primary)] truncate">{prettyMeta(ctxMenu.file).title || ctxMenu.file?.filename}</div>
+            <div className="text-xs text-gray-500 truncate">{prettyMeta(ctxMenu.file).artist || ''}</div>
+            <div className="flex items-center gap-2 mt-1">
+              {ctxMenu.file?.bpm && <span className="text-[10px] text-gray-500 font-mono">{ctxMenu.file.bpm} BPM</span>}
+              {ctxMenu.file?.key && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">{ctxMenu.file.key}</span>}
+            </div>
+          </div>
+          {/* Rating */}
+          <div className="px-5 py-3 flex items-center justify-between border-b border-[var(--border-color)]">
+            <span className="text-sm text-[var(--text-secondary)]">Rating</span>
+            <StarRating rating={ctxMenu.file?.rating || 0} onRate={(r) => handleRate(ctxMenu.file, r)} />
+          </div>
+          {/* Duración + Calidad (info) */}
+          <div className="px-5 py-3 flex items-stretch gap-8 border-b border-[var(--border-color)]">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-gray-500">Duración</div>
+              <div className="text-[var(--text-primary)] font-mono text-sm">{ctxMenu.file?.duration ? `${Math.floor(ctxMenu.file.duration / 60)}:${String(Math.floor(ctxMenu.file.duration % 60)).padStart(2, '0')}` : '—'}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-gray-500">Calidad</div>
+              <div className="text-[var(--text-primary)] text-sm">{(ctxMenu.file?.format || (ctxMenu.file?.filename || '').split('.').pop() || '?').toUpperCase()}{ctxMenu.file?.size_mb ? ` · ${Math.round(ctxMenu.file.size_mb)} MB` : ''}</div>
+            </div>
+          </div>
+          {/* Radio */}
+          {onRadio && (
+            <button onClick={() => { onRadio(ctxMenu.file); setCtxMenu(null) }} className="w-full text-left px-5 py-3.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
+              <div className="w-8 h-8 rounded-full bg-purple-500/15 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
+              </div>
+              Radio
+            </button>
+          )}
+          <div style={{ height: 'env(safe-area-inset-bottom)' }} />
+        </div>
+      </>)}
 
     </div>
   )
