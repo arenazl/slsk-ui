@@ -438,7 +438,9 @@ function getAudioUrl(file, useAgent) {
     const path = file.in_subfolder && file.subfolder
       ? 'audio/' + encodeURIComponent(file.subfolder) + '/' + encodeURIComponent(file.filename)
       : 'audio/' + encodeURIComponent(file.filename)
-    return agentUrl(path)
+    // fast=1: el agente transcodifica WAV/AIFF/FLAC pesados a MP3 al vuelo
+    // (arranca al toque). Los .mp3 los sirve directo. El original no se toca.
+    return agentUrl(path) + '?fast=1'
   }
   const base = API_BASE + '/audio/'
   if (file.in_subfolder && file.subfolder) {
@@ -448,11 +450,11 @@ function getAudioUrl(file, useAgent) {
 }
 
 async function createAudioElement(file, useAgent) {
-  // Prefer FSA: file lives on user's local disk via a directory handle.
-  // Cloud Run's /audio/ has no files (downloads land on the agent or in FSA),
-  // so when the agent path is disabled (FSA-ready desktop), this is the only
-  // way <audio> can actually find the bytes.
-  if (await fsaBackend.ready()) {
+  // Con el agente conectado reproducimos por el agente, que transcodifica los
+  // formatos pesados (WAV/AIFF/FLAC) a MP3 al vuelo -> arranca al toque. FSA
+  // sirve el archivo local crudo (sin transcoding), por eso solo lo usamos como
+  // fallback cuando NO hay agente: file lives on user's local disk via a handle.
+  if (!useAgent && await fsaBackend.ready()) {
     const fsaUrl = await fsaBackend.getFileUrl(file.filename, file.subfolder)
     if (fsaUrl) return new Audio(fsaUrl)
   }
@@ -6877,6 +6879,21 @@ function ReelCTA() {
   )
 }
 
+// Build an iTunes search term from a SoulSeek result filename. These names are
+// DJ rips / bootlegs ("tbeam260417d1_05_In_This_Bih.flac", "08 - IN THIS BIH.flac")
+// with underscores, rip prefixes and track numbers that wreck the match — strip
+// them so iTunes actually returns a preview. Keeps apostrophes (intentional).
+function buildPreviewQuery(filename) {
+  let s = String(filename || '').split(/[\\/]/).pop() || ''   // basename (slsk paths use backslashes)
+  s = s.replace(/\.[a-z0-9]{2,4}$/i, '')                      // drop extension
+  s = s.replace(/_+/g, ' ')                                   // underscores -> spaces
+  s = s.replace(/\b[a-z]*\d{4,}[a-z]?\d*\b/gi, ' ')           // strip rip blobs like "tbeam260417d1" / "260320d1"
+  s = s.replace(/[([][^)\]]*[)\]]/g, ' ')                     // strip "(Extended Mix)" / "[2024]" qualifiers
+  let prev                                                    // strip leading track numbers repeatedly ("1-05 ", "08 - ", "02. ")
+  do { prev = s; s = s.replace(/^\s*\d{1,3}\s*[-.\s]+\s*/, '') } while (s !== prev)
+  return s.replace(/\s+/g, ' ').trim()
+}
+
 function App() {
   // Hidden recording route — bypasses auth so playwright can capture the
   // vertical reels demo at 1080×1920. Not exposed in UI.
@@ -8349,23 +8366,29 @@ function App() {
     if (audioRef.current) { audioRef.current.pause() }
     setPreviewLoading(filename)
     try {
-      const clean = filename.replace(/\.\w{3,4}$/, '').replace(/^\d+[\.\-\s]+/, '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s*\[.*?\]\s*/g, ' ').trim()
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(clean)}&media=music&limit=5`)
+      const clean = buildPreviewQuery(filename)
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(clean)}&media=music&limit=10`)
       const data = await res.json()
-      if (data.results?.length > 0) {
-        const url = data.results[0].previewUrl
-        const audio = new Audio(url)
+      // iTunes can return rows without a previewUrl — pick the first that has one.
+      const match = data.results?.find(r => r.previewUrl)
+      if (match) {
+        const audio = new Audio(match.previewUrl)
         audio.preload = 'auto'
         audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
         audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
         audio.play().catch(() => {})
         audioRef.current = audio
         setPlayingFile(filename)
-        setNowPlaying({ filename, title: clean, artist: data.results[0].artistName || '', isPreview: true })
+        setNowPlaying({ filename, title: match.trackName || clean, artist: match.artistName || '', isPreview: true })
         setIsAudioPlaying(true)
+      } else {
+        // No silent fail: the preview is an iTunes lookup, and bootlegs/edits
+        // often aren't there. Tell the user instead of looking frozen.
+        toast('Sin preview disponible — no está en iTunes (igual lo podés descargar)', 'info', 3500)
       }
     } catch (e) {
       console.error('Preview error:', e)
+      toast('No se pudo cargar el preview', 'error', 3000)
     } finally {
       setPreviewLoading(null)
     }
