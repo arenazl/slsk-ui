@@ -19,8 +19,9 @@ function MaintenanceGate({ children }) {
   const submit = (e) => {
     e.preventDefault()
     const u = user.trim().toLowerCase()
-    // usuarios habilitados durante el mantenimiento (misma clave)
-    if (['look', 'jony', 'ari'].includes(u) && pass === '3211') {
+    // usuarios habilitados durante el mantenimiento (misma clave). Trimeamos la
+    // clave porque el teclado del celular suele meter un espacio al final.
+    if (['look', 'jony', 'jonathan', 'ari', 'ariel'].includes(u) && pass.trim() === '3211') {
       try { localStorage.setItem('maint_ok', '1') } catch {}
       setOk(true)
     } else {
