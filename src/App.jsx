@@ -1626,22 +1626,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     : searchFiltered
 
   // Duplicate detection - normalize by filename removing track numbers, BPM, extensions
-  const normDupe = (filename) => {
-    let s = (filename || '').toLowerCase()
-    // Remove extension
-    s = s.replace(/\.(flac|mp3|wav|aif|aiff|m4a|ogg|aac|wma|opus)$/i, '')
-    // Remove leading track numbers: "01 - ", "02.", "14 - "
-    s = s.replace(/^\d+[\s\-.]+/, '')
-    // Remove parenthesized/bracketed content
-    s = s.replace(/[\(\[\{].*?[\)\]\}]/g, '')
-    // Remove common mix words
-    s = s.replace(/extended|original|remix|mix|feat\.?|ft\.?/gi, '')
-    // Remove trailing BPM numbers
-    s = s.replace(/\s*\d{2,3}\s*$/, '')
-    // Collapse to alphanumeric
-    s = s.replace(/[^a-z0-9]/g, '')
-    return s
-  }
+  const normDupe = normDupeKey  // shared module-level helper (see normDupeKey)
   const FORMAT_SCORE = { FLAC: 100, WAV: 90, AIFF: 85, AIF: 85, MP3: 50, M4A: 40, OGG: 30, AAC: 30, WMA: 10, OPUS: 20 }
 
   // Score for dupe sorting: prioritize rated > categorized > format > size
@@ -2546,6 +2531,8 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const [setSelectedStars, setSetSelectedStars] = useState([])
   const [duration, setDuration] = useState(60)
   const [method, setMethod] = useState('camelot')
+  // Modo de energia del Set Pro: warmup (apertura suave) | peak (pico) | closing (cierre melodico)
+  const [setProMode, setSetProMode] = useState('peak')
   const [setTracks, setSetTracks] = useState([])
   const [generating, setGenerating] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -2568,6 +2555,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const [availableGenres, setAvailableGenres] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [allTracks, setAllTracks] = useState([])
+  const [dupeCtx, setDupeCtx] = useState(null) // { x, y, index, track } — right-click version-swap popover
 
   // Fetch genres that have tracks with >= minStars
   useEffect(() => {
@@ -2666,7 +2654,56 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     })
   }
 
-  const generateSet = async (m, overrideStars, overrideDuration, overrideSelectedStars, overrideGenres) => {
+  // Swap the set's track at `index` for another version (frontend only — the old
+  // file stays in the library, per the chosen behavior).
+  const replaceTrack = (index, version) => {
+    setSetTracks(prev => prev.map((t, i) => (i === index ? version : t)))
+  }
+
+  // Other files in the library that are the same song (same normalized key),
+  // including the current one (marked "actual" in the popover).
+  const versionsOf = (track) => {
+    const key = normDupeKey(track?.filename || '')
+    return allTracks.filter(t => normDupeKey(t.filename) === key)
+  }
+
+  // Send a file to the Recycle Bin via the agent (reversible) and clean the
+  // manifest. Without the agent only the manifest entry is removed — say so.
+  const deleteFromDisk = async (track, index) => {
+    try {
+      if (agentConnected) {
+        await agentFetch('delete-dupes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filenames: [track.filename] }),
+        }).catch(() => {})
+      }
+      await fetch(`${API_BASE}/api/delete-dupes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filenames: [track.filename], username: authUser?.name || '' }),
+      }).catch(() => {})
+      setAllTracks(prev => prev.filter(t => t.filename !== track.filename))
+      if (index != null) removeFromSet(index)
+      toast(
+        agentConnected ? 'Enviado a la Papelera' : 'Sacado de la biblioteca (sin agente el archivo queda en disco)',
+        agentConnected ? 'success' : 'info', 3000,
+      )
+    } catch (e) {
+      console.error('deleteFromDisk failed', e)
+      toast('No se pudo borrar el archivo', 'error', 3000)
+    }
+  }
+
+  // Close the version-swap popover when clicking outside it.
+  useEffect(() => {
+    if (!dupeCtx) return
+    const close = () => setDupeCtx(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [dupeCtx])
+
+  const generateSet = async (m, overrideStars, overrideDuration, overrideSelectedStars, overrideGenres, overrideMode) => {
     const useMethod = m || method
     setMethod(useMethod)
     setGenerating(true)
@@ -2676,7 +2713,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       const res = await fetch(`${API_BASE}/api/generate-set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: selStars.length > 0 ? selStars : undefined, duration: overrideDuration ?? duration, method: useMethod, genres: gens.length > 0 ? gens : undefined, username: authUser?.name || '', seed: useMethod === 'pro' ? Math.floor(Math.random() * 1e9) : undefined }),
+        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: selStars.length > 0 ? selStars : undefined, duration: overrideDuration ?? duration, method: useMethod, genres: gens.length > 0 ? gens : undefined, username: authUser?.name || '', seed: useMethod === 'pro' ? Math.floor(Math.random() * 1e9) : undefined, mode: useMethod === 'pro' ? (overrideMode ?? setProMode) : undefined }),
       })
       const data = await res.json()
       setSetTracks(data.tracks || [])
@@ -2964,6 +3001,24 @@ ${playlistEntries}
                 : 'Marcá un género arriba para empezar'}
             </div>
           </div>
+          {/* Modos de energía del set: Warm-up / Peak / Closing */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {[
+              { id: 'warmup', label: 'Warm-up', desc: 'apertura, grooves suaves, BPM bajo' },
+              { id: 'peak', label: 'Peak', desc: 'pico, los más fuertes/rankeados' },
+              { id: 'closing', label: 'Closing', desc: 'cierre melódico/emotivo' },
+            ].map(mo => (
+              <button
+                key={mo.id}
+                onClick={() => { setSetProMode(mo.id); if (method === 'pro' && setTracks.length > 0 && selectedGenres.length) generateSet('pro', undefined, undefined, undefined, undefined, mo.id) }}
+                title={mo.desc}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${setProMode === mo.id ? 'text-[var(--color-accent-text)]' : 'text-[var(--text-secondary)] bg-[var(--bg-input)]/60 hover:bg-[var(--bg-hover)]'}`}
+                style={setProMode === mo.id ? { background: 'var(--color-accent)' } : undefined}
+              >
+                {mo.label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => { if (!selectedGenres.length) { toast('Marcá un género arriba primero'); return } generateSet('pro') }}
             disabled={generating}
@@ -3056,6 +3111,7 @@ ${playlistEntries}
                     e.dataTransfer.setData('text/plain', url)
                     e.dataTransfer.setData('DownloadURL', `audio/mpeg:${t.filename}:${url}`)
                   }}
+                  onContextMenu={(e) => { e.preventDefault(); setDupeCtx({ x: e.clientX, y: e.clientY, index: i, track: t }) }}
                   className={`flex items-center gap-2 md:gap-3 px-3 md:px-6 py-1 md:py-1.5 transition-all duration-150 border-b border-[var(--border-color)]/30 cursor-grab active:cursor-grabbing ${
                     isPlaying ? 'bg-[var(--color-accent)]/5' : 'hover:bg-[var(--bg-hover)]'}`}
                 >
@@ -3369,6 +3425,78 @@ ${playlistEntries}
           </div>
         </div>
       )}
+
+      {/* Right-click version-swap popover: other versions of the song with a
+          play to preview + "Usar" to replace; footer removes from set or trashes. */}
+      {dupeCtx && (() => {
+        const versions = versionsOf(dupeCtx.track)
+        const others = versions.filter(v => v.filename !== dupeCtx.track.filename)
+        return (
+          <div
+            className="fixed z-[100] w-72 max-h-[70vh] overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-card,#1a1a1a)] shadow-2xl shadow-black/50"
+            style={{ left: Math.min(dupeCtx.x, window.innerWidth - 300), top: Math.min(dupeCtx.y, window.innerHeight - 360) }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <div className="px-3 py-2 border-b border-[var(--border-color)]/60">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Versiones del tema</div>
+              <div className="truncate text-xs font-medium text-[var(--text-primary)]">
+                {dupeCtx.track.artist ? `${dupeCtx.track.artist} - ` : ''}{dupeCtx.track.title || dupeCtx.track.filename}
+              </div>
+            </div>
+
+            <div className="py-1">
+              {versions.map((v) => {
+                const isCurrent = v.filename === dupeCtx.track.filename
+                const isPlaying = playing === v.filename
+                const fmt = (v.format || v.filename?.split('.').pop() || '').toUpperCase()
+                return (
+                  <div key={v.filename} className={`flex items-center gap-2 px-2 py-1.5 ${isCurrent ? 'bg-[var(--color-accent)]/10' : 'hover:bg-[var(--bg-hover)]'}`}>
+                    <PlayPauseBtn isPlaying={isPlaying} size="sm" onClick={() => handlePlay(v)} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className={`font-mono ${fmt === 'FLAC' ? 'text-purple-400' : 'text-gray-400'}`}>{fmt}</span>
+                        {v.size_mb ? <span className="text-gray-500">{v.size_mb}MB</span> : null}
+                        {v.rating ? <span className="text-[var(--text-primary)]">{'★'.repeat(v.rating)}</span> : null}
+                        {isCurrent && <span className="text-[9px] uppercase tracking-wide text-[var(--color-accent)] font-bold">actual</span>}
+                      </div>
+                      <div className="truncate text-[10px] text-[var(--text-muted)]">{v.filename}</div>
+                    </div>
+                    {!isCurrent && (
+                      <button
+                        onClick={() => { replaceTrack(dupeCtx.index, v); setDupeCtx(null); toast('Versión reemplazada en el set', 'success', 2000) }}
+                        className="flex-shrink-0 text-[10px] px-2 py-1 rounded-md btn-accent font-semibold"
+                        title="Usar esta versión en el set"
+                      >Usar</button>
+                    )}
+                  </div>
+                )
+              })}
+              {others.length === 0 && (
+                <div className="px-3 py-2 text-xs text-[var(--text-muted)]">Sin otras versiones en la biblioteca.</div>
+              )}
+            </div>
+
+            <div className="border-t border-[var(--border-color)]/60 py-1">
+              <button
+                onClick={() => { removeFromSet(dupeCtx.index); setDupeCtx(null) }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+              >
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                Quitar del set
+              </button>
+              <button
+                onClick={() => { const t = dupeCtx.track, idx = dupeCtx.index; setDupeCtx(null); deleteFromDisk(t, idx) }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                title={agentConnected ? 'Manda el archivo a la Papelera de Windows' : 'Sin agente solo se saca de la biblioteca; el archivo queda en disco'}
+              >
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                Borrar del disco {agentConnected ? '(Papelera)' : '(sin agente)'}
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
     </div>
   )
@@ -6877,6 +7005,19 @@ function ReelCTA() {
       </div>
     </div>
   )
+}
+
+// Normalized key for grouping different versions/copies of the same song by
+// filename (drops extension, track numbers, mix words, BPM, parens). Shared by
+// the Library dupe panel and the SetBuilder version-swap popover.
+function normDupeKey(filename) {
+  let s = (filename || '').toLowerCase()
+  s = s.replace(/\.(flac|mp3|wav|aif|aiff|m4a|ogg|aac|wma|opus)$/i, '')   // extension
+  s = s.replace(/^\d+[\s\-.]+/, '')                                       // leading track numbers
+  s = s.replace(/[([{].*?[)\]}]/g, '')                                    // (parenthesized) / [bracketed]
+  s = s.replace(/extended|original|remix|mix|feat\.?|ft\.?/gi, '')        // common mix words
+  s = s.replace(/\s*\d{2,3}\s*$/, '')                                     // trailing BPM
+  return s.replace(/[^a-z0-9]/g, '')                                      // collapse to alphanumeric
 }
 
 // Build an iTunes search term from a SoulSeek result filename. These names are
