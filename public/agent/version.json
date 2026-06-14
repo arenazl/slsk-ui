@@ -1,6 +1,6 @@
 {
-  "version": "2.12.10",
-  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.10/GrooveSyncAgent.exe",
-  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.10/GrooveSyncAgent-macOS.zip",
-  "release_notes": "Arreglar metatags: escribe artista/titulo/genero/key/BPM DENTRO del archivo (para Rekordbox), curando los faltantes con Beatport+IA sin pisar el genero. Ademas: duplicados a la Papelera de Windows (reversible) e icono de la bandeja resiliente."
+  "version": "2.12.11",
+  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.11/GrooveSyncAgent.exe",
+  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.11/GrooveSyncAgent-macOS.zip",
+  "release_notes": "Reproduccion instantanea: los temas locales en WAV/AIFF/FLAC pesados ahora arrancan al toque (antes 5-10s). El agente los convierte a MP3 al vuelo solo para escuchar en la app, con seek; el archivo original queda intacto en disco para Rekordbox."
 }
