@@ -1089,6 +1089,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [genreFilter, setGenreFilter] = useState([])
   const [deletingDupes, setDeletingDupes] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null) // { x, y, file }
+  const longPressRef = useRef({ timer: null, fired: false }) // long-press en mobile -> menu contextual
   const [customGenre, setCustomGenre] = useState('')
   const [toolsOpen, setToolsOpen] = useState(false)
   const ctxRef = useRef(null)
@@ -2201,8 +2202,11 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               return (
                 <div
                   key={`${f.filename}-${i}`}
-                  onClick={() => handlePlay(f)}
+                  onClick={() => { if (longPressRef.current.fired) { longPressRef.current.fired = false; return } handlePlay(f) }}
                   onContextMenu={(e) => handleContextMenu(e, f)}
+                  onTouchStart={() => { longPressRef.current.fired = false; longPressRef.current.timer = setTimeout(() => { longPressRef.current.fired = true; navigator.vibrate?.(10); setCtxMenu({ file: f }) }, 450) }}
+                  onTouchEnd={() => clearTimeout(longPressRef.current.timer)}
+                  onTouchMove={() => clearTimeout(longPressRef.current.timer)}
                   className={`flex items-center gap-2 px-3 md:px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-pointer ${
                     isPlaying ? 'bg-white/5' : ''
                   }`}
@@ -2431,48 +2435,17 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             <span className="text-gray-300">{ctxMenu.file?.title || ctxMenu.file?.filename}</span>
           </div>
 
-          {/* Genre list - scrollable */}
-          <div className="flex-shrink-0 px-3 py-1 text-[10px] text-gray-600 uppercase tracking-wider">Género</div>
-          <div className="flex-1 min-h-0 overflow-y-auto border-b border-[var(--border-color)]">
-            {allGenres.map(g => (
-              <button
-                key={g}
-                onClick={() => changeGenre(g)}
-                className={`w-full text-left px-3 py-1 text-sm transition-colors ${
-                  g === ctxMenu.file?.genre ? 'text-[var(--color-accent)] bg-[var(--color-accent)]/10 font-medium' : 'text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)]'
-                }`}
-              >
-                {g} {g === ctxMenu.file?.genre && '✓'}
-              </button>
-            ))}
-            <button
-              onClick={() => changeGenre('')}
-              className={`w-full text-left px-3 py-1 text-sm text-gray-400 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors ${
-                !ctxMenu.file?.genre ? 'text-[var(--color-accent)] bg-[var(--color-accent)]/10 font-medium' : ''
-              }`}
+          {/* Género: combo (en vez de la lista interminable) */}
+          <div className="flex-shrink-0 px-3 py-2 border-b border-[var(--border-color)]">
+            <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">Género</div>
+            <select
+              value={ctxMenu.file?.genre || ''}
+              onChange={(e) => changeGenre(e.target.value)}
+              className="w-full px-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
             >
-              Unsorted {!ctxMenu.file?.genre && '✓'}
-            </button>
-          </div>
-
-          {/* Custom genre input - fixed */}
-          <div className="flex-shrink-0 px-2 py-1.5">
-            <form onSubmit={(e) => { e.preventDefault(); if (customGenre.trim()) changeGenre(customGenre.trim()) }} className="flex gap-1">
-              <input
-                value={customGenre}
-                onChange={e => setCustomGenre(e.target.value)}
-                placeholder="Nuevo género..."
-                className="flex-1 min-w-0 px-2 py-1 bg-[var(--bg-input)] border border-gray-700 rounded text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)]"
-              />
-              <button
-                type="submit"
-                disabled={!customGenre.trim()}
-                className="px-2 py-1 disabled:opacity-40 rounded text-xs text-[var(--color-accent-text)] transition-colors"
-                style={{ background: 'var(--color-accent)' }}
-              >
-                OK
-              </button>
-            </form>
+              <option value="">Unsorted</option>
+              {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
           </div>
 
           {/* Rating */}
@@ -9573,7 +9546,7 @@ function App() {
           <div className="flex items-baseline gap-2">
             <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain self-center" />
             <span className="font-semibold text-base text-[var(--text-primary)] hidden lg:inline">DJ Free App</span>
-            <span className="text-[10px] font-mono text-[var(--text-muted)] tracking-tight" title="Versión UI">v{__APP_VERSION__}</span>
+            <span className="hidden md:inline text-[10px] font-mono text-[var(--text-muted)] tracking-tight" title="Versión UI">v{__APP_VERSION__}</span>
           </div>
           <div className="hidden md:flex gap-1">
             {[
@@ -9631,7 +9604,7 @@ function App() {
               cuando hay MÁS de un device online del mismo user (sino no hay a
               quién rutear). Verde/accent cuando el output es otro device. */}
           {devices.length > 1 && (
-            <div className="relative flex-shrink-0">
+            <div className="relative flex-shrink-0 hidden md:block">
               <button
                 onClick={() => setDeviceMenuOpen(v => !v)}
                 className={`h-8 flex items-center gap-1.5 px-2.5 rounded-lg border transition-all duration-200 active:scale-95 ${
