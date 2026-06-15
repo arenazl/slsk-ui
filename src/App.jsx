@@ -533,7 +533,7 @@ function ScreenHint({ id, title, tips }) {
           {title && <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-0.5">{title}</div>}
           <div
             key={`tip-${activeTip}`}
-            className="text-xs md:text-sm text-[var(--text-primary)]"
+            className="text-xs md:text-sm text-[var(--text-primary)] line-clamp-2 leading-snug"
             style={{ animation: 'hint-tip-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) backwards' }}
           >
             {typeof tip === 'string' ? tip : tip.text}
