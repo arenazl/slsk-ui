@@ -8270,13 +8270,14 @@ function App() {
     // El primer src se setea SINCRÓNICO dentro del gesto → iOS desbloquea el
     // elemento; los reintentos (onerror) reusan el mismo elemento ya desbloqueado.
     const candidates = []
+    // preview_url (iTunes cacheado) PRIMERO -> arranca INSTANTANEO, igual que en
+    // Discovery. SoundCloud (resolve+extract) tarda varios segundos y para los temas
+    // que no encuentra se iba a 8-10s -> queda de FALLBACK solo para los que NO
+    // tienen preview_url. YouTube fuera (502 desde Cloud Run).
+    if (file.preview_url) candidates.push(file.preview_url)
     if (query) {
-      // SoundCloud: version de DJ y funciona desde Cloud Run. YouTube da 502 desde
-      // datacenter (~3.5s de espera al pedo) -> NO va en la cascada. iTunes
-      // (preview_url) como ultimo recurso (suele traer otra version).
       candidates.push(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(query)}`)
     }
-    if (file.preview_url) candidates.push(file.preview_url)
 
     const audio = new Audio()
     audio.preload = 'auto'
