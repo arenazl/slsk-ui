@@ -1,6 +1,6 @@
 {
-  "version": "2.12.11",
-  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.11/GrooveSyncAgent.exe",
-  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.11/GrooveSyncAgent-macOS.zip",
-  "release_notes": "Reproduccion instantanea: los temas locales en WAV/AIFF/FLAC pesados ahora arrancan al toque (antes 5-10s). El agente los convierte a MP3 al vuelo solo para escuchar en la app, con seek; el archivo original queda intacto en disco para Rekordbox."
+  "version": "2.12.12",
+  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.12/GrooveSyncAgent.exe",
+  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.12/GrooveSyncAgent-macOS.zip",
+  "release_notes": "Cada descarga graba ahora la duracion del tema (se ve en la app sin re-procesar). Ademas, reproduccion instantanea de los temas locales pesados (WAV/AIFF/FLAC) convertidos a MP3 al vuelo, con el archivo original intacto para Rekordbox."
 }
