@@ -490,7 +490,8 @@ function ScreenHint({ id, title, tips }) {
     const t = setInterval(() => setActiveTip(i => (i + 1) % tips.length), TIP_MS)
     return () => clearInterval(t)
   }, [dismissed, tips?.length])
-  if (dismissed || !tips || !tips.length) return null
+  return null  // Hint desactivado a pedido del usuario (no mostrar nunca)
+  // eslint-disable-next-line no-unreachable
   const tip = tips[activeTip]
   return (
     <div className="flex-shrink-0 relative overflow-hidden border-b border-[var(--color-accent)]/30 animate-fade-in">
@@ -7615,8 +7616,12 @@ function App() {
   // 'preview' porque si no, no suena nada.
   useEffect(() => {
     const saved = localStorage.getItem('playback_mode')
-    const canLocal = agentConnected || fsaBackend.supported
-    if (saved && !(saved === 'local' && !canLocal)) return  // user-chosen valido, respetar
+    // 'local' = reproducir el ARCHIVO real. Solo sirve con acceso DIRECTO: FSA
+    // (desktop Chrome) o el agente en localhost (desktop, mismo equipo). En
+    // mobile/tablet el agente esta via PROXY/tunel y el audio no llega bien ->
+    // 'preview' (lo unico que suena). Corrige un 'local' guardado que no aplica aca.
+    const canLocal = fsaBackend.supported || (agentConnected && AGENT_MODE === 'local')
+    if (saved && !(saved === 'local' && !canLocal)) return  // eleccion del usuario valida, respetar
     setPlaybackModeState(canLocal ? 'local' : 'preview')
   }, [agentConnected])
   const [mixTracks, setMixTracks] = useState(null) // tracks array for MixEditor
