@@ -1072,7 +1072,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [organizing, setOrganizing] = useState(false)
   const [expanded, setExpanded] = useState({})
   const [search, setSearch] = useQS('q', '')
-  const [view, setView] = useQS('view', 'cards')
+  const [view, setView] = useQS('view', IS_MOBILE_DEVICE ? 'list' : 'cards')
   const [starFilter, _setStarFilter] = useQS('stars', '0')
   const setStarFilter = useCallback((v) => _setStarFilter(String(v)), [_setStarFilter])
   const [exportName, setExportName] = useState('')
@@ -2204,10 +2204,9 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   key={`${f.filename}-${i}`}
                   onClick={() => { if (longPressRef.current.fired) { longPressRef.current.fired = false; return } handlePlay(f) }}
                   onContextMenu={(e) => handleContextMenu(e, f)}
-                  onTouchStart={() => { longPressRef.current.fired = false; longPressRef.current.timer = setTimeout(() => { longPressRef.current.fired = true; navigator.vibrate?.(10); setCtxMenu({ file: f }) }, 450) }}
-                  onTouchEnd={() => clearTimeout(longPressRef.current.timer)}
-                  onTouchMove={() => clearTimeout(longPressRef.current.timer)}
-                  className={`flex items-center gap-2 px-3 md:px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-pointer ${
+                  onTouchStart={(e) => { longPressRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, fired: false } }}
+                  onTouchMove={(e) => { const t = longPressRef.current; if (!t || t.fired) return; const dx = e.touches[0].clientX - t.x; const dy = Math.abs(e.touches[0].clientY - t.y); if (Math.abs(dx) > 55 && dy < 30) { t.fired = true; navigator.vibrate?.(10); setCtxMenu({ file: f }) } }}
+                  className={`flex items-center gap-2 px-3 md:px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-pointer select-none ${
                     isPlaying ? 'bg-white/5' : ''
                   }`}
                 >
@@ -2344,33 +2343,34 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       </div>
                     )}
                     <div
-                      onDoubleClick={() => handlePlay(f)}
+                      onClick={() => { if (longPressRef.current.fired) { longPressRef.current.fired = false; return } handlePlay(f) }}
                       onContextMenu={(e) => handleContextMenu(e, f)}
-                      className={`flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-default ${
+                      onTouchStart={(e) => { longPressRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, fired: false } }}
+                      onTouchMove={(e) => { const t = longPressRef.current; if (!t || t.fired) return; const dx = e.touches[0].clientX - t.x; const dy = Math.abs(e.touches[0].clientY - t.y); if (Math.abs(dx) > 55 && dy < 30) { t.fired = true; navigator.vibrate?.(10); setCtxMenu({ file: f }) } }}
+                      className={`flex items-center gap-2 px-3 md:px-4 py-1.5 border-b border-[var(--border-color)]/50 transition-colors hover:bg-[var(--bg-hover)] cursor-pointer select-none ${
                       isPlaying ? 'bg-white/5' : ''
                     }`}>
-                      <span className="w-8 text-center text-xs text-gray-600">{idx}</span>
-                      <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
+                      <span className="w-6 md:w-8 text-center text-xs text-gray-600 flex-shrink-0">{idx}</span>
+                      <span className="hidden md:inline-flex flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
+                      </span>
                       <div className="flex-1 min-w-0 flex items-center gap-1">
-                        <div className={`text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
+                        <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
                           {f.title || f.filename}
                         </div>
-                        <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((f.artist || '') + ' ' + (f.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
+                        <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((f.artist || '') + ' ' + (f.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hidden sm:flex flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
                           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
                         </a>
-                        <a href={`https://www.beatport.com/search?q=${encodeURIComponent((f.artist || '') + ' ' + (f.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex-shrink-0 text-gray-700 hover:text-green-500 transition-colors" title="Beatport">
-                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm5.3 17.3c-1.4 1.4-3.3 2.2-5.3 2.2s-3.9-.8-5.3-2.2C5.3 15.9 4.5 14 4.5 12s.8-3.9 2.2-5.3C8.1 5.3 10 4.5 12 4.5s3.9.8 5.3 2.2c1.4 1.4 2.2 3.3 2.2 5.3s-.8 3.9-2.2 5.3z"/></svg>
-                        </a>
                       </div>
-                      <a href={`https://www.beatport.com/search?q=${encodeURIComponent(f.artist || '')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="w-36 flex-shrink-0 text-sm text-gray-400 truncate hover:text-[var(--color-accent)] transition-colors" title="Buscar artista en Beatport">{f.artist}</a>
-                      <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
-                      <span className={`w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
-                      <div className="w-24 flex-shrink-0 flex justify-center">
+                      <span className="w-24 sm:w-36 flex-shrink-0 text-xs md:text-sm text-gray-400 truncate">{f.artist}</span>
+                      <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
+                      <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
+                      <div className="hidden md:flex w-24 flex-shrink-0 justify-center" onClick={(e) => e.stopPropagation()}>
                         <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                       </div>
-                      <span className="w-20 flex-shrink-0 text-center text-xs text-gray-600">{f.date ? new Date(f.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '-'}</span>
-                      <span className="w-12 flex-shrink-0 text-center text-xs text-gray-600">{f.format}</span>
-                      <span className="w-14 flex-shrink-0 text-right text-xs text-gray-600">{f.size_mb}</span>
+                      <span className="hidden lg:block w-20 flex-shrink-0 text-center text-xs text-gray-600">{f.date ? new Date(f.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '-'}</span>
+                      <span className="hidden lg:block w-12 flex-shrink-0 text-center text-xs text-gray-600">{f.format}</span>
+                      <span className="hidden lg:block w-14 flex-shrink-0 text-right text-xs text-gray-600">{f.size_mb}</span>
                     </div>
                   </div>
                 )
@@ -8271,12 +8271,10 @@ function App() {
     // elemento; los reintentos (onerror) reusan el mismo elemento ya desbloqueado.
     const candidates = []
     if (query) {
-      // SoundCloud PRIMERO: tiene la version de DJ (Extended/remix) y, a diferencia
-      // de YouTube, NO bloquea la extraccion desde Cloud Run (datacenter). YouTube
-      // tendria la version exacta pero da 502 desde el server -> queda de fallback.
-      // iTunes (preview_url) suele traer OTRA version -> ultimo recurso.
+      // SoundCloud: version de DJ y funciona desde Cloud Run. YouTube da 502 desde
+      // datacenter (~3.5s de espera al pedo) -> NO va en la cascada. iTunes
+      // (preview_url) como ultimo recurso (suele traer otra version).
       candidates.push(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(query)}`)
-      candidates.push(`${API_BASE}/api/yt-audio?q=${encodeURIComponent(query)}`)
     }
     if (file.preview_url) candidates.push(file.preview_url)
 
