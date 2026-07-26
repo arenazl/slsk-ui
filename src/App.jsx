@@ -369,7 +369,7 @@ function TrackRow({ track, onCancel }) {
   )
 }
 
-const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.southamerica-east1.run.app'
+const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.us-east4.run.app'
 
 // Stable per-browser device id + human label. Used para que el banner de
 // "temas en cola desde otros dispositivos" solo cuente los que realmente
@@ -7652,7 +7652,7 @@ function App() {
       reconnectTimer.current = null
     }
 
-    const wsHost = ['5173', '5174', '5175'].includes(window.location.port) ? 'localhost:8899' : 'djfreeapp-api-730989854717.southamerica-east1.run.app'
+    const wsHost = ['5173', '5174', '5175'].includes(window.location.port) ? 'localhost:8899' : 'djfreeapp-api-730989854717.us-east4.run.app'
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${protocol}//${wsHost}/ws`)
     wsRef.current = ws
