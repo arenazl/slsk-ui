@@ -2,7 +2,7 @@
 // No aggressive caching — we WANT the user to always get the latest version,
 // just like the normal web app. The SW exists mainly to satisfy install criteria.
 
-const CACHE_NAME = 'groove-sync-v1'
+const CACHE_NAME = 'groove-sync-v2'
 
 self.addEventListener('install', (event) => {
   // Skip waiting so new versions activate immediately on reload
@@ -26,7 +26,7 @@ self.addEventListener('activate', (event) => {
 })
 
 // Network-first strategy: always try the network, fall back to cache only if offline.
-// This keeps the app fresh and avoids stale-asset problems.
+// NEVER cache JS assets or HTML to prevent stale code errors in PWA.
 self.addEventListener('fetch', (event) => {
   // Skip POST/PUT/etc. and any non-GET requests
   if (event.request.method !== 'GET') return
@@ -34,11 +34,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
   if (url.origin !== self.location.origin) return
 
+  // JS/HTML assets must always be network-fresh to avoid stale ReferenceError bugs
+  if (url.pathname.includes('/assets/') || url.pathname.endsWith('.html') || url.pathname === '/') {
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)))
+    return
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cache only full 200 responses. 206 (partial content, range requests
-        // for video/audio) and opaque/redirect responses break Cache.put.
         if (response.ok && response.status === 200 && response.type === 'basic') {
           const clone = response.clone()
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone)).catch(() => {})

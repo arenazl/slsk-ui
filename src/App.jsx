@@ -11477,7 +11477,7 @@ function App() {
             ].map(chip => (
               <button
                 key={chip}
-                onClick={() => { setDlSearch(chip); setTimeout(handleSearchSlsk, 10) }}
+                onClick={() => { setDlSearch(chip); handleSearchSlsk(chip) }}
                 className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-[var(--color-accent)]/20 hover:text-[var(--color-accent)] border border-white/5 transition-all text-xs font-medium whitespace-nowrap flex-shrink-0 active:scale-95"
               >
                 {chip}
@@ -12147,7 +12147,7 @@ function App() {
                     if (q) {
                       setDlSearch(q)
                       setSearchResults([])
-                      search(q)
+                      handleSearchSlsk(q)
                     }
                   }}
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:brightness-110 transition-all active:scale-95 shadow-md"
