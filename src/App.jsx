@@ -1141,11 +1141,42 @@ function prettyMeta(f) {
   return { artist, title: title || (f.filename || '') }
 }
 
-// True si el artista falta o el título parece un filename (sucio) -> candidato a curar.
-function isDirtyMeta(f) {
-  const a = (f.artist || '').trim()
-  const t = (f.title || '').trim()
-  return !a || !t || t.includes('_') || t.length > 70 || /^\s*\d{1,3}[.\-_ ]/.test(t)
+function StarFilterHover({ rating, selectedStars, onSelect }) {
+  const [hoverRating, setHoverRating] = useState(0)
+
+  return (
+    <div className="hidden md:flex items-center gap-1 bg-[var(--bg-input)]/40 px-2 py-1 rounded-lg border border-[var(--border-color)] flex-shrink-0" onMouseLeave={() => setHoverRating(0)}>
+      <button
+        onClick={() => onSelect(0)}
+        title="Mostrar todas las estrellas"
+        className={`px-1.5 py-0.5 rounded text-[11px] font-semibold transition-all ${
+          selectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
+        }`}
+      >
+        Todas
+      </button>
+      <div className="flex items-center gap-0.5 ml-1">
+        {[1, 2, 3, 4, 5].map(star => {
+          const active = hoverRating ? star <= hoverRating : (rating !== null ? star <= rating : selectedStars.includes(star))
+          return (
+            <button
+              key={star}
+              onMouseEnter={() => setHoverRating(star)}
+              onClick={() => onSelect(star)}
+              title={`Filtrar por ${star} estrella${star > 1 ? 's' : ''}`}
+              className="p-0.5 transition-transform duration-150 hover:scale-125 focus:outline-none"
+            >
+              <span className={`text-base leading-none transition-colors ${
+                active ? 'text-amber-400 font-bold drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]' : 'text-gray-600 hover:text-gray-400'
+              }`}>
+                ★
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
@@ -2026,48 +2057,71 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           <span className="text-xs md:text-sm text-gray-500">{q || selectedStars.length > 0 || genreFilter.length > 0 ? `/ ${files.length}` : 'tracks'}</span>
         </div>
 
-        {/* View toggle */}
-        <div className="flex gap-0.5 md:gap-1 flex-shrink-0">
-          {['cards', 'list', 'tracks'].map(v => (
+        {/* View toggle — 3 icon-only buttons */}
+        <div className="flex items-center gap-1 bg-[var(--bg-input)]/40 p-0.5 rounded-lg border border-[var(--border-color)] flex-shrink-0">
+          {[
+            {
+              key: 'cards',
+              title: 'Vista de Tarjetas por Género (Cards)',
+              icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+              )
+            },
+            {
+              key: 'list',
+              title: 'Vista Unida por Género (Join)',
+              icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )
+            },
+            {
+              key: 'tracks',
+              title: 'Lista Plana (Tracks)',
+              icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V5l12-2v12M9 17c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                </svg>
+              )
+            }
+          ].map(tab => (
             <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-xs md:text-sm ${
-                view === v ? 'btn-accent font-semibold' : 'btn-ghost'
+              key={tab.key}
+              onClick={() => setView(tab.key)}
+              title={tab.title}
+              className={`w-7 h-7 flex items-center justify-center rounded-md transition-all duration-200 ${
+                view === tab.key
+                  ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)] font-bold shadow'
+                  : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
             >
-              {v === 'cards' ? 'Cards' : v === 'list' ? 'Join' : 'Tracks'}
+              {tab.icon}
             </button>
           ))}
         </div>
 
-        {/* Star filter - hidden on mobile */}
-        <div className="hidden md:flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={() => setStarFilter('0')}
-            title="Mostrar todos los niveles de estrellas"
-            className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
-              selectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >Todas ★</button>
-          {[1, 2, 3, 4, 5].map(s => {
-            const active = selectedStars.includes(s)
-            return (
-              <button
-                key={s}
-                onClick={() => {
-                  const next = active ? selectedStars.filter(x => x !== s) : [...selectedStars, s]
-                  setStarFilter(next.length > 0 ? next.join(',') : '0')
-                }}
-                className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
-                  active ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                {'★'.repeat(s)}
-              </button>
-            )
-          })}
-        </div>
+        {/* Star filter — 5-star interactive hover selector */}
+        {(() => {
+          const currentRating = selectedStars.length === 1 ? selectedStars[0] : (selectedStars.length === 0 ? 0 : null)
+          return (
+            <StarFilterHover
+              rating={currentRating}
+              selectedStars={selectedStars}
+              onSelect={(star) => {
+                if (star === 0) {
+                  setStarFilter('0')
+                } else if (selectedStars.includes(star) && selectedStars.length === 1) {
+                  setStarFilter('0')
+                } else {
+                  setStarFilter(String(star))
+                }
+              }}
+            />
+          )
+        })()}
 
         {/* Action buttons - hidden on mobile, shown on md+ */}
 
@@ -10824,7 +10878,7 @@ function App() {
               </>
             )}
           </div>
-          {/* Estado del agente — SIEMPRE visible en icono comprimido con tooltip */}
+          {/* Estado del agente de descargas (Icono con estados de color: Verde=OK, Amarillo=Warn, Rojo=Offline) */}
           <button
             onClick={async () => {
               if (checkAgentRef.current) await checkAgentRef.current()
@@ -10832,22 +10886,39 @@ function App() {
               else if (agentRegistered) toast('Tu agente está apagado — abrilo en tu PC para poder descargar', 'warning', 4500)
               else setAgentInstallOpen(true)
             }}
-            className={`h-8 w-8 flex items-center justify-center rounded-lg border transition-all duration-200 active:scale-95 flex-shrink-0 ${
-              agentConnected
-                ? agentErrRecent
-                  ? 'border-red-500/50 bg-red-500/10 text-red-400'
+            className={`h-8 w-8 relative flex items-center justify-center rounded-lg border transition-all duration-200 active:scale-95 flex-shrink-0 ${
+              !agentConnected
+                ? 'border-red-500/50 bg-red-500/10 text-red-400'
+                : agentErrRecent
+                  ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400'
                   : 'border-green-500/40 bg-green-500/10 text-green-400'
-                : agentRegistered
-                  ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400'
-                  : 'border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
             }`}
-            title={agentConnected
-              ? agentErrRecent
-                ? `El agente tuvo un error (${agentErrMsg}) — tocá para re-chequear`
-                : `Agente v${agentVersion} conectado y listo`
-              : agentRegistered ? 'Agente instalado pero apagado — prendelo en tu PC' : 'Agente sin instalar — tocá para descargar'}
+            title={
+              !agentConnected
+                ? 'Agente desconectado (Rojo) — abrí DjFreeAppAgent en tu PC'
+                : agentErrRecent
+                  ? `Agente v${agentVersion} con aviso (${agentErrMsg || 'timeout'}) — tocá para re-chequear`
+                  : `Agente v${agentVersion} online y listo (Verde)`
+            }
           >
-            <span className={`w-2.5 h-2.5 rounded-full ${agentConnected ? (agentErrRecent ? 'bg-red-500 animate-pulse' : 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]') : agentRegistered ? 'bg-yellow-500' : 'bg-red-500'}`} />
+            {/* Icono de Servidor/Agente de Descargas */}
+            <svg className={`w-4 h-4 ${
+              !agentConnected
+                ? 'text-red-400'
+                : agentErrRecent
+                  ? 'text-yellow-400 animate-pulse'
+                  : 'text-green-400'
+            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+            </svg>
+            {/* Indicador LED circular de estado */}
+            <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${
+              !agentConnected
+                ? 'bg-red-500'
+                : agentErrRecent
+                  ? 'bg-yellow-400'
+                  : 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.8)]'
+            }`} />
           </button>
           {agentConnected && (
             <button
