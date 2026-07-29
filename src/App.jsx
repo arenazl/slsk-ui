@@ -11493,21 +11493,38 @@ function App() {
                 <span className="hidden sm:inline">— se bajan solos, en orden</span>
               </div>
               <div className="max-h-40 overflow-y-auto">
-                {pendingTracks.map((t, idx) => (
-                  <div key={`${t.artist}|${t.title}|${idx}`} className="flex items-center gap-2 px-3 md:px-4 py-1 border-t border-[var(--border-color)]/30 text-xs">
-                    <span className="flex-1 min-w-0 truncate text-[var(--text-primary)]">{t.artist ? `${t.artist} - ` : ''}{t.title}</span>
-                    {t.device_name && t.device_id !== DEVICE.id && (
-                      <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--color-accent)]/12 text-[var(--color-accent)]">{t.device_name}</span>
-                    )}
-                    <button
-                      onClick={() => removeFromPending(idx)}
-                      title="Sacar de la cola"
-                      className="flex-shrink-0 p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                {pendingTracks.map((t, idx) => {
+                  const trackQuery = `${t.artist || ''} ${t.title || ''}`.trim()
+                  return (
+                    <div
+                      key={`${t.artist}|${t.title}|${idx}`}
+                      onClick={() => {
+                        if (trackQuery) {
+                          setDlSearch(trackQuery)
+                          setSearchResults([])
+                          search(trackQuery)
+                        }
+                      }}
+                      title="Haz clic para ver las 3 secciones (FLAC, Remixes, MP3) en vivo"
+                      className="flex items-center gap-2 px-3 md:px-4 py-1 border-t border-[var(--border-color)]/30 text-xs cursor-pointer hover:bg-white/[0.04] transition-colors group"
                     >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-                ))}
+                      <span className="flex-1 min-w-0 truncate text-[var(--text-primary)] group-hover:text-[var(--color-accent)] transition-colors">
+                        {t.artist ? `${t.artist} - ` : ''}{t.title}
+                      </span>
+                      <span className="text-[10px] text-gray-500 hidden sm:inline group-hover:text-gray-300">Ver 3 secciones (FLAC/Remixes/MP3) &rarr;</span>
+                      {t.device_name && t.device_id !== DEVICE.id && (
+                        <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--color-accent)]/12 text-[var(--color-accent)]">{t.device_name}</span>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeFromPending(idx) }}
+                        title="Sacar de la cola"
+                        className="flex-shrink-0 p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
