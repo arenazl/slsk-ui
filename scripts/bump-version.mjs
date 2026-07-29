@@ -8,6 +8,7 @@ const rootDir = path.resolve(__dirname, '..')
 const pkgPath = path.join(rootDir, 'package.json')
 const pubVerPath = path.join(rootDir, 'public', 'agent', 'version.json')
 const landVerPath = path.resolve(rootDir, '..', 'landing', 'agent', 'version.json')
+const agentPyPath = path.resolve(rootDir, '..', 'slsk-agent', 'agent.py')
 
 try {
   if (fs.existsSync(pkgPath)) {
@@ -31,6 +32,12 @@ try {
     }
     if (fs.existsSync(landVerPath)) {
       fs.writeFileSync(landVerPath, JSON.stringify(verObj, null, 2) + '\n')
+    }
+    if (fs.existsSync(agentPyPath)) {
+      let content = fs.readFileSync(agentPyPath, 'utf8')
+      content = content.replace(/VERSION = "[^"]+"/, `VERSION = "${newVer}"`)
+      fs.writeFileSync(agentPyPath, content, 'utf8')
+      console.log(`[Auto-Bump] Updated agent.py VERSION to v${newVer}`)
     }
   }
 } catch (err) {

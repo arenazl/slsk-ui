@@ -13202,8 +13202,8 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     if (!query) return
     setDlSearch(query)
     setSearchResults(null)
-    setActiveTab('buscar')
-    toast(`Buscando "${query}"...`, 'info', 2000)
+    setPage('search')
+    toast(`🔍 Buscando "${query}"...`, 'info', 2500)
     search(query)
   }
 
