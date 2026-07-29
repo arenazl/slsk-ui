@@ -11941,6 +11941,26 @@ function App() {
                   })()}
                 </div>
               )
+            ) : pendingTracks.length > 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-3">
+                <div className="w-8 h-8 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mx-auto" />
+                <div className="text-sm font-bold text-[var(--text-primary)]">
+                  Buscando fuentes en vivo para "{pendingTracks[0].artist ? `${pendingTracks[0].artist} - ` : ''}{pendingTracks[0].title}"
+                </div>
+                <button
+                  onClick={() => {
+                    const q = `${pendingTracks[0].artist || ''} ${pendingTracks[0].title || ''}`.trim()
+                    if (q) {
+                      setDlSearch(q)
+                      setSearchResults([])
+                      search(q)
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:brightness-110 transition-all active:scale-95 shadow-md"
+                >
+                  Ver 3 secciones (FLAC / Remixes / MP3) en vivo &rarr;
+                </button>
+              </div>
             ) : tracks.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-600">
                 <div className="text-center space-y-3 px-6">
