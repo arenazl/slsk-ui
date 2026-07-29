@@ -10796,6 +10796,29 @@ function App() {
               {agentConnected ? (agentErrRecent ? 'Timeout' : 'Agente ON') : agentRegistered ? 'Apagado' : 'Instalar'}
             </span>
           </button>
+          {agentConnected && (
+            <button
+              onClick={async () => {
+                try {
+                  toast('Renovando sesión de Soulseek...', 'info', 2000)
+                  const res = await agentFetch('slsk-reconnect', { method: 'POST' })
+                  const json = await res.json()
+                  if (json.ok) {
+                    toast('✅ Sesión de Soulseek renovada exitosamente', 'success', 3000)
+                  } else {
+                    toast(`Error renovando sesión: ${json.error || 'error desconocido'}`, 'error', 4000)
+                  }
+                } catch (err) {
+                  toast(`Error de conexión con el agente: ${err.message}`, 'error', 3000)
+                }
+              }}
+              className="h-8 flex items-center gap-1.5 px-2.5 rounded-lg border border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-all text-xs font-semibold active:scale-95 flex-shrink-0"
+              title="Forzar re-login inmediato con Soulseek en tu agente local"
+            >
+              <svg className="w-3.5 h-3.5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              <span className="hidden md:inline">Renovar Sesión</span>
+            </button>
+          )}
           {/* "Descargar agente" — SOLO si el agente NO está conectado (si ya está,
               sobra: el badge "AGENTE ON" alcanza). Titila fuerte para que un
               usuario sin agente sepa que es LO que tiene que bajar. */}
