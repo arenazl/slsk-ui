@@ -1,6 +1,6 @@
 {
-  "version": "2.12.15",
-  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.15/GrooveSyncAgent.exe",
-  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.15/GrooveSyncAgent-macOS.dmg",
-  "release_notes": "Instalador de Mac (.dmg): arrastra GrooveSyncAgent a Aplicaciones y listo. Mismo agente que en Windows: cambiar el genero mueve el archivo y sincroniza el manifest en la nube, desbloquea el acceso del browser al agente y muestra el error real si algo falla."
+  "version": "2.12.16",
+  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.16/GrooveSyncAgent.exe",
+  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.16/GrooveSyncAgent-macOS.dmg",
+  "release_notes": "v2.12.16: boton detener descargas en resumen + MAX_STALL 90s"
 }
