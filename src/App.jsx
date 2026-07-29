@@ -12314,7 +12314,8 @@ function App() {
           onTriggerSearch={(query) => {
             setDlSearch(query)
             setSearchResults(null)
-            setActiveTab('search')
+            setActiveTab('all')
+            setPage('search')
             handleSearchSlsk(query)
           }}
         />
@@ -13377,6 +13378,21 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // de búsqueda, cambia a la pestaña Buscar y ejecuta la búsqueda manual inmediatamente.
     const query = `${track.artist || ''} ${track.title || ''}`.trim()
     if (!query) return
+
+    if (window.__ensureCanDownload && !window.__ensureCanDownload()) return
+
+    if (!agentConnected) {
+      toast('Agente no conectado — iniciá el agente local (slsk-agent) para descargar', 'warning', 4000)
+      return
+    }
+
+    if (track && track.id) {
+      setDownloadQueue(prev => ({
+        ...prev,
+        [track.id]: { status: 'searching', message: 'Buscando...' }
+      }))
+    }
+
     toast(`🔍 Buscando "${query}"...`, 'info', 2500)
     if (onTriggerSearch) {
       onTriggerSearch(query)
@@ -13988,10 +14004,27 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                             <span className="hidden sm:inline">Bajar</span>
                           </button>
                         )
-                        if (dl.status === 'searching') return <span className="flex-shrink-0 text-xs text-yellow-400"><SearchingLabel className="hidden sm:inline" /><span className="sm:hidden">...</span></span>
+                        if (dl.status === 'searching') return (
+                          <span className="flex-shrink-0 flex items-center gap-1.5 text-xs text-yellow-400">
+                            <div className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                            <SearchingLabel className="hidden sm:inline" />
+                            <span className="sm:hidden">...</span>
+                          </span>
+                        )
                         if (dl.status === 'downloading') return dl.pct != null
-                          ? <span className="flex-shrink-0 flex items-center gap-1.5 text-xs text-[var(--color-accent)]"><div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden"><div className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${dl.pct}%` }} /></div><span>{dl.pct}%</span></span>
-                          : <span className="flex-shrink-0 text-xs text-[var(--color-accent)] animate-pulse"><span className="hidden sm:inline">{dl.message === 'En cola' ? 'En cola' : 'Descargando'}</span><span className="sm:hidden">...</span></span>
+                          ? (
+                            <span className="flex-shrink-0 flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
+                              <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                              <div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden"><div className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${dl.pct}%` }} /></div>
+                              <span>{dl.pct}%</span>
+                            </span>
+                          ) : (
+                            <span className="flex-shrink-0 flex items-center gap-1.5 text-xs text-[var(--color-accent)] animate-pulse">
+                              <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                              <span className="hidden sm:inline">{dl.message === 'En cola' ? 'En cola' : 'Descargando'}</span>
+                              <span className="sm:hidden">...</span>
+                            </span>
+                          )
                         if (dl.status === 'done') return <span className="flex-shrink-0 text-xs text-green-400">Listo</span>
                         if (dl.status === 'not_found') return (
                           <button onClick={() => { setDownloadQueue(prev => { const n = {...prev}; delete n[t.id]; return n }); searchAndDownload(t) }}
