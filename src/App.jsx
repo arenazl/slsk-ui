@@ -12311,6 +12311,12 @@ function App() {
           sendRemoteCommand={sendRemoteCommand}
           discoverRemoteRef={discoverRemoteRef}
           outputDeviceName={(devices.find(d => d.id === playingDeviceId)?.name) || 'otro equipo'}
+          onTriggerSearch={(query) => {
+            setDlSearch(query)
+            setSearchResults(null)
+            setActiveTab('search')
+            handleSearchSlsk(query)
+          }}
         />
       </div>
 
@@ -12466,7 +12472,7 @@ function SwipeableRow({ children, onReveal }) {
 }
 
 
-function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary, isRemoteOutput, sendRemoteCommand, discoverRemoteRef, outputDeviceName }) {
+function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary, isRemoteOutput, sendRemoteCommand, discoverRemoteRef, outputDeviceName, onTriggerSearch }) {
   const toast = useToast()
   // Per-user genre click tracking with 5-click reorder threshold (server-persisted)
   const beatportClicks = useGenreClicks('beatport_genre_clicks', authUser?.name || '')
@@ -13371,11 +13377,10 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // de búsqueda, cambia a la pestaña Buscar y ejecuta la búsqueda manual inmediatamente.
     const query = `${track.artist || ''} ${track.title || ''}`.trim()
     if (!query) return
-    setDlSearch(query)
-    setSearchResults(null)
-    setPage('search')
     toast(`🔍 Buscando "${query}"...`, 'info', 2500)
-    handleSearchSlsk(query)
+    if (onTriggerSearch) {
+      onTriggerSearch(query)
+    }
   }
 
   const formatDuration = (ms) => {
