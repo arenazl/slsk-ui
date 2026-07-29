@@ -9410,15 +9410,16 @@ function App() {
     setServerStatus('idle')
   }
 
-  const handleSearchSlsk = () => {
-    if (!wsRef.current || wsRef.current.readyState !== 1 || !dlSearch.trim() || !username || !password) return
+  const handleSearchSlsk = (overrideQuery) => {
+    const q = (typeof overrideQuery === 'string' ? overrideQuery : dlSearch).trim()
+    if (!wsRef.current || wsRef.current.readyState !== 1 || !q || !username || !password) return
     userSearchRef.current = true
     setSearchResults([])
     setSearchStatus('connecting')
     setSearchDlStatus({})
     wsRef.current.send(JSON.stringify({
       type: 'search_slsk',
-      query: dlSearch.trim(),
+      query: q,
       username,
       password,
     }))
@@ -10983,11 +10984,10 @@ function App() {
                   toast(`Error de conexión con el agente: ${err.message}`, 'error', 3000)
                 }
               }}
-              className="h-8 flex items-center gap-1.5 px-2.5 rounded-lg border border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-all text-xs font-semibold active:scale-95 flex-shrink-0"
-              title="Forzar re-login inmediato con Soulseek en tu agente local"
+              className="w-8 h-8 flex items-center justify-center p-0 rounded-lg border border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-all text-xs font-semibold active:scale-95 flex-shrink-0"
+              title="Renovar Sesión Soulseek"
             >
-              <svg className="w-3.5 h-3.5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              <span className="hidden md:inline">Renovar Sesión</span>
+              <svg className="w-4 h-4 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             </button>
           )}
           {/* "Descargar agente" — SOLO si el agente NO está conectado (si ya está,
@@ -11696,7 +11696,7 @@ function App() {
                         if (trackQuery) {
                           setDlSearch(trackQuery)
                           setSearchResults([])
-                          search(trackQuery)
+                          handleSearchSlsk(trackQuery)
                         }
                       }}
                       title="Haz clic para ver las 3 secciones (FLAC, Remixes, MP3) en vivo"
@@ -13375,7 +13375,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     setSearchResults(null)
     setPage('search')
     toast(`🔍 Buscando "${query}"...`, 'info', 2500)
-    search(query)
+    handleSearchSlsk(query)
   }
 
   const formatDuration = (ms) => {
