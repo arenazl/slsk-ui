@@ -11439,24 +11439,42 @@ function App() {
             </div>
           )}
 
-          {/* Active progress banner */}
+          {/* Active progress banner / Resumen */}
           {isRunning && tracks.length > 0 && (() => {
             const done = completed + skipped + notFound + errors
             const pct = tracks.length > 0 ? (done / tracks.length) * 100 : 0
             const active = tracks.find(t => t.status === 'downloading') || tracks.find(t => t.status === 'searching')
             return (
               <div className="flex-shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-panel)] px-3 md:px-4 py-2">
-                <div className="flex items-center gap-3 mb-1.5">
-                  <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                  <span className="text-xs text-gray-400 flex-shrink-0">{done}/{tracks.length}</span>
-                  {active && (
-                    <span className="text-xs truncate min-w-0 text-[var(--text-primary)]">
-                      <span className={active.status === 'downloading' ? 'text-[var(--color-accent)]' : 'text-yellow-400'}>
-                        {active.status === 'downloading' ? '↓' : '🔍'}
+                <div className="flex items-center justify-between gap-3 mb-1.5 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <span className="text-xs font-bold text-gray-300 flex-shrink-0">Resumen:</span>
+                    <span className="text-xs text-emerald-400 font-semibold flex-shrink-0">{completed} descargados</span>
+                    <span className="text-xs text-red-400 font-semibold flex-shrink-0">{notFound + errors} no encontrados</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">de {tracks.length} total</span>
+                    {active && (
+                      <span className="text-xs truncate min-w-0 text-[var(--text-primary)] ml-2">
+                        <span className={active.status === 'downloading' ? 'text-[var(--color-accent)]' : 'text-yellow-400'}>
+                          {active.status === 'downloading' ? '↓' : '🔍'}
+                        </span>
+                        {' '}{active.artist} - {active.title}
                       </span>
-                      {' '}{active.artist} - {active.title}
-                    </span>
-                  )}
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      fetch(`${API_BASE}/api/download/cancel_all`, { method: 'POST' }).catch(() => {})
+                      setPendingTracks([])
+                      setFailedTracks([])
+                      setSearchResults(null)
+                      toast('Descargas detenidas por completo', 'info', 3000)
+                    }}
+                    className="flex-shrink-0 px-3 py-1 rounded-lg text-xs font-bold bg-red-600/20 text-red-400 border border-red-500/40 hover:bg-red-600/30 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                    title="Detener todas las descargas activas y liberar el servidor/agente"
+                  >
+                    <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
+                    <span>🛑 Detener descargas</span>
+                  </button>
                 </div>
                 <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
                   <div className="h-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${pct}%` }} />
