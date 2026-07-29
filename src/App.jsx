@@ -2007,10 +2007,11 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         <div className="hidden md:flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => setStarFilter('0')}
+            title="Mostrar todos los niveles de estrellas"
             className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
               selectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
             }`}
-          >All</button>
+          >Todas ★</button>
           {[1, 2, 3, 4, 5].map(s => {
             const active = selectedStars.includes(s)
             return (
