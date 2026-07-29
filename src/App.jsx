@@ -214,7 +214,7 @@ const STATUS_LABELS = {
   pending: 'Pendiente',
   searching: 'Buscando...',
   downloading: 'Descargando',
-  completed: 'Completado',
+  completed: 'Ya descargado',
   skipped: 'Ya descargado',
   not_found: 'No encontrado',
   error: 'Error',
@@ -300,6 +300,40 @@ function PlayPauseBtn({ isPlaying, onClick, size = 'md', loading = false, classN
   )
 }
 
+// Skeleton de carga: filas "fantasma" pulsantes con la silueta real de la
+// grilla (thumb + dos líneas + chips) — reemplaza los "Cargando..." pelados.
+function SkeletonRows({ rows = 10 }) {
+  return (
+    <div className="flex-1 min-h-0 overflow-hidden px-3 md:px-4 py-2 space-y-1 animate-pulse">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 py-2.5 border-b border-[var(--border-color)]/30" style={{ opacity: 1 - i * 0.07 }}>
+          <span className="w-8 h-8 rounded-md bg-[var(--bg-hover)] flex-shrink-0" />
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="h-3 rounded bg-[var(--bg-hover)]" style={{ width: `${45 + ((i * 17) % 40)}%` }} />
+            <div className="h-2 rounded bg-[var(--bg-hover)]" style={{ width: `${25 + ((i * 11) % 25)}%` }} />
+          </div>
+          <span className="hidden md:block w-16 h-4 rounded-full bg-[var(--bg-hover)] flex-shrink-0" />
+          <span className="hidden md:block w-12 h-4 rounded bg-[var(--bg-hover)] flex-shrink-0" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Mini-foto de carátula para las grillas (Biblioteca / Export). Si no hay
+// artwork o falla la carga, placeholder con nota musical — nunca rompe layout.
+function TrackThumb({ src, size = 'w-8 h-8' }) {
+  const [err, setErr] = useState(false)
+  if (!src || err) {
+    return (
+      <span className={`${size} rounded-md flex-shrink-0 bg-[var(--bg-hover)] border border-[var(--border-color)] flex items-center justify-center`}>
+        <svg className="w-3.5 h-3.5 text-[var(--text-dim)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg>
+      </span>
+    )
+  }
+  return <img src={src} alt="" loading="lazy" onError={() => setErr(true)} className={`${size} rounded-md object-cover flex-shrink-0 ring-1 ring-white/10`} />
+}
+
 const STATUS_COLORS = {
   pending: 'bg-gray-700',
   searching: 'bg-yellow-500/20 text-yellow-400',
@@ -310,34 +344,33 @@ const STATUS_COLORS = {
   error: 'bg-red-500/20 text-red-400',
 }
 
-function TrackRow({ track, onCancel }) {
+function TrackRow({ track, onCancel, onGoToLibrary }) {
+  const fmt = String(track.format || '').toUpperCase()
+  const lossless = ['FLAC', 'WAV', 'AIFF', 'AIF'].includes(fmt)
+  const isDone = ['completed', 'skipped'].includes(track.status)
   return (
-    <div className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 border-b border-[var(--border-color)] transition-all duration-200 group ${
+    <div className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 border-b border-[var(--border-color)]/40 hover:bg-white/[0.03] transition-colors group ${
       track.status === 'downloading' ? 'bg-[var(--color-accent)]/5' :
-      track.status === 'completed' ? 'bg-green-500/5' :
-      track.status === 'skipped' ? 'bg-cyan-500/5' : ''
+      isDone ? 'bg-green-500/[0.04]' : ''
     }`}>
-      <span className="text-gray-500 text-xs md:text-sm w-6 md:w-8 text-right flex-shrink-0">{track.id + 1}</span>
+      <span className="text-gray-500 text-xs w-6 md:w-8 text-right flex-shrink-0 font-mono">{track.id + 1}</span>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-[var(--text-primary)] truncate font-medium text-xs md:text-sm">{track.title}</span>
-          {track.format && (
-            <span className="hidden sm:inline text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 flex-shrink-0">
-              {track.format}
-            </span>
-          )}
-        </div>
-        <div className="text-xs md:text-sm text-gray-400 truncate">
+        <div className="truncate font-medium text-xs md:text-sm text-[var(--text-primary)]">{track.title}</div>
+        <div className="truncate text-[11px] text-gray-500 mt-0.5">
           {track.artist}
-          <span className="hidden sm:inline">
-            {track.source_user && <span className="text-gray-600"> &middot; de {track.source_user}</span>}
-            {track.size_mb > 0 && <span className="text-gray-600"> &middot; {track.size_mb} MB</span>}
-          </span>
+          {track.source_user && <span className="text-gray-600"> &middot; de {track.source_user}</span>}
+          {track.size_mb > 0 && <span className="text-gray-600"> &middot; {track.size_mb} MB</span>}
         </div>
       </div>
 
-      <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+      {track.format && (
+        <span className={`hidden md:inline-flex w-16 flex-shrink-0 justify-center px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide ${lossless ? 'bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30' : 'bg-white/[0.06] text-gray-300 ring-1 ring-white/10'}`}>
+          {fmt}
+        </span>
+      )}
+
+      <div className="flex items-center gap-2 md:gap-3 flex-shrink-0 md:w-56 justify-end">
         {track.status === 'downloading' && track.progress > 0 && (
           <div className="w-16 md:w-24 flex items-center gap-1 md:gap-2">
             <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -352,10 +385,24 @@ function TrackRow({ track, onCancel }) {
         {track.status === 'searching' && (
           <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
         )}
-        <span className={`text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded-full ${STATUS_COLORS[track.status] || 'bg-gray-700'}`}>
-          {STATUS_LABELS[track.status] || track.status}
-        </span>
-        {onCancel && track.status !== 'completed' && (
+        {isDone ? (
+          <button
+            onClick={() => {
+              const target = track.filename || `${track.artist || ''} ${track.title || ''}`.trim()
+              onGoToLibrary?.(target)
+            }}
+            className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all duration-200 active:scale-95 cursor-pointer shadow-sm"
+            title="Ir a la biblioteca para organizar, curar o eliminar este tema"
+          >
+            <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+            <span>Ya descargado</span>
+          </button>
+        ) : (
+          <span className={`text-[10px] md:text-xs px-2 py-1 rounded-lg font-semibold ${STATUS_COLORS[track.status] || 'bg-gray-700'}`}>
+            {STATUS_LABELS[track.status] || track.status}
+          </span>
+        )}
+        {onCancel && !isDone && (
           <button
             onClick={() => onCancel(track)}
             title="Cancelar / quitar de la lista"
@@ -369,7 +416,7 @@ function TrackRow({ track, onCancel }) {
   )
 }
 
-const API_BASE = ['5173', '5174', '5175'].includes(window.location.port) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.us-east4.run.app'
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.us-east4.run.app'
 
 // Stable per-browser device id + human label. Used para que el banner de
 // "temas en cola desde otros dispositivos" solo cuente los que realmente
@@ -1090,6 +1137,10 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [genreFilter, setGenreFilter] = useState([])
   const [deletingDupes, setDeletingDupes] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null) // { x, y, file }
+  // Ecosistema activo del recategorizador del menú contextual (la clínica):
+  // arranca en el del tema y el toggle permite moverlo de ambiente en un click.
+  const [ctxEco, setCtxEco] = useState('edm')
+  const [fetchingArt, setFetchingArt] = useState(false)
   const longPressRef = useRef({ timer: null, fired: false }) // long-press en mobile -> menu contextual
   const [customGenre, setCustomGenre] = useState('')
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -1097,8 +1148,13 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const toolsRef = useRef(null)
 
   const fetchIdRef = useRef(0)
+  // SWR por colección: al alternar EDM/POP/LATIN se muestra al INSTANTE lo
+  // último conocido de esa colección y se revalida por detrás (antes: ~2s de
+  // pantalla vacía en cada cambio).
+  const libCacheRef = useRef({})
   const fetchLibrary = useCallback(async () => {
     const id = ++fetchIdRef.current
+    if (libCacheRef.current[collection]) setFiles(libCacheRef.current[collection])
     // Backfill `collection` field on manifest entries derived from genre.
     // Cheap pure-function call on the server, idempotent. Runs in parallel
     // with metadata fetch so it doesn't block. After a few seconds the
@@ -1119,7 +1175,11 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       // Fetch metadata from Cloud Run (Cloudinary = source of truth).
       // cache-bust + no-store: sin esto el navegador/SW servía el manifest viejo y
       // los contadores (ej. "Metatags (N)") no bajaban tras curar.
-      const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}&_=${Date.now()}`, { cache: 'no-store' })
+      // SIN filtro de colección: el cruce necesita la metadata de TODOS los
+      // archivos del disco (el filtro por colección es de la VISTA). Filtrada,
+      // los temas de otras colecciones quedaban "sin artista" e inflaban los
+      // contadores (Curador/Metatags marcaban 415 sucios que no existían).
+      const metaRes = await fetch(`${API_BASE}/api/metadata?user=${encodeURIComponent(authUser?.name || '')}&_=${Date.now()}`, { cache: 'no-store' })
       const metadata = await metaRes.json()
 
       // Local file scan: prefer FSA, fallback to agent. Mobile (no FSA, no agent)
@@ -1189,14 +1249,15 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             manual_genre: meta.manual_genre || false,
             has_metadata: !!metadata[f.filename],  // flag for UI (e.g. grey out orphans)
             preview_url: meta.preview_url,  // iTunes cached URL for iOS sync play
+            artwork: meta.artwork || meta.artwork_url || '',  // mini-foto en grillas
           }
         })
-        if (id === fetchIdRef.current) setFiles(merged)
+        if (id === fetchIdRef.current) { libCacheRef.current[collection] = merged; setFiles(merged) }
       } else {
         // No FSA, no agent: fall back to Cloud Run metadata (read-only view)
         const libRes = await fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection}`)
         const data = await libRes.json()
-        if (id === fetchIdRef.current) setFiles(data)
+        if (id === fetchIdRef.current) { libCacheRef.current[collection] = data; setFiles(data) }
       }
     } catch (e) {
       console.error('Failed to fetch library', e)
@@ -1255,6 +1316,36 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     return () => document.removeEventListener('mousedown', handleClick)
   }, [ctxMenu])
 
+  // Al abrir el menú, el toggle de ecosistema arranca en el del tema.
+  useEffect(() => {
+    if (ctxMenu?.file) setCtxEco(ctxMenu.file.collection || 'edm')
+  }, [ctxMenu])
+
+  // Carátulas determinísticas (iTunes→Deezer) vía server; actualiza estado local.
+  const fetchArtworkFor = async (filenames) => {
+    if (!filenames.length || fetchingArt) return
+    setFetchingArt(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/fetch-artwork`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: authUser?.name || '', filenames }),
+      })
+      const data = await res.json()
+      const resolved = data.resolved || {}
+      const n = Object.keys(resolved).length
+      if (n) setFiles(prev => prev.map(f => resolved[f.filename] ? { ...f, artwork: resolved[f.filename] } : f))
+      toast(n
+        ? `Carátulas: ${n} encontradas${data.missed?.length ? `, ${data.missed.length} sin match` : ''}`
+        : 'Sin carátula en iTunes/Deezer', n ? 'success' : 'info', 3500)
+    } catch (e) {
+      console.error('fetch-artwork', e)
+      toast('Error buscando carátulas', 'error', 3000)
+    } finally {
+      setFetchingArt(false)
+    }
+  }
+
   // Close tools dropdown on outside click
   useEffect(() => {
     if (!toolsOpen) return
@@ -1280,35 +1371,45 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     setCustomGenre('')
   }
 
-  const changeGenre = (newGenre) => {
-    if (ctxMenu?.file && newGenre !== ctxMenu.file.genre) {
-      moveFile(ctxMenu.file, newGenre)
+  const changeGenre = (newGenre, eco) => {
+    const f = ctxMenu?.file
+    if (f && (newGenre !== f.genre || (eco && eco !== (f.collection || 'edm')))) {
+      moveFile(f, newGenre, eco)
     }
     setCtxMenu(null)
   }
 
   const deleteFile = async (file) => {
     setCtxMenu(null)
-    setFiles(prev => {
-      const idx = prev.findIndex(f => f.filename === file.filename)
-      if (idx === -1) return prev
-      return [...prev.slice(0, idx), ...prev.slice(idx + 1)]
+    const targetFilename = file.filename || file.local_name || isInLibrary?.findLocation?.(file)?.file
+    if (!targetFilename && !file.title) {
+      console.warn('deleteFile: no target filename found for', file)
+      return
+    }
+    const fname = targetFilename || ''
+    setFiles(prev => prev.filter(f => f.filename !== fname))
+    setLocalFilesSet(prev => {
+      const next = new Set(prev)
+      if (fname) next.delete(fname)
+      if (file.filename) next.delete(file.filename)
+      if (file.local_name) next.delete(file.local_name)
+      return next
     })
     try {
-      // Delete from agent (local files)
       if (agentConnected) {
         await agentFetch('delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.filename }),
+          body: JSON.stringify({ filename: fname, artist: file.artist, title: file.title }),
         })
       }
-      // Delete from Cloud Run manifest (Cloudinary)
       await fetch(`${API_BASE}/api/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.filename, username: authUser?.name || '' }),
+        body: JSON.stringify({ filename: fname, artist: file.artist, title: file.title, username: authUser?.name || '' }),
       })
+      fetchLibrary()
+      window.dispatchEvent(new Event('library-changed'))
     } catch (e) {
       console.error('Failed to delete', e)
       fetchLibrary()
@@ -1396,6 +1497,90 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   // backend. NUNCA pisa el género ya asignado. Solo toca el manifest (no el archivo).
   // Arregla los metatags vía el AGENTE: cura los faltantes (Beatport+IA, sin pisar
   // género) y ESCRIBE los tags dentro del archivo (mutagen) para que Rekordbox los lea.
+  // ── Curador en vivo (side modal): pasa los temas "sucios" por la cascada
+  // determinística. AUTO-aplica SOLO con fuente Beatport (certeza de catálogo);
+  // lo que decide la IA queda "a revisar" y el dueño elige por tema.
+  const [curadorOpen, setCuradorOpen] = useState(false)
+  const [curRunning, setCurRunning] = useState(false)
+  const [curRows, setCurRows] = useState([])
+  const [curStats, setCurStats] = useState({ done: 0, auto: 0, revisar: 0, err: 0, total: 0 })
+  const curCancelRef = useRef(false)
+
+  const aplicarCuracion = async (filename, d) => {
+    const r = await fetch(`${API_BASE}/api/track-meta`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: authUser?.name || '', filename, artist: d.artist, title: d.title, genre: d.genre, collection: d.collection, bpm: d.bpm, key: d.key }),
+    })
+    const ok = (await r.json().catch(() => ({}))).ok
+    if (!ok) throw new Error('no se pudo aplicar')
+  }
+
+  const startCurador = async () => {
+    const targets = files.filter(isDirtyMeta)
+    setCurStats({ done: 0, auto: 0, revisar: 0, err: 0, total: targets.length })
+    setCurRows([])
+    setCurRunning(true)
+    curCancelRef.current = false
+    for (const f of targets) {
+      if (curCancelRef.current) break
+      const id = f.filename
+      setCurRows(prev => [{ id, filename: f.filename, estado: 'procesando', antes: { artist: f.artist, title: f.title } }, ...prev])
+      try {
+        const r = await fetch(`${API_BASE}/api/curate-track`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ artist: f.artist || '', title: f.title || '', filename: f.filename }),
+        })
+        const d = await r.json()
+        if (!d.artist && !d.title) throw new Error('sin propuesta')
+        if (d.source === 'beatport') {
+          await aplicarCuracion(f.filename, d)
+          setCurRows(prev => prev.map(x => x.id === id ? { ...x, estado: 'auto', prop: d } : x))
+          setCurStats(s => ({ ...s, done: s.done + 1, auto: s.auto + 1 }))
+        } else {
+          // IA o default → decisión del dueño (seleccionada por defecto para
+          // el "Aplicar seleccionados"; desmarcás las que no te cierran)
+          setCurRows(prev => prev.map(x => x.id === id ? { ...x, estado: 'revisar', prop: d, sel: true } : x))
+          setCurStats(s => ({ ...s, done: s.done + 1, revisar: s.revisar + 1 }))
+        }
+      } catch (e) {
+        setCurRows(prev => prev.map(x => x.id === id ? { ...x, estado: 'error', error: String(e.message || e).slice(0, 60) } : x))
+        setCurStats(s => ({ ...s, done: s.done + 1, err: s.err + 1 }))
+      }
+    }
+    setCurRunning(false)
+    fetchLibrary()
+  }
+
+  const setSelTodas = (v) => setCurRows(prev => prev.map(x => x.estado === 'revisar' ? { ...x, sel: v } : x))
+
+  const aplicarSeleccionados = async () => {
+    const rows = curRows.filter(x => x.estado === 'revisar' && x.sel)
+    for (const row of rows) {
+      try {
+        await aplicarCuracion(row.filename, row.prop)
+        setCurRows(prev => prev.map(x => x.id === row.id ? { ...x, estado: 'ok' } : x))
+      } catch {
+        setCurRows(prev => prev.map(x => x.id === row.id ? { ...x, estado: 'error', error: 'no se pudo aplicar' } : x))
+      }
+    }
+    toast(`${rows.length} curaciones aplicadas`, 'success', 2500)
+    fetchLibrary()
+  }
+
+  const decidirRevision = async (row, aceptar) => {
+    if (!aceptar) {
+      setCurRows(prev => prev.map(x => x.id === row.id ? { ...x, estado: 'saltado' } : x))
+      return
+    }
+    try {
+      await aplicarCuracion(row.filename, row.prop)
+      setCurRows(prev => prev.map(x => x.id === row.id ? { ...x, estado: 'ok' } : x))
+      fetchLibrary()
+    } catch {
+      setCurRows(prev => prev.map(x => x.id === row.id ? { ...x, estado: 'error', error: 'no se pudo aplicar' } : x))
+    }
+  }
+
   const fixMetatags = async () => {
     if (!agentConnected) { toast('Necesitás el agente conectado para escribir los tags en los archivos'); return }
     const before = files.filter(isDirtyMeta).length
@@ -1497,11 +1682,11 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     }
   }
 
-  const moveFile = async (file, newGenre) => {
+  const moveFile = async (file, newGenre, newCollection) => {
     setMoving(true)
     // Optimistic update
     setFiles(prev => prev.map(f =>
-      f.filename === file.filename ? { ...f, genre: newGenre, in_subfolder: !!newGenre, subfolder: newGenre } : f
+      f.filename === file.filename ? { ...f, genre: newGenre, collection: newCollection || f.collection, in_subfolder: !!newGenre, subfolder: newGenre } : f
     ))
     try {
       // Move file on agent
@@ -1515,11 +1700,12 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         fetchLibrary() // Revert on error
         return
       }
-      // Update genre metadata on Cloud Run (Cloudinary)
+      // Update genre metadata on Cloud Run (Cloudinary) — collection viaja solo
+      // en recategorización de ecosistema (acción manual del dueño, pisa todo)
       await fetch(`${API_BASE}/api/move-file`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.filename, genre: newGenre, username: authUser?.name || '' }),
+        body: JSON.stringify({ filename: file.filename, genre: newGenre, username: authUser?.name || '', collection: newCollection || undefined }),
       }).catch(() => {})
     } catch (e) {
       console.error('Failed to move file', e)
@@ -1595,30 +1781,33 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   // Available genres (with counts)
   const availGenres = useMemo(() => {
     const counts = {}
-    files.forEach(f => { const g = f.genre || ''; if (g) counts[g] = (counts[g] || 0) + 1 })
+    files.forEach(f => {
+      if (collection !== 'all' && (f.collection || 'edm') !== collection) return
+      const g = f.genre || ''
+      if (g) counts[g] = (counts[g] || 0) + 1
+    })
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([g, c]) => ({ genre: g, count: c }))
-  }, [files])
+  }, [files, collection])
 
-  // Filter by current collection (EDM / POP / LATIN). Files without a
-  // collection field default to 'edm' for backwards compatibility (most of
-  // the historical library is EDM downloads).
-  const collectionFiltered = files.filter(f => (f.collection || 'edm') === collection)
+  // Filter by current collection (TODOS / EDM / POP / LATIN).
+  const collectionFiltered = collection === 'all'
+    ? files
+    : files.filter(f => (f.collection || 'edm') === collection)
 
   // Filter by genre (multi-select)
   const genreFiltered = genreFilter.length === 0 ? collectionFiltered : collectionFiltered.filter(f => genreFilter.includes(f.genre))
 
-  // Filter by search
+  // Filter by search — Global search across ALL files/collections when active
   const q = search.toLowerCase().trim()
-  const searchFiltered = q
-    // Chequear SIEMPRE el filename (no solo cuando falta title): "Ir a la
-    // biblioteca" setea el buscador con el nombre COMPLETO del archivo
-    // ("Artista - Tema (Original Mix)"), que nunca está contenido en un title
-    // corto de metadata → antes no matcheaba y no te llevaba al tema.
-    ? genreFiltered.filter(f =>
-        (f.filename || '').toLowerCase().includes(q) ||
-        (f.title || '').toLowerCase().includes(q) ||
-        (f.artist || '').toLowerCase().includes(q) ||
-        (f.genre || '').toLowerCase().includes(q))
+  const activeQ = q.length >= 3 ? q : (q.length > 0 ? q : '')
+  const searchBase = activeQ ? files : genreFiltered
+  const searchFiltered = activeQ
+    ? searchBase.filter(f =>
+        (f.filename || '').toLowerCase().includes(activeQ) ||
+        (f.title || '').toLowerCase().includes(activeQ) ||
+        (f.artist || '').toLowerCase().includes(activeQ) ||
+        (f.genre || '').toLowerCase().includes(activeQ) ||
+        (f.collection || '').toLowerCase().includes(activeQ))
     : genreFiltered
 
   // Filter by stars (multi-select)
@@ -1723,6 +1912,30 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     'Pop', 'Hip Hop', 'R&B', 'Rock', 'Other',
   ]
 
+  // Géneros por ECOSISTEMA para el recategorizador del menú contextual:
+  // el toggle EDM/POP/LATIN define qué lista se ofrece (más los géneros
+  // custom ya existentes en esa colección).
+  const ECO_GENRES = {
+    edm: ['Tech House', 'Deep House', 'Melodic House', 'Progressive House', 'Minimal Tech', 'Afro House',
+      'Melodic Techno', 'Peak Time Techno', 'Hard Techno', 'Raw Techno',
+      'Trance', 'Progressive Trance', 'Psy Trance',
+      'Drum & Bass', 'Breaks', 'Electro', 'Downtempo', 'Indie Dance', 'Nu Disco', 'Other'],
+    pop: ['Pop', 'Rock', 'Hip Hop', 'R&B', 'Indie', 'Funk', 'Soul', 'Disco', 'Dance', 'Other'],
+    latin: ['Reggaeton', 'Cumbia', 'RKT', 'Dembow', 'Salsa', 'Bachata', 'Merengue', 'Latin Pop', 'Rock Nacional', 'Cuarteto', 'Other'],
+  }
+  const ecoGenreOptions = (eco, currentGenre) => {
+    const base = ECO_GENRES[eco] || ECO_GENRES.edm
+    const customs = []
+    files.forEach(f => {
+      if (f.genre && (f.collection || 'edm') === eco && !base.includes(f.genre) && !customs.includes(f.genre)) customs.push(f.genre)
+    })
+    const opts = [...base, ...customs.sort()]
+    // El género actual del tema siempre visible aunque sea de otro ambiente,
+    // para que el select no mienta.
+    if (currentGenre && !opts.includes(currentGenre)) opts.unshift(currentGenre)
+    return opts
+  }
+
   const allGenres = useMemo(() => {
     const existing = new Set()
     files.forEach(f => { if (f.genre) existing.add(f.genre) })
@@ -1755,11 +1968,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   })
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
-        Cargando biblioteca...
-      </div>
-    )
+    return <SkeletonRows rows={12} />
   }
 
   return (
@@ -1864,23 +2073,150 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {detectingKeys ? 'Detectando...' : `Keys (${files.filter(f => !f.key).length})`}
           </button>
         )}
-        {view === 'tracks' && agentConnected && (
+        {/* Metatags se mudó ADENTRO del Curador ("Grabar tags en archivos"):
+            un solo botón inteligente en la barra, menos quilombo. */}
+        <button
+          onClick={() => setCuradorOpen(true)}
+          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all duration-200 active:scale-95 flex-shrink-0"
+          title="Curador en vivo: cascada determinística (Beatport primero). Auto-aplica solo lo seguro; lo dudoso lo decidís vos."
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+          Curador{files.filter(isDirtyMeta).length ? ` (${files.filter(isDirtyMeta).length})` : ''}
+        </button>
+        {/* Carátulas para los VISIBLES sin foto (iTunes→Deezer determinístico).
+            Solo aparece cuando hay faltantes en la grilla actual. */}
+        {filtered.filter(f => !f.artwork).length > 0 && (
           <button
-            onClick={fixMetatags}
-            disabled={fixingMeta}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
-            style={{ background: 'var(--color-accent)' }}
-            title="Completar artista/título faltantes y escribir los tags en los archivos (para Rekordbox)"
+            onClick={() => fetchArtworkFor(filtered.filter(f => !f.artwork).map(f => f.filename).slice(0, 60))}
+            disabled={fetchingArt}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0 disabled:opacity-50"
+            title="Busca carátulas (iTunes/Deezer) para los temas visibles que no tienen — hasta 60 por corrida"
           >
-            {fixingMeta ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            )}
-            {fixingMeta ? 'Arreglando...' : `Metatags${files.filter(isDirtyMeta).length ? ` (${files.filter(isDirtyMeta).length})` : ''}`}
+            {fetchingArt
+              ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+            Carátulas ({filtered.filter(f => !f.artwork).length})
           </button>
+        )}
+        {/* ── Side modal: Curador en vivo ── */}
+        {curadorOpen && (
+          <div className="fixed inset-y-0 right-0 z-[80] w-full sm:w-[30rem] bg-[var(--bg-panel)] border-l border-[var(--border-color)] shadow-2xl flex flex-col animate-sheet-up sm:animate-fade-in">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-color)]">
+              <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-[var(--text-primary)]">Curador de metatags</div>
+                <div className="text-[11px] text-[var(--text-muted)]">Beatport auto-aplica · la IA propone y decidís vos</div>
+              </div>
+              <button onClick={() => { curCancelRef.current = true; setCuradorOpen(false) }} className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="px-4 py-2.5 border-b border-[var(--border-color)] flex items-center gap-2 flex-wrap">
+              {!curRunning ? (
+                <button onClick={startCurador} disabled={files.filter(isDirtyMeta).length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 hover:brightness-110 disabled:opacity-40"
+                  style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  Iniciar ({files.filter(isDirtyMeta).length} temas)
+                </button>
+              ) : null}
+              {!curRunning && agentConnected && (
+                <button onClick={fixMetatags} disabled={fixingMeta}
+                  title="Paso final: escribe la curación en los tags físicos de los archivos (Rekordbox los lee). Antes era el botón Metatags."
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-95 disabled:opacity-40">
+                  {fixingMeta ? <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" /> : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  )}
+                  {fixingMeta ? 'Grabando...' : 'Grabar tags en archivos'}
+                </button>
+              )}
+              {curRunning ? (
+                <button onClick={() => { curCancelRef.current = true }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-all active:scale-95">
+                  <div className="w-3 h-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                  Frenar
+                </button>
+              ) : null}
+              {curStats.total > 0 && (
+                <>
+                  <div className="flex-1 h-1.5 min-w-16 bg-[var(--bg-hover)] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${Math.round((curStats.done / curStats.total) * 100)}%` }} />
+                  </div>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{curStats.done}/{curStats.total}</span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-500">{curStats.auto} auto</span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500">{curStats.revisar} a revisar</span>
+                  {curStats.err > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400">{curStats.err} err</span>}
+                </>
+              )}
+              {/* Acciones masivas sobre las filas "a revisar" */}
+              {curRows.some(r => r.estado === 'revisar') && (
+                <div className="w-full flex items-center gap-1.5 pt-1.5 border-t border-[var(--border-color)] mt-1">
+                  <button onClick={() => setSelTodas(true)} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all">Seleccionar todo</button>
+                  <button onClick={() => setSelTodas(false)} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all">Deseleccionar</button>
+                  <button
+                    onClick={aplicarSeleccionados}
+                    disabled={!curRows.some(r => r.estado === 'revisar' && r.sel)}
+                    className="ml-auto px-3 py-1 rounded-lg text-[11px] font-bold transition-all active:scale-95 hover:brightness-110 disabled:opacity-40"
+                    style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                  >
+                    Aplicar seleccionados ({curRows.filter(r => r.estado === 'revisar' && r.sel).length})
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-1.5">
+              {curRows.length === 0 && (
+                <div className="text-center text-xs text-[var(--text-muted)] pt-10 px-6">
+                  Tocá Iniciar y mirá en vivo cómo se cura cada tema: Beatport (dato de catálogo, se aplica solo) o IA (te propone y elegís).
+                </div>
+              )}
+              {curRows.map(row => (
+                <div key={row.id} className={`rounded-xl border px-3 py-2 text-xs ${
+                  row.estado === 'procesando' ? 'border-[var(--color-accent)]/40 bg-[var(--color-accent)]/5' :
+                  row.estado === 'auto' || row.estado === 'ok' ? 'border-green-500/25 bg-green-500/5' :
+                  row.estado === 'revisar' ? 'border-amber-500/35 bg-amber-500/5' :
+                  row.estado === 'saltado' ? 'border-[var(--border-color)] opacity-50' :
+                  'border-red-500/30 bg-red-500/5'
+                }`}>
+                  <div className="flex items-center gap-1.5">
+                    {row.estado === 'procesando' && <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin flex-shrink-0" />}
+                    {(row.estado === 'auto' || row.estado === 'ok') && <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
+                    {row.estado === 'revisar' && <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                    {row.estado === 'error' && <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+                    <span className="truncate font-mono text-[10px] text-[var(--text-muted)]" title={row.filename}>{row.filename}</span>
+                  </div>
+                  {row.prop && (
+                    <div className="mt-1.5 space-y-0.5">
+                      <div className="text-[var(--text-primary)] font-medium truncate">{row.prop.artist} <span className="text-[var(--text-muted)]">—</span> {row.prop.title}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[10px] text-[var(--text-secondary)]">{row.prop.genre}</span>
+                        {row.prop.bpm && <span className="text-[10px] text-[var(--text-muted)]">{row.prop.bpm} bpm</span>}
+                        {row.prop.key && <span className="text-[10px] text-amber-500 font-mono">{row.prop.key}</span>}
+                        <span className={`ml-auto px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${row.prop.source === 'beatport' ? 'bg-green-500/10 text-green-500' : 'bg-amber-500/10 text-amber-500'}`}>{row.prop.source === 'beatport' ? 'Beatport' : 'IA'}</span>
+                      </div>
+                    </div>
+                  )}
+                  {row.estado === 'revisar' && (
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={!!row.sel}
+                        onChange={() => setCurRows(prev => prev.map(x => x.id === row.id ? { ...x, sel: !x.sel } : x))}
+                        className="w-3.5 h-3.5 accent-[var(--color-accent)] cursor-pointer"
+                        title="Incluir en Aplicar seleccionados"
+                      />
+                      <button onClick={() => decidirRevision(row, true)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all active:scale-95 hover:brightness-110"
+                        style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>Aplicar</button>
+                      <button onClick={() => decidirRevision(row, false)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all">Saltar</button>
+                    </div>
+                  )}
+                  {row.error && <div className="mt-1 text-[10px] text-red-400">{row.error}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
         {view === 'tracks' && (
           <button
@@ -2141,6 +2477,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       }`}
                     >
                       <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
+                      <TrackThumb src={f.artwork} size="w-7 h-7" />
                       <div className="flex-1 min-w-0">
                         <div className={`text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : isBest ? 'text-[var(--text-primary)]' : 'text-gray-400'}`}>
                           {f.filename}
@@ -2216,6 +2553,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   <span className="hidden md:inline-flex flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                     <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
                   </span>
+                  <TrackThumb src={f.artwork} />
                   <div className="w-28 sm:w-40 flex-shrink-0 min-w-0">
                     <div className="text-xs md:text-sm truncate text-[var(--text-secondary)]" title={pm.artist}>{pm.artist || '—'}</div>
                   </div>
@@ -2355,6 +2693,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                       <span className="hidden md:inline-flex flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                         <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
                       </span>
+                      <TrackThumb src={f.artwork} size="w-7 h-7" />
                       <div className="flex-1 min-w-0 flex items-center gap-1">
                         <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
                           {f.title || f.filename}
@@ -2436,16 +2775,37 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             <span className="text-gray-300">{ctxMenu.file?.title || ctxMenu.file?.filename}</span>
           </div>
 
-          {/* Género: combo (en vez de la lista interminable) */}
+          {/* Género: toggle de ECOSISTEMA + combo con los géneros de ese ambiente.
+              Tocar otro ecosistema recategoriza YA (mantiene el género) — rescata
+              temas que cayeron por error en otro universo. */}
           <div className="flex-shrink-0 px-3 py-2 border-b border-[var(--border-color)]">
             <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">Género</div>
+            <div className="flex items-center gap-0.5 mb-1.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-0.5">
+              {['edm', 'pop', 'latin'].map(eco => (
+                <button
+                  key={eco}
+                  onClick={() => {
+                    setCtxEco(eco)
+                    if (ctxMenu.file && (ctxMenu.file.collection || 'edm') !== eco) {
+                      moveFile(ctxMenu.file, ctxMenu.file.genre || '', eco)
+                      toast(`Movido al ecosistema ${eco.toUpperCase()}`, 'success', 2000)
+                    }
+                  }}
+                  title={`Recategorizar al ecosistema ${eco.toUpperCase()}`}
+                  className={`flex-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all ${ctxEco === eco ? 'text-[var(--color-accent-text)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  style={ctxEco === eco ? { background: 'var(--color-accent)' } : undefined}
+                >
+                  {eco}
+                </button>
+              ))}
+            </div>
             <select
               value={ctxMenu.file?.genre || ''}
-              onChange={(e) => changeGenre(e.target.value)}
+              onChange={(e) => changeGenre(e.target.value, ctxEco)}
               className="w-full px-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
             >
               <option value="">Unsorted</option>
-              {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
+              {ecoGenreOptions(ctxEco, ctxMenu.file?.genre).map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
 
@@ -2478,6 +2838,19 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               </svg>
               Preview continuo (30s c/u)
             </button>
+            {!ctxMenu.file?.artwork && (
+              <button
+                onClick={() => { const fn = ctxMenu.file?.filename; setCtxMenu(null); if (fn) fetchArtworkFor([fn]) }}
+                disabled={fetchingArt}
+                className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2 disabled:opacity-50"
+                title="Busca la carátula en iTunes/Deezer y la guarda para este tema"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Buscar carátula
+              </button>
+            )}
             <button
               onClick={() => { openFolder(ctxMenu.file?.subfolder || '', ctxMenu.file?.filename || ctxMenu.file?.name || ''); setCtxMenu(null) }}
               className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2"
@@ -2516,12 +2889,32 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             <span className="text-sm text-[var(--text-secondary)]">Rating</span>
             <StarRating rating={ctxMenu.file?.rating || 0} onRate={(r) => handleRate(ctxMenu.file, r)} />
           </div>
-          {/* Género (combo) */}
-          <div className="px-5 py-3 flex items-center justify-between gap-3 border-b border-[var(--border-color)]">
-            <span className="text-sm text-[var(--text-secondary)] flex-shrink-0">Género</span>
-            <select value={ctxMenu.file?.genre || ''} onChange={(e) => changeGenre(e.target.value)} className="flex-1 min-w-0 max-w-[62%] px-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]">
+          {/* Género (toggle de ecosistema + combo del ambiente) */}
+          <div className="px-5 py-3 border-b border-[var(--border-color)]">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <span className="text-sm text-[var(--text-secondary)] flex-shrink-0">Género</span>
+              <div className="flex items-center gap-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-0.5">
+                {['edm', 'pop', 'latin'].map(eco => (
+                  <button
+                    key={eco}
+                    onClick={() => {
+                      setCtxEco(eco)
+                      if (ctxMenu.file && (ctxMenu.file.collection || 'edm') !== eco) {
+                        moveFile(ctxMenu.file, ctxMenu.file.genre || '', eco)
+                        toast(`Movido al ecosistema ${eco.toUpperCase()}`, 'success', 2000)
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all ${ctxEco === eco ? 'text-[var(--color-accent-text)]' : 'text-[var(--text-muted)]'}`}
+                    style={ctxEco === eco ? { background: 'var(--color-accent)' } : undefined}
+                  >
+                    {eco}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <select value={ctxMenu.file?.genre || ''} onChange={(e) => changeGenre(e.target.value, ctxEco)} className="w-full px-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]">
               <option value="">Unsorted</option>
-              {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
+              {ecoGenreOptions(ctxEco, ctxMenu.file?.genre).map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
           {/* Duración + Calidad (info) */}
@@ -2584,14 +2977,63 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
   const [allTracks, setAllTracks] = useState([])
   const [dupeCtx, setDupeCtx] = useState(null) // { x, y, index, track } — right-click version-swap popover
 
+  // MiniDisc Recording Studio state
+  const [mdCapacity, setMdCapacityState] = useState(() => {
+    const v = localStorage.getItem('md_capacity')
+    return v && v !== '0' ? v : '74'  // '0' (sin límite) ya no aplica a un disco físico
+  })
+  const setMdCapacity = (val) => { setMdCapacityState(val); localStorage.setItem('md_capacity', val) }
+  const [mdGap, setMdGapState] = useState(() => localStorage.getItem('md_gap') === 'true')
+  const setMdGap = (val) => { setMdGapState(val); localStorage.setItem('md_gap', val ? 'true' : 'false') }
+  const [isRecordingMode, setIsRecordingMode] = useState(false)
+
+  // ── Barra polimórfica (Generador | Límite | Destino) ──
+  // Estrategia del GENERADOR: la decide la colección activa, no el usuario.
+  //   edm → 'club' (Set Pro / Mixed in Key)  ·  pop/latin → 'playlist' (presets curados)
+  const genStrategy = (collection || 'edm') === 'edm' ? 'club' : 'playlist'
+  // DESTINO de exportación: m3u | xml | mix | md. MiniDisc es un destino más:
+  // al elegirlo, el slot Límite pasa de minutos (60/90/120) a capacidad de disco.
+  const [exportTarget, setExportTargetState] = useState(() => localStorage.getItem('export_target') || 'm3u')
+  const setExportTarget = (v) => { setExportTargetState(v); localStorage.setItem('export_target', v) }
+  const isMd = exportTarget === 'md'
+  // Último preset de playlist usado — para regenerar al cambiar filtros/límite.
+  const lastPresetRef = useRef('auto')
+  // Límite vigente en minutos (0 = sin límite): capacidad del disco si el
+  // destino es MiniDisc, si no la duración elegida. Una sola variable, dos unidades.
+  const limitMin = isMd ? (parseInt(mdCapacity, 10) || 0) : (duration || 0)
+
+  // Track duration helper (seconds)
+  const getTrackDurationSec = (t) => {
+    if (!t) return 210
+    if (t.duration_ms) return Math.round(t.duration_ms / 1000)
+    if (t.duration_sec) return Math.round(t.duration_sec)
+    if (t.duration_est) return Math.round(t.duration_est * 60)
+    if (t.duration) return Math.round(t.duration)
+    return 210
+  }
+
+  // Calculate total MiniDisc time metrics
+  const totalPlaylistSec = setTracks.reduce((acc, t) => acc + getTrackDurationSec(t) + (mdGap && isMd ? 2 : 0), 0)
+  const totalPlaylistMin = Math.round((totalPlaylistSec / 60) * 10) / 10
+  const maxMdMin = parseInt(mdCapacity, 10) || 0
+  const mdUsagePercent = maxMdMin > 0 ? Math.min(100, Math.round((totalPlaylistMin / maxMdMin) * 100)) : 0
+  const isMdOverCapacity = maxMdMin > 0 && totalPlaylistMin > maxMdMin
+
   // Fetch genres that have tracks with >= minStars
   useEffect(() => {
     if (page !== 'set') return
     fetch(`${API_BASE}/api/library?user=${encodeURIComponent(authUser?.name || '')}&collection=${collection || 'edm'}`).then(r => r.json()).then(tracks => {
       setAllTracks(tracks)
       const genreCounts = {}
+      // Conteo polimórfico: en EDM (club) exige key (Camelot) + corte de estrellas;
+      // en POP/LATIN (playlist) cuenta TODO lo que tenga género — sin key y sin
+      // corte implícito de 3 estrellas (solo filtra si el user marcó estrellas).
+      const isPlaylistMode = (collection || 'edm') !== 'edm'
       tracks.forEach(t => {
-        if ((setSelectedStars.length > 0 ? setSelectedStars.includes(t.rating || 0) : (t.rating || 0) >= minStars) && t.genre && t.key) {
+        const passStars = setSelectedStars.length > 0
+          ? setSelectedStars.includes(t.rating || 0)
+          : (isPlaylistMode ? true : (t.rating || 0) >= minStars)
+        if (passStars && t.genre && (isPlaylistMode || t.key)) {
           genreCounts[t.genre] = (genreCounts[t.genre] || 0) + 1
         }
       })
@@ -2601,11 +3043,14 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     }).catch(() => {})
   }, [page, minStars, setSelectedStars, authUser, collection])
 
-  // Hint banner — dismissible, persisted via localStorage
-  const [hintDismissed, setHintDismissed] = useState(() => !!localStorage.getItem('set_hint_dismissed'))
-  const dismissHint = () => { localStorage.setItem('set_hint_dismissed', '1'); setHintDismissed(true) }
+  // Hint de importación a Rekordbox (P/X) — info de principiante: se cierra
+  // con la cruz y queda cerrado para siempre (localStorage).
+  const [rbHintDismissed, setRbHintDismissed] = useState(() => !!localStorage.getItem('rb_import_hint_dismissed'))
+  const dismissRbHint = () => { localStorage.setItem('rb_import_hint_dismissed', '1'); setRbHintDismissed(true) }
 
-  // Auto-generate a starter set on first entry (when no set yet)
+  // Auto-generate a starter set on first entry (when no set yet) — polimórfico:
+  // en EDM arma un set armónico; en POP/LATIN arma una playlist client-side
+  // (allTracks ya viene filtrado por colección, así no se cuelan temas de otra).
   const autoGenRef = useRef(false)
   useEffect(() => {
     if (page !== 'set') return
@@ -2613,8 +3058,20 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     if (setTracks.length > 0) return
     if (allTracks.length === 0) return  // wait until library loads
     autoGenRef.current = true
-    generateSet('camelot')
+    if (genStrategy === 'club') generateSet('camelot')
+    else generateCuratedPlaylist('auto')
   }, [page, allTracks.length, setTracks.length])
+
+  // Al cambiar de colección la lista armada deja de tener sentido (un set EDM
+  // no es una playlist POP): se vacía todo y el auto-generado rearma con la
+  // biblioteca nueva cuando termina de cargar.
+  const prevCollectionRef = useRef(collection)
+  useEffect(() => {
+    if (prevCollectionRef.current === collection) return
+    prevCollectionRef.current = collection
+    setSetTracks([]); setSuggestions([]); setTotalMin(0); setAllTracks([])
+    autoGenRef.current = false
+  }, [collection])
 
   const fetchSuggestions = async (currentTracks) => {
     if (!currentTracks.length) return
@@ -2642,17 +3099,190 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
 
   // Autoplay-next: when a set track finishes (real audio, not preview/stop),
   // advance to the next one. Re-registered on every setTracks/onPlay change
-  // so the closure always sees the current list.
+  // so the closure always sees the current list. Handles 2s gap for MiniDisc track marking.
   useEffect(() => {
     if (!playNextRef || page !== 'set') return
     playNextRef.current = (endedFilename) => {
       const idx = setTracks.findIndex(t => t.filename === endedFilename)
       if (idx >= 0 && idx + 1 < setTracks.length) {
-        onPlay(setTracks[idx + 1])
+        const nextTrack = setTracks[idx + 1]
+        if (mdGap && isMd) {
+          toast(`[MiniDisc] Pausa 2s (Track Mark)... Siguiente: ${nextTrack.title || nextTrack.filename}`, 'info', 2000)
+          setTimeout(() => {
+            onPlay(nextTrack)
+          }, 2000)
+        } else {
+          onPlay(nextTrack)
+        }
+      } else if (idx >= 0 && idx + 1 === setTracks.length) {
+        toast('🔴 [MiniDisc] ¡Grabación finalizada! Todos los temas reproducidos.', 'success', 5000)
+        setIsRecordingMode(false)
       }
     }
     return () => { if (playNextRef.current) playNextRef.current = null }
-  }, [setTracks, onPlay, playNextRef, page])
+  }, [setTracks, onPlay, playNextRef, page, mdGap, isMd])
+
+  // Generador de playlists (estrategia POP/LATIN de la barra polimórfica).
+  // 'auto' respeta los filtros activos (géneros + estrellas); los presets
+  // (pop/latin/edm/top) son atajos curados. El límite lo pone el slot Límite:
+  // minutos en destino digital, capacidad del disco en destino MiniDisc.
+  // opts = { limitMin, genres, stars } para overrides síncronos desde onClick.
+  const generateCuratedPlaylist = (preset, opts = {}) => {
+    if (!allTracks.length) {
+      toast('Cargando biblioteca...', 'info', 2000)
+      return
+    }
+    lastPresetRef.current = preset
+    let filtered = []
+    if (preset === 'auto') {
+      const gens = opts.genres !== undefined ? opts.genres : selectedGenres
+      const stars = opts.stars !== undefined ? opts.stars : setSelectedStars
+      filtered = allTracks.filter(t => (!gens.length || gens.includes(t.genre)) && (!stars.length || stars.includes(t.rating || 0)))
+    } else if (preset === 'pop') {
+      filtered = allTracks.filter(t => {
+        const g = (t.genre || '').toLowerCase()
+        const col = (t.collection || '').toLowerCase()
+        return col === 'pop' || col === 'latin' || g.includes('pop') || g.includes('rock') || g.includes('cumbia')
+      })
+    } else if (preset === 'latin') {
+      // SOLO ecosistema latino: colección latin o géneros latinos explícitos.
+      // OJO: NADA de 'rock' como proxy de Rock Nacional — agarraba rock en inglés.
+      filtered = allTracks.filter(t => {
+        const g = (t.genre || '').toLowerCase()
+        const col = (t.collection || '').toLowerCase()
+        return col === 'latin' || ['cumbia', 'reggaeton', 'latin', 'salsa', 'bachata', 'dembow', 'rkt', 'merengue'].some(x => g.includes(x))
+      })
+    } else if (preset === 'edm') {
+      filtered = allTracks.filter(t => {
+        const g = (t.genre || '').toLowerCase()
+        const col = (t.collection || '').toLowerCase()
+        return col === 'edm' || g.includes('house') || g.includes('techno') || g.includes('trance') || g.includes('edm')
+      })
+    } else if (preset === 'top') {
+      filtered = allTracks.filter(t => (t.rating || 0) >= 4)
+    }
+
+    // Sin relleno silencioso: si el filtro no encuentra nada, se dice y listo —
+    // rellenar con cualquier cosa disfrazaba el vacío (bandas en inglés en "latino").
+    if (!filtered.length) {
+      toast('No hay temas de ese estilo en esta colección — bajá algunos primero', 'info', 3500)
+      return
+    }
+
+    const targetMin = opts.limitMin !== undefined ? opts.limitMin : limitMin
+    const targetSec = targetMin * 60
+    let picked = []
+    let currentSec = 0
+    const pool = [...filtered].sort(() => Math.random() - 0.5)
+    const gapSec = mdGap && isMd ? 2 : 0
+
+    // Dedup por CANCIÓN (no por archivo): la biblioteca puede tener 6 versiones
+    // de "Numb" (live/instrumental/acústica) y una playlist no repite tema.
+    const songKey = (t) => `${t.artist || ''} ${t.title || t.filename || ''}`.toLowerCase()
+      .replace(/\(.*?\)|\[.*?\]/g, ' ')
+      .replace(/\b(feat|ft|featuring)\b.*$/g, ' ')
+      .replace(/\.[a-z0-9]{2,4}$/, '')
+      .replace(/[^a-z0-9áéíóúñü]+/g, ' ')
+      .trim()
+    const seenSongs = new Set()
+
+    for (const t of pool) {
+      const sk = songKey(t)
+      if (sk && seenSongs.has(sk)) continue
+      const dur = getTrackDurationSec(t)
+      if (targetMin > 0 && currentSec + dur > targetSec) continue
+      if (sk) seenSongs.add(sk)
+      picked.push(t)
+      currentSec += dur + gapSec
+    }
+
+    setSetTracks(picked)
+    setTotalMin(Math.round(currentSec / 60))
+    const presetName = preset === 'auto'
+      ? `Playlist-${(collection || 'pop').toUpperCase()}`
+      : preset === 'pop' ? 'Pop-Hits' : preset === 'latin' ? 'Pop-Latino' : preset === 'edm' ? 'EDM-Highlights' : 'Top-Stars'
+    setSetName(presetName)
+    toast(`"${presetName}": ${picked.length} temas (${Math.round(currentSec / 60)} min)`, 'success', 3500)
+  }
+
+  // Export MiniDisc J-Card sleeve text file
+  const exportMDJCard = () => {
+    const name = computeSetName()
+    let txt = `========================================\n`
+    txt += `  MINIDISC J-CARD / TRACKLIST\n`
+    txt += `========================================\n`
+    txt += `TITULO: ${name}\n`
+    txt += `FORMATO: ${mdCapacity !== '0' ? 'MD ' + mdCapacity + ' min' : 'Sin limite'}\n`
+    txt += `TRACKS: ${setTracks.length}\n`
+    txt += `DURACION TOTAL: ${totalPlaylistMin} min\n`
+    txt += `FECHA: ${new Date().toLocaleDateString()}\n`
+    txt += `----------------------------------------\n\n`
+    setTracks.forEach((t, i) => {
+      const sec = getTrackDurationSec(t)
+      const m = Math.floor(sec / 60)
+      const s = String(sec % 60).padStart(2, '0')
+      txt += `${String(i + 1).padStart(2, '0')}. ${t.artist || 'Desconocido'} - ${t.title || t.filename} [${m}:${s}]\n`
+    })
+    txt += `\n========================================\n`
+    downloadFile(`${name}-MD-JCard.txt`, txt, 'text/plain;charset=utf-8')
+    toast(`Carátula J-Card exportada (${name}-MD-JCard.txt)`)
+  }
+
+  // Etiqueta MD imprimible: tamaño FÍSICO real de la etiqueta de un MiniDisc
+  // (54×38 mm, aprox. la pantalla de un Apple Watch). Encabezado + tracklist
+  // numerado a 2 columnas. Las medidas van en mm para que imprima a escala 1:1;
+  // el borde punteado es la guía de recorte.
+  const printMDLabel = () => {
+    if (!setTracks.length) { toast('Agregá temas a la lista primero', 'info', 2000); return }
+    const name = computeSetName()
+    const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    const rows = setTracks.map((t, i) =>
+      `<div class="tr"><span class="n">${i + 1}</span><span class="t">${esc(`${t.artist ? t.artist + ' - ' : ''}${t.title || t.filename}`)}</span></div>`
+    ).join('')
+    const w = window.open('', '_blank', 'width=540,height=680')
+    if (!w) { toast('El navegador bloqueó la ventana de impresión — permití popups', 'warning', 3500); return }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Etiqueta MD — ${esc(name)}</title>
+<style>
+  @page { size: A4 portrait; margin: 12mm }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif }
+  body { padding: 8mm; color: #111; background: #fff }
+  .hint { font-size: 9pt; color: #777; margin-bottom: 4mm }
+  .label { width: 54mm; height: 38mm; border: 0.4mm dashed #999; border-radius: 1.5mm; padding: 1.8mm 2mm; overflow: hidden; display: flex; flex-direction: column }
+  .hd { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 0.3mm solid #111; padding-bottom: 0.8mm; margin-bottom: 1mm }
+  .hd b { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.2mm; max-width: 36mm; overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
+  .hd span { font-size: 4.5pt; color: #444; white-space: nowrap }
+  .cols { flex: 1; column-count: 2; column-gap: 2mm; column-rule: 0.2mm solid #ccc }
+  .tr { font-size: 4.2pt; line-height: 1.5; display: flex; gap: 0.8mm; break-inside: avoid }
+  .tr .n { font-weight: 700; min-width: 2.4mm; text-align: right }
+  .tr .t { overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
+</style></head><body>
+  <div class="hint">Recortá por la línea punteada — tamaño real de etiqueta MiniDisc (54×38 mm)</div>
+  <div class="label">
+    <div class="hd"><b>${esc(name)}</b><span>${fecha} · ${setTracks.length}t · ${totalPlaylistMin}'</span></div>
+    <div class="cols">${rows}</div>
+  </div>
+  <script>window.onload = function(){ setTimeout(function(){ window.print() }, 300) }<\/script>
+</body></html>`)
+    w.document.close()
+  }
+
+  // Reproducción continua de la lista — para CUALQUIER destino (escuchar el
+  // set de corrido; el avance lo hace playNextRef). Con recording=true (destino
+  // MiniDisc) además activa el modo grabación: REC, toast de finalizada y la
+  // pausa 2s del Track Mark si está prendida.
+  const startPlayAll = (recording = false) => {
+    if (!setTracks.length) {
+      toast('Agregá temas a la lista antes de reproducir', 'info', 2000)
+      return
+    }
+    setIsRecordingMode(!!recording)
+    onPlay(setTracks[0])
+    toast(recording
+      ? `Grabación MiniDisc iniciada (${setTracks.length} temas en Autoplay)`
+      : `Reproduciendo la lista (${setTracks.length} temas seguidos)`, 'success', 3000)
+  }
+  const startMDAutoplay = () => startPlayAll(true)
 
   const addToSet = (track) => {
     setSetTracks(prev => [...prev, track])
@@ -2740,7 +3370,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
       const res = await fetch(`${API_BASE}/api/generate-set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: selStars.length > 0 ? selStars : undefined, duration: overrideDuration ?? duration, method: useMethod, genres: gens.length > 0 ? gens : undefined, username: authUser?.name || '', seed: useMethod === 'pro' ? Math.floor(Math.random() * 1e9) : undefined, mode: useMethod === 'pro' ? (overrideMode ?? setProMode) : undefined }),
+        body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: selStars.length > 0 ? selStars : undefined, duration: overrideDuration ?? (isMd ? (parseInt(mdCapacity, 10) || 74) : duration), method: useMethod, genres: gens.length > 0 ? gens : undefined, collection: collection || 'edm', username: authUser?.name || '', seed: useMethod === 'pro' ? Math.floor(Math.random() * 1e9) : undefined, mode: useMethod === 'pro' ? (overrideMode ?? setProMode) : undefined }),
       })
       const data = await res.json()
       setSetTracks(data.tracks || [])
@@ -2763,7 +3393,7 @@ function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConne
     const slug = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
     const genrePart = slug(selectedGenres[0] || setTracks[0]?.genre || 'set')
-    const methodPart = slug(method || 'mix')
+    const methodPart = slug(genStrategy === 'playlist' ? 'playlist' : (method || 'mix'))
     return setName.trim() || `${genrePart}-${methodPart}-${months[new Date().getMonth()]}`
   }
 
@@ -2890,18 +3520,18 @@ ${playlistEntries}
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <ScreenHint id="set" title="Armado de set" tips={[
-        { icon: '⭐', text: <>Tocá <strong>estrellas</strong> para subir/bajar el corte de calidad — el set se regenera al toque.</> },
-        { icon: '⏱️', text: <>Cambiá la <strong>duración</strong> (60'/90'/120') y el set se rearma con la cantidad de tracks justos.</> },
-        { icon: '🎯', text: <><strong>Camelot</strong>: encadena tracks por compatibilidad armónica. <strong>Energy</strong>: por curva de energía. <strong>Genre</strong>: por estilo. <strong>Peak</strong>: arma el momento alto.</> },
-        { icon: '🎵', text: <>Filtrá por <strong>género</strong> con las pills de abajo. Multi-select OK.</> },
-        { icon: '📤', text: <>Exportá como <strong>Rekordbox playlist</strong> (.m3u) o <strong>Rekordbox XML</strong> con rating + BPM + key.</> },
+        { icon: '⭐', text: <>Tocá <strong>estrellas</strong> para subir/bajar el corte de calidad — la lista se regenera al toque.</> },
+        { icon: '🎛️', text: <>La <strong>barra de abajo</strong> tiene 3 partes: <strong>Generador</strong> (cambia según la colección), <strong>Límite</strong> (minutos o capacidad del disco) y <strong>Destino</strong>.</> },
+        { icon: '🧠', text: <>En <strong>EDM</strong> el generador arma sets con <strong>Mixed in Key</strong> (Set Pro y métodos armónicos); en <strong>POP/LATIN</strong> arma playlists con presets curados.</> },
+        { icon: '📀', text: <>Elegí <strong>MiniDisc</strong> como destino y el límite pasa a capacidad de disco (74/80/LP2), con etiqueta imprimible y grabación autoplay.</> },
+        { icon: '📤', text: <>Destinos digitales: <strong>.m3u</strong> (Rekordbox playlist), <strong>.xml</strong> (con rating + BPM + key) o el <strong>mezclador</strong>.</> },
       ]} />
       {/* Controls: single compact row - duration + algorithms + search */}
       <div className="flex-shrink-0 flex items-center gap-1.5 md:gap-3 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
         {/* Star filter - desktop only */}
         <div className="hidden lg:flex items-center gap-1">
           <button
-            onClick={() => { setSetSelectedStars([]); setMinStars(1); if (method) generateSet(method, 1, undefined, []) }}
+            onClick={() => { setSetSelectedStars([]); setMinStars(1); if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { stars: [] }); else if (method) generateSet(method, 1, undefined, []) }}
             className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
               setSelectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
@@ -2916,7 +3546,8 @@ ${playlistEntries}
                   setSetSelectedStars(next)
                   const newMin = next.length > 0 ? Math.min(...next) : 1
                   setMinStars(newMin)
-                  if (method) generateSet(method, newMin, undefined, next)
+                  if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { stars: next })
+                  else if (method) generateSet(method, newMin, undefined, next)
                 }}
                 className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
                   active ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -2927,46 +3558,9 @@ ${playlistEntries}
             )
           })}
         </div>
-        {/* Duration */}
-        <div className="flex items-center gap-0.5 md:gap-1 flex-shrink-0">
-          {[60, 90, 120].map(d => (
-            <button
-              key={d}
-              onClick={() => { setDuration(d); if (method) generateSet(method, undefined, d) }}
-              className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex-shrink-0 ${
-                duration === d ? 'font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-              style={duration === d ? { background: 'color-mix(in srgb, var(--color-accent) 20%, transparent)', color: 'var(--color-accent)' } : {}}
-            >
-              {d}'
-            </button>
-          ))}
-        </div>
-        {/* Separator */}
-        <div className="w-px h-5 bg-[var(--border-color)] flex-shrink-0" />
-        {/* Generation algorithms */}
-        {[
-          { id: 'camelot', label: 'Camelot', icon: '🎯' },
-          { id: 'energy', label: 'Energy', icon: '⚡' },
-          { id: 'genre', label: 'Genre', icon: '🎭' },
-          { id: 'peak', label: 'Peak', icon: '📈' },
-        ].map(m => (
-          <button
-            key={m.id}
-            onClick={() => generateSet(m.id)}
-            disabled={generating}
-            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 disabled:opacity-50 flex-shrink-0`}
-            style={method === m.id
-              ? { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.25)', color: 'var(--color-accent)' }
-              : { background: 'rgba(var(--color-accent-rgb, 59,130,246), 0.08)', color: 'rgba(var(--color-accent-rgb, 59,130,246), 0.6)' }
-            }
-          >
-            {generating && method === m.id ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>{m.icon}</span>}
-            <span className="hidden md:inline">{m.label}</span>
-          </button>
-        ))}
-        {/* Separator */}
-        <div className="w-px h-5 bg-[var(--border-color)] flex-shrink-0" />
+        {/* Duración, métodos y MiniDisc viven en la barra polimórfica de abajo
+            (Generador | Límite | Destino) — acá quedan solo filtros. */}
+        <div className="w-px h-5 bg-[var(--border-color)] flex-shrink-0 hidden lg:block" />
         {/* Search inline */}
         <div className="flex-1 min-w-32 md:min-w-48 relative flex-shrink-0">
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2985,7 +3579,7 @@ ${playlistEntries}
       {availableGenres.length > 0 && (
         <div className="flex-shrink-0 flex items-center gap-1 px-3 md:px-6 py-1.5 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
           <button
-            onClick={() => { setSelectedGenres([]); if (method) generateSet(method, undefined, undefined, undefined, []) }}
+            onClick={() => { setSelectedGenres([]); if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { genres: [] }); else if (method) generateSet(method, undefined, undefined, undefined, []) }}
             className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all duration-200 active:scale-95 ${
               selectedGenres.length === 0 ? 'btn-accent font-semibold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
@@ -2999,7 +3593,8 @@ ${playlistEntries}
                 onClick={() => {
                   const next = active ? selectedGenres.filter(g => g !== genre) : [...selectedGenres, genre]
                   setSelectedGenres(next)
-                  if (method) generateSet(method, undefined, undefined, undefined, next)
+                  if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { genres: next })
+                  else if (method) generateSet(method, undefined, undefined, undefined, next)
                 }}
                 className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all duration-200 active:scale-95`}
                 style={{
@@ -3014,60 +3609,7 @@ ${playlistEntries}
         </div>
       )}
 
-      {/* Set Pro — armado inteligente (destacado) */}
-      <div className="flex-shrink-0 px-3 md:px-6 py-3 border-b border-[var(--border-color)]" style={{ background: 'linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent)' }}>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
-              <span>🧠</span> Set Pro
-              <span className="text-[10px] font-normal text-[var(--text-muted)]">armado inteligente</span>
-            </div>
-            <div className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">
-              {selectedGenres.length > 0
-                ? `${selectedGenres[0]} + afines · mejor en Beatport + más nuevos + clásicos · key ascendente`
-                : 'Marcá un género arriba para empezar'}
-            </div>
-          </div>
-          {/* Modos de energía del set: Warm-up / Peak / Closing */}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {[
-              { id: 'warmup', label: 'Warm-up', desc: 'apertura, grooves suaves, BPM bajo' },
-              { id: 'peak', label: 'Peak', desc: 'pico, los más fuertes/rankeados' },
-              { id: 'closing', label: 'Closing', desc: 'cierre melódico/emotivo' },
-            ].map(mo => (
-              <button
-                key={mo.id}
-                onClick={() => { setSetProMode(mo.id); if (method === 'pro' && setTracks.length > 0 && selectedGenres.length) generateSet('pro', undefined, undefined, undefined, undefined, mo.id) }}
-                title={mo.desc}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${setProMode === mo.id ? 'text-[var(--color-accent-text)]' : 'text-[var(--text-secondary)] bg-[var(--bg-input)]/60 hover:bg-[var(--bg-hover)]'}`}
-                style={setProMode === mo.id ? { background: 'var(--color-accent)' } : undefined}
-              >
-                {mo.label}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => { if (!selectedGenres.length) { toast('Marcá un género arriba primero'); return } generateSet('pro') }}
-            disabled={generating}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-[var(--color-accent-text)] disabled:opacity-50 active:scale-95 transition-all flex-shrink-0"
-            style={{ background: 'var(--color-accent)' }}
-          >
-            {generating && method === 'pro' ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>🧠</span>}
-            Generar Set Pro
-          </button>
-          {method === 'pro' && setTracks.length > 0 && (
-            <button
-              onClick={() => generateSet('pro')}
-              disabled={generating}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-input)]/60 hover:bg-[var(--bg-hover)] disabled:opacity-50 active:scale-95 transition-all flex-shrink-0"
-              title="Otra selección con el mismo criterio"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              Regenerar
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Set Pro y MiniDisc Studio: absorbidos por la barra polimorfica de abajo (Generador | Limite | Destino). */}
 
       {/* Search results dropdown */}
       <div className="flex-shrink-0">
@@ -3161,6 +3703,7 @@ ${playlistEntries}
                   </div>
                   <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(t)} />
                   <span className="w-5 md:w-6 text-center text-xs text-gray-600 font-mono flex-shrink-0">{i + 1}</span>
+                  <TrackThumb src={t.artwork} />
                   <div className="flex-1 min-w-0">
                     <div className={`text-xs md:text-sm truncate flex items-center gap-1.5 ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
                       {t.is_classic && <span className="flex-shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/25 text-amber-400">CLÁSICO</span>}
@@ -3173,6 +3716,12 @@ ${playlistEntries}
                     t.format === 'FLAC' || t.format === 'flac' ? 'text-purple-400' : 'text-gray-500'
                   }`}>{(t.format || t.filename?.split('.').pop() || '').toUpperCase()}</span>
                   <span className="hidden md:block w-14 flex-shrink-0 text-xs text-gray-500 text-center">{t.size_mb ? `${t.size_mb}MB` : `~${t.duration_est || 6}m`}</span>
+                  {/* Duración REAL (mm:ss); solo estimación → ~Xm; sin dato → — (no se inventa) */}
+                  <span className="hidden sm:block w-12 flex-shrink-0 text-xs text-gray-500 font-mono text-center">{(() => {
+                    const sec = t.duration_ms ? Math.round(t.duration_ms / 1000) : t.duration_sec ? Math.round(t.duration_sec) : t.duration ? Math.round(t.duration) : 0
+                    if (sec > 0) return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
+                    return t.duration_est ? `~${t.duration_est}m` : '—'
+                  })()}</span>
                   <span className={`w-16 md:w-20 flex-shrink-0 text-[10px] md:text-xs font-mono px-1 md:px-2 py-0.5 rounded text-center ${
                     i > 0 && t.camelot === setTracks[i-1].camelot ? 'bg-green-500/20 text-green-400' :
                     'bg-amber-500/20 text-amber-400'
@@ -3383,41 +3932,8 @@ ${playlistEntries}
                     )}
                   </>
                 )}
-                {/* EXPORTAR — pinned to the right with its own label group. */}
-                <div className="ml-auto flex flex-col gap-0.5 pl-3 border-l border-[var(--border-color)]">
-                  <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5 flex items-center gap-1">Exportar <span className="text-[9px] text-[var(--text-muted)] font-mono normal-case tracking-normal">· {setTracks.length}t ~{totalMin}'</span></span>
-                  <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-[var(--text-muted)] font-mono whitespace-nowrap">{setTracks.length}t · ~{totalMin}'</span>
-                  <button
-                    onClick={exportM3U}
-                    disabled={exporting}
-                    className="flex items-center gap-1 px-2.5 py-1 disabled:opacity-50 rounded-lg text-xs font-semibold text-white transition-all duration-200 active:scale-95 flex-shrink-0 shadow-md hover:brightness-110"
-                    style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
-                    title="Rekordbox playlist (.m3u)"
-                  >
-                    {exporting ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>}
-                    .m3u
-                  </button>
-                  <button
-                    onClick={exportRekordboxXML}
-                    disabled={exporting}
-                    className="flex items-center gap-1 px-2.5 py-1 disabled:opacity-50 rounded-lg text-xs font-semibold text-white transition-all duration-200 active:scale-95 flex-shrink-0 shadow-md hover:brightness-110"
-                    style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
-                    title="Rekordbox XML (con rating, BPM, key, género)"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-                    .xml
-                  </button>
-                  <button
-                    onClick={() => onEditMix(setTracks)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 bg-purple-600 hover:bg-purple-500 text-white flex-shrink-0"
-                    title="Editor de mezcla"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="12" r="2.2" fill="currentColor"/><circle cx="13" cy="17" r="2.2" fill="currentColor"/></svg>
-                    Mezclar
-                  </button>
-                  </div>
-                </div>
+                {/* Exportar vive en la barra polimórfica de abajo (slot Destino). */}
+                <div className="ml-auto pl-3 border-l border-[var(--border-color)] self-center text-[10px] text-[var(--text-muted)] font-mono whitespace-nowrap">{setTracks.length}t · ~{totalMin}'</div>
               </div>
               {/* Grid */}
               {!panelCollapsed && (
@@ -3434,9 +3950,9 @@ ${playlistEntries}
           )
         })()}
 
-      {/* Export footer removed — buttons moved into the tab strip above. setName auto-fills via computeSetName(). */}
-      {/* Hint: how to import */}
-      {setTracks.length > 0 && (
+      {/* Hint: how to import — info de principiante, cerrable con la cruz;
+          solo tiene sentido con destino digital (.m3u/.xml) */}
+      {!rbHintDismissed && setTracks.length > 0 && (exportTarget === 'm3u' || exportTarget === 'xml') && (
         <div className="flex-shrink-0 px-3 md:px-6 py-2 bg-gradient-to-r from-orange-500/5 via-pink-500/5 to-orange-500/5 border-t border-[var(--border-color)] flex flex-col sm:flex-row gap-2 sm:gap-6 text-[11px] md:text-xs text-[var(--text-muted)]">
           <div className="flex items-start gap-2">
             <span className="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">P</span>
@@ -3450,8 +3966,306 @@ ${playlistEntries}
               <span className="text-[var(--text-secondary)] font-semibold">XML (con rating + BPM + key):</span> <code className="px-1 py-0.5 rounded bg-white/5 text-pink-400">Preferences → Advanced → Database → rekordbox xml</code> → seteás el path
             </div>
           </div>
+          <button
+            onClick={dismissRbHint}
+            title="Cerrar esta ayuda (no se muestra más)"
+            className="sm:ml-auto self-start flex-shrink-0 p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
       )}
+
+      {/* ═══ BARRA POLIMÓRFICA — Generador | Límite | Destino ═══
+          Cada slot resuelve su estrategia según contexto y lo que no aplica no
+          se rendea: Generador por colección (club en EDM / playlist en POP-LATIN),
+          Límite por destino (minutos digital / capacidad de disco en MiniDisc),
+          Destino define la acción de exportación. */}
+      <div className="flex-shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-panel)] px-3 md:px-6 py-2 overflow-x-auto scrollbar-none">
+        <div className="flex items-end gap-3 min-w-max">
+
+          {/* ── GENERADOR (por colección) ── */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">
+              {genStrategy === 'club' ? 'Generador · Set Club (Mixed in Key)' : 'Generador · Playlist'}
+            </span>
+            <div className="flex items-center gap-1.5">
+              {genStrategy === 'club' ? (
+                <>
+                  <select
+                    value={method || 'pro'}
+                    onChange={e => {
+                      const m = e.target.value
+                      if (m === 'pro' && !selectedGenres.length) { setMethod('pro'); toast('Marcá un género arriba para Set Pro', 'info', 2500); return }
+                      generateSet(m)
+                    }}
+                    title="Método de armado — todos respetan compatibilidad armónica"
+                    className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+                  >
+                    <option value="pro">Set Pro</option>
+                    <option value="camelot">Camelot</option>
+                    <option value="energy">Energy</option>
+                    <option value="genre">Genre</option>
+                    <option value="peak">Peak</option>
+                  </select>
+                  {(method || 'pro') === 'pro' && (
+                    <div className="flex items-center gap-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-0.5">
+                      {[
+                        { id: 'warmup', label: 'Warm-up', desc: 'apertura, grooves suaves, BPM bajo' },
+                        { id: 'peak', label: 'Peak', desc: 'pico, los más fuertes/rankeados' },
+                        { id: 'closing', label: 'Closing', desc: 'cierre melódico/emotivo' },
+                      ].map(mo => (
+                        <button
+                          key={mo.id}
+                          onClick={() => { setSetProMode(mo.id); if (method === 'pro' && setTracks.length > 0 && selectedGenres.length) generateSet('pro', undefined, undefined, undefined, undefined, mo.id) }}
+                          title={mo.desc}
+                          className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all active:scale-95 ${setProMode === mo.id ? 'text-[var(--color-accent-text)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                          style={setProMode === mo.id ? { background: 'var(--color-accent)' } : undefined}
+                        >
+                          {mo.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => { const m = method || 'pro'; if (m === 'pro' && !selectedGenres.length) { toast('Marcá un género arriba primero', 'info', 2500); return } generateSet(m) }}
+                    disabled={generating}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-[var(--color-accent-text)] disabled:opacity-50 active:scale-95 transition-all flex-shrink-0"
+                    style={{ background: 'var(--color-accent)' }}
+                  >
+                    {generating
+                      ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+                    Generar
+                  </button>
+                </>
+              ) : (
+                <>
+                  {(collection === 'latin'
+                    ? [{ id: 'latin', label: 'Pop Latino', dot: 'bg-amber-400', title: 'Lista curada Pop Latino & Rock Nacional' }, { id: 'top', label: 'Top ★', dot: 'bg-yellow-400', title: 'Solo temas con 4-5 estrellas' }]
+                    : [{ id: 'pop', label: 'Pop Hits', dot: 'bg-pink-400', title: 'Lista curada Pop Hits & Classics' }, { id: 'latin', label: 'Pop Latino', dot: 'bg-amber-400', title: 'Lista curada Pop Latino & Rock Nacional' }, { id: 'top', label: 'Top ★', dot: 'bg-yellow-400', title: 'Solo temas con 4-5 estrellas' }]
+                  ).map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => generateCuratedPlaylist(c.id)}
+                      title={c.title}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-95"
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                      {c.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => generateCuratedPlaylist('auto')}
+                    title="Arma una playlist al azar respetando los filtros de género y estrellas, hasta el límite elegido"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-[var(--color-accent-text)] active:scale-95 transition-all flex-shrink-0"
+                    style={{ background: 'var(--color-accent)' }}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h4l3 5 3-5h6m0 0l-2-2m2 2l-2 2M4 17h4l3-5m6 5h3m0 0l-2-2m2 2l-2 2" /></svg>
+                    Generar Playlist
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="w-px h-9 bg-[var(--border-color)] flex-shrink-0" />
+
+          {/* ── LÍMITE (por destino) ── */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">
+              {isMd ? 'Límite · Capacidad del disco' : 'Límite · Duración'}
+            </span>
+            <div className="flex items-center gap-1">
+              {isMd ? (
+                <>
+                  {[
+                    { id: '74', label: 'MD 74m' },
+                    { id: '80', label: 'MD 80m' },
+                    { id: '148', label: 'LP2 148m' },
+                  ].map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => { setMdCapacity(c.id); const lim = parseInt(c.id, 10); if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { limitMin: lim }); else if (method) generateSet(method, undefined, lim) }}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${mdCapacity === c.id ? 'text-[var(--color-accent-text)]' : 'bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                      style={mdCapacity === c.id ? { background: 'var(--color-accent)' } : undefined}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                  <div className="flex items-center gap-1.5 pl-1">
+                    <div className="w-20 md:w-28 h-2 bg-[var(--bg-hover)] rounded-full overflow-hidden border border-[var(--border-color)]">
+                      <div
+                        className={`h-full transition-all duration-300 ${isMdOverCapacity ? 'bg-red-500' : mdUsagePercent > 85 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                        style={{ width: `${mdUsagePercent}%` }}
+                      />
+                    </div>
+                    <span className={`text-[10px] font-mono font-semibold whitespace-nowrap ${isMdOverCapacity ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>
+                      {totalPlaylistMin}/{maxMdMin}m{isMdOverCapacity ? ` (+${(totalPlaylistMin - maxMdMin).toFixed(1)})` : ''}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {[60, 90, 120, ...(genStrategy === 'playlist' ? [0] : [])].map(d => (
+                    <button
+                      key={d}
+                      onClick={() => { setDuration(d); if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { limitMin: d }); else if (method) generateSet(method, undefined, d) }}
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${duration === d ? 'text-[var(--color-accent-text)]' : 'bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                      style={duration === d ? { background: 'var(--color-accent)' } : undefined}
+                    >
+                      {d === 0 ? 'Sin límite' : `${d}'`}
+                    </button>
+                  ))}
+                  <span className="pl-1 text-[10px] text-[var(--text-muted)] font-mono whitespace-nowrap">{setTracks.length}t · ~{totalMin}'</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="w-px h-9 bg-[var(--border-color)] flex-shrink-0" />
+
+          {/* ── ESCUCHAR — acción de la LISTA, vale para cualquier destino ── */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Escuchar</span>
+            {(() => {
+              // Activo = está sonando un tema de la lista (el autoplay encadena solo).
+              // El contenido cambia CON el tema: mini carátula + posición + título.
+              const curIdx = setTracks.findIndex(t => t.filename === playing)
+              const cur = curIdx >= 0 ? setTracks[curIdx] : null
+              return (
+                <button
+                  onClick={() => startPlayAll(false)}
+                  disabled={!setTracks.length}
+                  title={cur ? `Sonando: ${cur.artist ? cur.artist + ' - ' : ''}${cur.title || cur.filename} — click para reiniciar desde el primer tema` : 'Reproduce la lista completa de corrido (autoplay tema a tema)'}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-40 flex-shrink-0 ${
+                    cur
+                      ? 'text-[var(--color-accent-text)] shadow-md'
+                      : 'bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                  }`}
+                  style={cur ? { background: 'var(--color-accent)' } : undefined}
+                >
+                  {cur ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="4" y="8" width="4" height="8" rx="1" className="animate-pulse" />
+                        <rect x="10" y="4" width="4" height="16" rx="1" className="animate-pulse" style={{ animationDelay: '150ms' }} />
+                        <rect x="16" y="10" width="4" height="6" rx="1" className="animate-pulse" style={{ animationDelay: '300ms' }} />
+                      </svg>
+                      {cur.artwork && <img src={cur.artwork} alt="" className="w-4 h-4 rounded object-cover flex-shrink-0" />}
+                      <span className="font-mono text-[10px] flex-shrink-0">{curIdx + 1}/{setTracks.length}</span>
+                      <span className="truncate max-w-[9rem]">{cur.title || cur.filename}</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                      Reproducir
+                    </>
+                  )}
+                </button>
+              )
+            })()}
+          </div>
+
+          <div className="w-px h-9 bg-[var(--border-color)] flex-shrink-0" />
+
+          {/* ── DESTINO (acción polimórfica) ── */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Destino</span>
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-0.5">
+                {[
+                  { id: 'm3u', label: 'M3U' },
+                  { id: 'xml', label: 'XML' },
+                  { id: 'mix', label: 'Mezcla' },
+                  { id: 'md', label: 'MiniDisc' },
+                ].map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setExportTarget(t.id)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all active:scale-95 ${exportTarget === t.id ? 'text-[var(--color-accent-text)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                    style={exportTarget === t.id ? { background: 'var(--color-accent)' } : undefined}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {exportTarget === 'm3u' && (
+                <button
+                  onClick={exportM3U}
+                  disabled={exporting || !setTracks.length}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-40 shadow-md hover:brightness-110 flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
+                  title="Rekordbox playlist (.m3u)"
+                >
+                  {exporting
+                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" /></svg>}
+                  Exportar .m3u
+                </button>
+              )}
+              {exportTarget === 'xml' && (
+                <button
+                  onClick={exportRekordboxXML}
+                  disabled={exporting || !setTracks.length}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-40 shadow-md hover:brightness-110 flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
+                  title="Rekordbox XML (con rating, BPM, key, género)"
+                >
+                  {exporting
+                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" /></svg>}
+                  Exportar .xml
+                </button>
+              )}
+              {exportTarget === 'mix' && (
+                <button
+                  onClick={() => onEditMix(setTracks)}
+                  disabled={!setTracks.length}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition-all active:scale-95 disabled:opacity-40 flex-shrink-0"
+                  title="Editor de mezcla"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" /><circle cx="15" cy="7" r="2.2" fill="currentColor" /><circle cx="9" cy="12" r="2.2" fill="currentColor" /><circle cx="13" cy="17" r="2.2" fill="currentColor" /></svg>
+                  Abrir mezclador
+                </button>
+              )}
+              {exportTarget === 'md' && (
+                <>
+                  <button
+                    onClick={() => setMdGap(!mdGap)}
+                    title="Inserta 2 segundos de silencio entre canciones para que el grabador de MiniDisc marque los cortes de tema"
+                    className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${mdGap ? 'border-transparent' : 'bg-[var(--bg-input)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                    style={mdGap ? { background: 'color-mix(in srgb, var(--color-accent) 20%, transparent)', color: 'var(--color-accent)' } : {}}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Pausa 2s
+                  </button>
+                  <button
+                    onClick={printMDLabel}
+                    disabled={!setTracks.length}
+                    title="Imprimir etiqueta a tamaño real de MiniDisc (54×38 mm)"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all disabled:opacity-40"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Etiqueta
+                  </button>
+                  <button
+                    onClick={startMDAutoplay}
+                    disabled={!setTracks.length}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-40 flex-shrink-0 ${isRecordingMode ? 'bg-red-600 hover:bg-red-500 animate-pulse' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                  >
+                    {isRecordingMode
+                      ? <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse flex-shrink-0" />
+                      : <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>}
+                    <span>{isRecordingMode ? 'Grabación Activa' : 'Grabar (Autoplay)'}</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
 
       {/* Right-click version-swap popover: other versions of the song with a
           play to preview + "Usar" to replace; footer removes from set or trashes. */}
@@ -3460,7 +4274,7 @@ ${playlistEntries}
         const others = versions.filter(v => v.filename !== dupeCtx.track.filename)
         return (
           <div
-            className="fixed z-[100] w-72 max-h-[70vh] overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-card,#1a1a1a)] shadow-2xl shadow-black/50"
+            className="fixed z-[100] w-72 max-h-[70vh] overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-panel)] shadow-2xl"
             style={{ left: Math.min(dupeCtx.x, window.innerWidth - 300), top: Math.min(dupeCtx.y, window.innerHeight - 360) }}
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
@@ -3505,6 +4319,16 @@ ${playlistEntries}
             </div>
 
             <div className="border-t border-[var(--border-color)]/60 py-1">
+              {/* El Export NO cura: deriva a la Biblioteca (la clínica de la música),
+                  donde viven TODAS las tools — género, metatags, rating, papelera. */}
+              <button
+                onClick={() => { const fn = dupeCtx.track.filename; setDupeCtx(null); onGoToLibrary?.(fn) }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                title="Abre este tema en la Biblioteca para curarlo (género, metatags, rating)"
+              >
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0zM12 8v4m-2-2h4" /></svg>
+                Ir a la Biblioteca (curar ahí)
+              </button>
               <button
                 onClick={() => { removeFromSet(dupeCtx.index); setDupeCtx(null) }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
@@ -5132,7 +5956,7 @@ function SlideDownload() {
         </div>
         <div className="p-6 flex items-center justify-center">
           <a
-            href="https://djfreeapp.ar/GrooveSyncAgent.exe"
+            href={typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '/GrooveSyncAgent.exe' : 'https://djfreeapp.ar/GrooveSyncAgent.exe'}
             className="group relative inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold shadow-lg shadow-blue-500/40 transition-all hover:scale-105 active:scale-95"
             style={{ background: 'linear-gradient(135deg, #00b1ea, #0080c9)' }}
           >
@@ -7069,11 +7893,22 @@ function App() {
     return <DemoReels />
   }
   const toast = useToast()
+  // Salud del agente EN LA TOPBAR: los errores/timeouts del agente NO tiran
+  // toast (eran transitorios y puro ruido) — pintan de ROJO el botoncito
+  // AGENTE por 30s y vuelve a verde solo. El detalle queda en el title.
+  const [agentErrAt, setAgentErrAt] = useState(0)
+  const [agentErrMsg, setAgentErrMsg] = useState('')
   useEffect(() => {
-    const handler = (e) => toast(e.detail, 'error', 4000)
+    const handler = (e) => { setAgentErrAt(Date.now()); setAgentErrMsg(String(e.detail || 'error')) }
     window.addEventListener('agent-error', handler)
     return () => window.removeEventListener('agent-error', handler)
-  }, [toast])
+  }, [])
+  useEffect(() => {
+    if (!agentErrAt) return
+    const t = setTimeout(() => setAgentErrAt(0), 30000)
+    return () => clearTimeout(t)
+  }, [agentErrAt])
+  const agentErrRecent = agentErrAt > 0
 
   // Auto-reload cuando se deploya una versión nueva del frontend (sin pedir Ctrl+Shift+R).
   // Compara el bundle hasheado que está corriendo contra el de index.html del server
@@ -7238,9 +8073,14 @@ function App() {
       try {
         const res = await fetch(`${API_BASE}/api/pending?user=${encodeURIComponent(authUser.name)}`)
         const arr = await res.json()
-        // Contar solo los que vienen de OTRO device. Items sin device_id son
-        // legacy (pre-device-tracking) — los mostramos para no perder datos.
-        const others = Array.isArray(arr) ? arr.filter(t => !t.device_id || t.device_id !== DEVICE.id) : []
+        // COLA VIVA: el poll de 30s refresca la cola ENTERA — así un tap de
+        // descarga en el iPhone aparece acá y el drenador lo baja solo (≤30s).
+        if (Array.isArray(arr)) setPendingTracks(arr)
+        // Contar SOLO lo que tiene un device_id distinto al de esta máquina.
+        // Sin device_id = agregado por el sistema (recuperación de corruptos,
+        // scripts de curaduría) o legacy — NO es "otro dispositivo" (el banner
+        // decía "23 temas desde Otro dispositivo" por los items de recuperación).
+        const others = Array.isArray(arr) ? arr.filter(t => t.device_id && t.device_id !== DEVICE.id) : []
         setQueueCount(others.length)
         // Lista única de devices que aportaron
         const devs = Array.from(new Set(others.map(t => t.device_name || 'Otro dispositivo')))
@@ -7314,6 +8154,7 @@ function App() {
 
   const [agentConnected, setAgentConnected] = useState(false)
   const agentConnectedRef = useRef(false)
+  const checkAgentRef = useRef(null)
   const agentFailRef = useRef(0)  // fallos consecutivos del polling — tolerar cold start de Cloud Run
   const [agentVersion, setAgentVersion] = useState('')
   const [agentHasSlsk, setAgentHasSlsk] = useState(false)
@@ -7392,9 +8233,15 @@ function App() {
       }
       setAgentCheckDone(true)
     }
+    checkAgentRef.current = checkAgent
     checkAgent()
-    const interval = setInterval(checkAgent, 30000)
-    return () => clearInterval(interval)
+    const interval = setInterval(checkAgent, 15000)
+    const onFocus = () => checkAgent()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [authUser])
 
   // Auto-update del agente: cuando detectamos que la version local del
@@ -7461,6 +8308,18 @@ function App() {
   const [searchResults, setSearchResults] = useState(null) // null = no search, [] = empty results
   const [searchStatus, setSearchStatus] = useState('idle') // idle, connecting, searching
   const [searchDlStatus, setSearchDlStatus] = useState({}) // { filename: { status, local_name?, ... } }
+  // true SOLO cuando la búsqueda la inició el usuario con el botón Buscar.
+  // El server broadcastea sus búsquedas internas (auto-pick del batch) por el
+  // mismo WS; sin este flag pisaban la vista de resultados.
+  const userSearchRef = useRef(false)
+  // Rediseño resultados (mockup PNG): filtro, orden y selección múltiple
+  const [searchFilter, setSearchFilter] = useState('all')   // all | hq | flac | multi
+  const [searchSort, setSearchSort] = useState('rel')       // rel | quality | sources | size
+  const [searchSel, setSearchSel] = useState(() => new Set())
+  // Vista de resultados: archivos sueltos o DISCOS (carpetas del peer con 2+
+  // archivos — el concepto SoulSeek de bajar el álbum entero de una vez).
+  const [searchView, setSearchView] = useState('files')  // files | albums
+  const [albumOpen, setAlbumOpen] = useState(() => new Set())
   // Progreso de descarga por TEMA (key = artist|||title normalizado) para pintar
   // la barra de % en la fila de "pendientes" y sacarla de la lista al terminar.
   // Lo alimenta searchAndDownload (DiscoverPage) vía window.__setDlProgress: el
@@ -7473,7 +8332,29 @@ function App() {
   // searchDlStatus.completed — so the badge cannot lie when the server says
   // completed but the file never aterrizó local.
   const [localFilesSet, setLocalFilesSet] = useState(() => new Set())
-  const [pendingTracks, setPendingTracks] = useState([]) // tracks that failed to download
+  const [pendingTracks, setPendingTracks] = useState([]) // cola viva: se drena sola en el host
+  // "No conseguidos": terminal tras 2 intentos automáticos — el estacionamiento
+  // de pendientes murió (dale 2026-07-28); acá solo queda lo declarado imposible.
+  const [failedTracks, setFailedTracks] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dl_failed') || '[]') } catch { return [] }
+  })
+  // Campanita: avisos de la cola (bajó un pedido remoto / no conseguido).
+  const [notices, setNotices] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dl_notices') || '[]') } catch { return [] }
+  })
+  const [noticesOpen, setNoticesOpen] = useState(false)
+  const addNotice = (text, kind = 'info') => {
+    setNotices(prev => {
+      const next = [{ id: Date.now() + Math.random(), text, kind, ts: Date.now(), read: false }, ...prev].slice(0, 50)
+      try { localStorage.setItem('dl_notices', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+  const markNoticesRead = () => setNotices(prev => {
+    const n = prev.map(x => ({ ...x, read: true }))
+    try { localStorage.setItem('dl_notices', JSON.stringify(n)) } catch {}
+    return n
+  })
   // Favorite tracks (hearts) — marked for filtering, never downloaded automatically.
   // Persisted in Cloudinary per user. Each entry: { artist, title, addedAt, source }.
   const [favoriteTracks, setFavoriteTracks] = useState([])
@@ -7652,7 +8533,7 @@ function App() {
       reconnectTimer.current = null
     }
 
-    const wsHost = ['5173', '5174', '5175'].includes(window.location.port) ? 'localhost:8899' : 'djfreeapp-api-730989854717.us-east4.run.app'
+    const wsHost = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) ? 'localhost:8899' : 'djfreeapp-api-730989854717.us-east4.run.app'
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${protocol}//${wsHost}/ws`)
     wsRef.current = ws
@@ -7771,6 +8652,22 @@ function App() {
         setTracks(prev => prev.map(t => t.id === data.track.id ? data.track : t))
         // Remove from pending list if successfully downloaded or already in library
         if (data.track.status === 'completed' || data.track.status === 'skipped') {
+          // Cola viva: limpiar el contador de intentos y avisar por campanita
+          // si el pedido vino de OTRO dispositivo (ej. tap en el iPhone).
+          try {
+            const a = JSON.parse(localStorage.getItem('dl_attempts') || '{}')
+            delete a[`${(data.track.artist || '').toLowerCase()}|${(data.track.title || '').toLowerCase()}`]
+            localStorage.setItem('dl_attempts', JSON.stringify(a))
+          } catch {}
+          setPendingTracks(prev => {
+            const art = (data.track.artist || '').toLowerCase()
+            const tit = (data.track.title || '').toLowerCase()
+            const hit = prev.find(p => (p.artist || '').toLowerCase() === art && (p.title || '').toLowerCase() === tit)
+            if (hit && hit.device_id && hit.device_id !== DEVICE.id) {
+              addNotice(`Se bajó "${data.track.artist} - ${data.track.title}" (pedido desde ${hit.device_name || 'otro dispositivo'})`, 'success')
+            }
+            return prev
+          })
           const artist = (data.track.artist || '').toLowerCase()
           const title = (data.track.title || '').toLowerCase()
           setPendingTracks(prev => prev.filter(p => !((p.artist || '').toLowerCase() === artist && (p.title || '').toLowerCase() === title)))
@@ -7786,8 +8683,20 @@ function App() {
           // Transfer file from Cloud Run to local disk: prefer FSA (browser-native),
           // fallback to agent if FSA not available/ready.
           fetch(`${API_BASE}/audio/${encodeURIComponent(data.track.filename)}`)
-            .then(r => { if (!r.ok) throw new Error(`Cloud Run audio ${r.status}`); return r.blob() })
-            .then(async (blob) => {
+            .then(r => {
+              if (!r.ok) throw new Error(`Cloud Run audio ${r.status}`)
+              const expected = parseInt(r.headers.get('content-length') || '0', 10)
+              return r.blob().then(blob => ({ blob, expected }))
+            })
+            .then(async ({ blob, expected }) => {
+              // E0e: una transferencia cortada guardaba un archivo TRUNCO como
+              // "completo" (FLAC con header de 3:00 y audio hasta 0:54 — 28
+              // corruptos en un día). Verificar bytes ANTES de guardar.
+              const declaredBytes = (parseFloat(data.track.size_mb) || 0) * 1024 * 1024
+              const minBytes = expected ? expected - 4096 : (declaredBytes ? declaredBytes * 0.95 : 0)
+              if (minBytes && blob.size < minBytes) {
+                throw new Error(`descarga incompleta: ${Math.round(blob.size / 1024)}KB de ${Math.round((expected || declaredBytes) / 1024)}KB`)
+              }
               if (await fsaBackend.ready()) {
                 await fsaBackend.saveFile(data.track.filename, blob, data.track.genre || '')
                 libraryRef.current?.refresh()
@@ -7824,18 +8733,23 @@ function App() {
         toast(data.message, 'error')
       }
 
-      if (data.type === 'search_status') {
+      // OJO: el server hace BROADCAST de sus búsquedas internas (batch de
+      // descargas) por este mismo WS. Solo actualizamos la vista de resultados
+      // si la búsqueda la inició EL USUARIO (userSearchRef, prendido por el
+      // botón Buscar) — sino la pantalla quedaba secuestrada mostrando la
+      // cocina del auto-pick mientras bajaba una lista.
+      if (data.type === 'search_status' && userSearchRef.current) {
         setSearchStatus(data.status)
       }
 
       // Streaming: cada peer que contesta llega como partial result. Acumulamos
       // in-place para que la UI se llene en vivo (slskd-style). El final
       // `search_results` reemplaza con la versión deduplicada cuando cierra.
-      if (data.type === 'search_result_partial' && data.result) {
+      if (data.type === 'search_result_partial' && data.result && userSearchRef.current) {
         setSearchResults(prev => Array.isArray(prev) ? [...prev, data.result] : [data.result])
       }
 
-      if (data.type === 'search_results') {
+      if (data.type === 'search_results' && userSearchRef.current) {
         setSearchResults(data.results)
         setSearchStatus('idle')
       }
@@ -7915,9 +8829,26 @@ function App() {
               ...prev,
               [data.filename]: { ...(prev[data.filename] || {}), status: 'error', error: reason },
             }))
+            window.__addLog?.(`[DL] retirando de Cloud Run: ${localName}`)
             fetch(`${API_BASE}/audio/${encodeURIComponent(localName)}`)
-              .then(r => { if (!r.ok) throw new Error(`Cloud Run audio ${r.status}`); return r.blob() })
-              .then(async (blob) => {
+              .then(r => {
+                if (!r.ok) {
+                  window.__addLog?.(`[DL] ERROR retiro: Cloud Run respondió ${r.status} para ${localName} (el disco del server es efímero — reintentá con el agente en verde)`)
+                  throw new Error(`Cloud Run audio ${r.status}`)
+                }
+                const expected = parseInt(r.headers.get('content-length') || '0', 10)
+                return r.blob().then(blob => ({ blob, expected }))
+              })
+              .then(async ({ blob, expected }) => {
+                // E0e: verificar bytes antes de guardar (ver comentario del otro
+                // sitio de guardado) — trunco = error con Reintentar, no "listo".
+                const minBytes = expected ? expected - 4096 : 0
+                if (minBytes && blob.size < minBytes) {
+                  window.__addLog?.(`[DL] ERROR integridad: llegaron ${Math.round(blob.size / 1024)}KB de ${Math.round(expected / 1024)}KB — NO se guarda (transferencia cortada)`)
+                  markError(`descarga incompleta: ${Math.round(blob.size / 1024)}KB de ${Math.round(expected / 1024)}KB`)
+                  return
+                }
+                window.__addLog?.(`[DL] retiro OK (${Math.round(blob.size / 1024)}KB) — guardando en ${await fsaBackend.ready() ? 'carpeta local (FSA)' : 'agente'}...`)
                 if (await fsaBackend.ready()) {
                   await fsaBackend.saveFile(localName, blob, '')
                   libraryRef.current?.refresh()
@@ -8071,6 +9002,87 @@ function App() {
     }).catch(() => {})
   }
 
+  // ═══ COLA VIVA ═══ "los temas se bajan o no se bajan": en el host con agente,
+  // lo encolado (desde cualquier dispositivo) se baja SOLO, en secuencia, cuando
+  // el motor está libre. 2 intentos por tema; agotados → "No conseguido" +
+  // campanita. Sin botones de Reintentar: la cola se drena sola.
+  const drainBusyRef = useRef(false)
+  const dlKeyOf = (t) => `${(t?.artist || '').toLowerCase()}|${(t?.title || '').toLowerCase()}`
+  useEffect(() => {
+    // OJO TDZ: isRunning se declara más abajo — acá se deriva de serverStatus.
+    const engineBusy = ['connecting', 'connected', 'waiting_downloads'].includes(serverStatus)
+    if (!agentConnected || AGENT_MODE !== 'local') return
+    if (engineBusy || drainBusyRef.current) return
+    if (!wsRef.current || wsRef.current.readyState !== 1) return
+    if (!authUser || !pendingTracks.length) return
+    let attempts = {}
+    try { attempts = JSON.parse(localStorage.getItem('dl_attempts') || '{}') } catch {}
+
+    // 1) Declarar "No conseguido" lo agotado (2 intentos) y sacarlo de la cola
+    const agotados = pendingTracks.filter(t => (attempts[dlKeyOf(t)] || 0) >= 2)
+    if (agotados.length) {
+      setFailedTracks(prev => {
+        const next = [...prev]
+        agotados.forEach(t => {
+          if (!next.some(f => dlKeyOf(f) === dlKeyOf(t))) next.unshift({ artist: t.artist, title: t.title, collection: t.collection, ts: Date.now() })
+          addNotice(`No conseguí "${t.artist} - ${t.title}" tras 2 intentos`, 'warning')
+        })
+        const capped = next.slice(0, 100)
+        try { localStorage.setItem('dl_failed', JSON.stringify(capped)) } catch {}
+        return capped
+      })
+      setPendingTracks(prev => prev.filter(t => (attempts[dlKeyOf(t)] || 0) < 2))
+      fetch(`${API_BASE}/api/pending/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: authUser?.name, tracks: agotados.map(t => ({ artist: t.artist, title: t.title })) }),
+      }).catch(() => {})
+      return
+    }
+
+    // 2) Bajar el siguiente de la cola
+    const next = pendingTracks[0]
+    if (!next || !next.artist && !next.title) return
+    const k = dlKeyOf(next)
+    attempts[k] = (attempts[k] || 0) + 1
+    try { localStorage.setItem('dl_attempts', JSON.stringify(attempts)) } catch {}
+    drainBusyRef.current = true
+    setTimeout(() => { drainBusyRef.current = false }, 20000)
+    userSearchRef.current = false
+    wsRef.current.send(JSON.stringify({
+      type: 'start',
+      tracks_text: `${next.artist} - ${next.title}`,
+      username, password,
+      genre: '',
+      app_user: authUser?.name || '',
+      collection: next.collection || collection || 'edm',
+    }))
+    window.__addLog?.(`[COLA] Auto-bajando: ${next.artist} - ${next.title} (intento ${attempts[k]}/2)`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentConnected, serverStatus, pendingTracks, authUser])
+
+  // "Buscar de nuevo" de un No conseguido: resetea intentos y re-encola.
+  const retryFailed = (f) => {
+    try {
+      const a = JSON.parse(localStorage.getItem('dl_attempts') || '{}')
+      delete a[dlKeyOf(f)]
+      localStorage.setItem('dl_attempts', JSON.stringify(a))
+    } catch {}
+    setFailedTracks(prev => {
+      const n = prev.filter(x => dlKeyOf(x) !== dlKeyOf(f))
+      try { localStorage.setItem('dl_failed', JSON.stringify(n)) } catch {}
+      return n
+    })
+    addToPending({ artist: f.artist, title: f.title, source: 'retry', collection: f.collection })
+  }
+  const dismissFailed = (f) => {
+    setFailedTracks(prev => {
+      const n = prev.filter(x => dlKeyOf(x) !== dlKeyOf(f))
+      try { localStorage.setItem('dl_failed', JSON.stringify(n)) } catch {}
+      return n
+    })
+  }
+
   const removeFromPending = (idx) => {
     const target = pendingTracks[idx]
     setPendingTracks(prev => prev.filter((_, i) => i !== idx))
@@ -8213,6 +9225,7 @@ function App() {
 
   const handleStart = () => {
     if (!wsRef.current || !inputText.trim() || !username || !password) return
+    userSearchRef.current = false
     setSummary(null)
     setLogs([])
     wsRef.current.send(JSON.stringify({
@@ -8222,6 +9235,7 @@ function App() {
       password,
       genre,
       app_user: authUser?.name || '',
+      collection: collection || 'edm',
     }))
   }
 
@@ -8238,6 +9252,7 @@ function App() {
 
   const handleSearchSlsk = () => {
     if (!wsRef.current || wsRef.current.readyState !== 1 || !dlSearch.trim() || !username || !password) return
+    userSearchRef.current = true
     setSearchResults([])
     setSearchStatus('connecting')
     setSearchDlStatus({})
@@ -8582,8 +9597,14 @@ function App() {
     // Si el agente está conectado y tiene aioslsk, delegar el download a él:
     // corre en tu home network, sin los bugs de NAT de Cloud Run, peers-ghost
     // dejan de ghostear. El agent postea progress a Cloud Run que lo rebota por WS.
-    // downloadMode='local' fuerza el path WS (archivo a este dispositivo).
-    if (downloadMode !== 'local' && agentConnected && agentHasSlsk) {
+    // downloadMode='local' fuerza el path WS SOLO si el agente NO corre en ESTA
+    // máquina (agente por proxy = otra PC): si el agente es local, guarda en la
+    // MISMA carpeta y evita el disco efímero de Cloud Run (archivos que se
+    // evaporaban entre "completado" y el retiro del browser → 404).
+    const agentIsThisPc = AGENT_MODE === 'local'
+    const useAgentDl = agentConnected && agentHasSlsk && (downloadMode !== 'local' || agentIsThisPc)
+    window.__addLog?.(`[DL] ${result.filename}: via=${useAgentDl ? 'AGENTE' : 'SERVER'} (modo=${downloadMode || 'auto'} · agente=${agentConnected ? 'on' : 'off'} · slsk=${agentHasSlsk ? 'si' : 'no'} · agenteEnEstaPc=${agentIsThisPc ? 'si' : 'no'})`)
+    if (useAgentDl) {
       agentFetch('slsk-download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -8632,6 +9653,17 @@ function App() {
   }
 
   const isRunning = ['connecting', 'connected', 'waiting_downloads'].includes(serverStatus)
+  // Descargas activas (para el mini badge del tab Buscar): suma lo que baja el
+  // agente (dlProgress), lo que baja el server desde el buscador (searchDlStatus)
+  // y el flujo batch (isRunning) como mínimo 1. OJO: tiene que declararse
+  // DESPUÉS de dlProgress/searchDlStatus/isRunning (TDZ — crasheó en prod).
+  const activeDlCount = (() => {
+    const st = (d) => d?.status || d
+    const a = Object.values(dlProgress).filter(d => ['searching', 'queued', 'downloading'].includes(st(d))).length
+    const b = Object.values(searchDlStatus).filter(d => ['searching', 'queued', 'downloading'].includes(st(d))).length
+    const n = a + b
+    return n > 0 ? n : (isRunning ? 1 : 0)
+  })()
   const completed = tracks.filter(t => t.status === 'completed').length
   const skipped = tracks.filter(t => t.status === 'skipped').length
   const downloading = tracks.filter(t => t.status === 'downloading').length
@@ -8656,15 +9688,19 @@ function App() {
     return (a.id ?? 0) - (b.id ?? 0)
   })
 
+  // COLA VIVA: 3 estados y punto — Activos (en cola/buscando/bajando), Bajados,
+  // No conseguidos. Los chips son FILTROS toggleables sobre una única lista
+  // cronológica; sin filtro se ve todo (activos arriba por el sort de estado).
+  const TAB_STATUSES = {
+    activos: ['searching', 'downloading', 'pending'],
+    bajados: ['completed', 'skipped'],
+    fallidos: ['not_found', 'error'],
+  }
   const filteredTracks = dlQ
     ? sortByStatus(searchedTracks)
-    : activeTab === 'all'
-    ? sortByStatus(searchedTracks)
-    : activeTab === 'by_genre'
-    ? searchedTracks
-    : activeTab.startsWith('genre:')
-    ? sortByStatus(searchedTracks.filter(t => t.genre === activeTab.slice(6)))
-    : sortByStatus(searchedTracks.filter(t => t.status === activeTab))
+    : TAB_STATUSES[activeTab]
+    ? sortByStatus(searchedTracks.filter(t => TAB_STATUSES[activeTab].includes(t.status)))
+    : sortByStatus(searchedTracks)
 
   const tracksByGenre = genres.reduce((acc, g) => {
     acc[g] = (dlQ ? searchedTracks : tracks).filter(t => t.genre === g)
@@ -8673,16 +9709,10 @@ function App() {
   const ungrouped = (dlQ ? searchedTracks : tracks).filter(t => !t.genre)
 
   const tabs = [
-    { key: 'all', label: 'Todos', count: tracks.length },
-    ...(genres.length > 0 ? [{ key: 'by_genre', label: 'Por estilo', count: genres.length }] : []),
-    { key: 'completed', label: 'Completados', count: completed },
-    { key: 'skipped', label: 'Ya descargados', count: skipped },
-    { key: 'downloading', label: 'Descargando', count: downloading },
-    { key: 'searching', label: 'Buscando', count: searching },
-    { key: 'pending', label: 'Pendientes', count: pending },
-    { key: 'not_found', label: 'No encontrados', count: notFound },
-    { key: 'error', label: 'Errores', count: errors },
-  ].filter(t => t.key === 'all' || t.key === 'by_genre' || t.count > 0)
+    { key: 'activos', label: 'Activos', count: searching + downloading + pending + pendingTracks.length },
+    { key: 'bajados', label: 'Bajados', count: completed + skipped },
+    { key: 'fallidos', label: 'No conseguidos', count: notFound + errors + failedTracks.length },
+  ]
 
   // Trial config (editable in Settings, only by admin "look").
   // Default: 2 days, demo/123, $4999 ARS/mes, MP + Cafecito links.
@@ -9557,11 +10587,12 @@ function App() {
           <div className="flex items-baseline gap-2">
             <img src="/logo.png" alt="DJ Free App" className="h-6 object-contain self-center" />
             <span className="font-semibold text-base text-[var(--text-primary)] hidden lg:inline">DJ Free App</span>
-            <span className="hidden md:inline text-[10px] font-mono text-[var(--text-muted)] tracking-tight" title="Versión UI">v{__APP_VERSION__}</span>
+            <span className="hidden md:inline text-[10px] font-mono text-[var(--text-muted)] tracking-tight" title={`Versión UI v${__APP_VERSION__} · build ${__BUILD_TIME__} (ART)`}>v{__APP_VERSION__}</span>
           </div>
           <div className="hidden md:flex gap-1">
             {[
               { id: 'discover', label: 'Discover' },
+              { id: 'search', label: 'Buscar' },
               { id: 'library', label: 'Biblioteca' },
               { id: 'set', label: 'Export' },
               { id: 'mix', label: 'Mix' },
@@ -9569,16 +10600,30 @@ function App() {
               <button
                 key={tab.id}
                 onClick={() => setPage(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-sm ${
+                className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 ${
                   page === tab.id ? 'btn-accent font-semibold' : 'btn-ghost'
                 }`}
               >
+                {tab.id === 'search' && (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                )}
                 {tab.label}
+                {/* Mini badge: cantidad de descargas activas, visible desde cualquier página */}
+                {tab.id === 'search' && activeDlCount > 0 && (
+                  <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                    page === tab.id ? 'bg-white/25 text-white' : 'bg-[var(--color-accent)] text-[var(--color-accent-text)]'
+                  }`}>
+                    {activeDlCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
-          <div className="flex items-center bg-white/10 rounded-full p-0.5 flex-shrink-0">
+          {/* Chips de colección theme-aware: antes eran blanco-sobre-blanco y
+              desaparecían en el modo claro marfil. */}
+          <div className="flex items-center rounded-full p-0.5 flex-shrink-0 bg-[var(--bg-hover)] border border-[var(--border-color)]">
             {[
+              { id: 'all',   label: 'TODOS' },
               { id: 'edm',   label: 'EDM' },
               { id: 'pop',   label: 'POP' },
               { id: 'latin', label: 'LATIN' },
@@ -9586,8 +10631,9 @@ function App() {
               <button key={c.id}
                 onClick={() => setCollection(c.id)}
                 className={`px-2 md:px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
-                  collection === c.id ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/60'
+                  collection === c.id ? '' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
+                style={collection === c.id ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
               >
                 {c.label}
               </button>
@@ -9596,16 +10642,26 @@ function App() {
         </div>
         <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
           {logs.length > 0 && isRunning && (
-            <div className="hidden lg:flex items-center gap-1.5 max-w-lg">
-              <span className="text-sm text-yellow-400 truncate">
-                {logs[logs.length - 1]}
-              </span>
+            // Ticker COMPACTO de actividad: chip discreto con spinner + texto
+            // truncado (el log completo queda en el title y en Logs técnicos).
+            // Antes volcaba el log crudo en amarillo y quedaba gigante.
+            <div
+              className="hidden lg:flex items-center gap-1.5 max-w-[15rem] px-2.5 py-1 rounded-full bg-white/5 border border-white/10"
+              title={logs[logs.length - 1]}
+            >
+              <div className="w-3 h-3 flex-shrink-0 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+              {/* Mensaje HUMANO (la jerga [FILTER]/[TOP1] vive en el panel de logs) */}
+              <span className="text-[11px] text-[var(--text-muted)] truncate">{(() => {
+                const cur = tracks.find(t => t.status === 'downloading') || tracks.find(t => t.status === 'searching')
+                if (cur) return `${cur.status === 'downloading' ? 'Bajando' : 'Buscando'}: ${cur.artist ? cur.artist + ' - ' : ''}${cur.title}`
+                return 'Procesando descargas…'
+              })()}</span>
               <button
                 onClick={() => { handleForceStop(); toast('Detenido — podés iniciar otra descarga', 'success', 2500) }}
                 title="Forzar detención (reset del download actual)"
-                className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-yellow-400/60 hover:text-red-400 hover:bg-red-500/10 transition-colors active:scale-90"
+                className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-gray-500 hover:text-red-400 transition-colors active:scale-90"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -9675,27 +10731,68 @@ function App() {
               )}
             </div>
           )}
+          {/* Campanita — avisos de la cola viva: bajadas remotas y no conseguidos */}
+          <div className="relative">
+            <button
+              onClick={() => { setNoticesOpen(o => !o); if (!noticesOpen) markNoticesRead() }}
+              title="Notificaciones de descargas"
+              className="relative p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-95"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+              {notices.filter(n => !n.read).length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {notices.filter(n => !n.read).length}
+                </span>
+              )}
+            </button>
+            {noticesOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setNoticesOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-50 w-80 max-h-96 overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-panel)] shadow-2xl">
+                  <div className="px-3 py-2 border-b border-[var(--border-color)] text-xs font-bold text-[var(--text-primary)]">Notificaciones</div>
+                  {notices.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-[var(--text-muted)]">Sin novedades — acá te aviso cuando se baja un pedido remoto o algo no se consigue.</div>
+                  ) : notices.map(n => (
+                    <div key={n.id} className="px-3 py-2 border-b border-[var(--border-color)]/40 last:border-0 flex items-start gap-2">
+                      <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${n.kind === 'success' ? 'bg-green-400' : n.kind === 'warning' ? 'bg-amber-400' : 'bg-[var(--color-accent)]'}`} />
+                      <div className="min-w-0">
+                        <div className="text-xs text-[var(--text-primary)] break-words">{n.text}</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">{new Date(n.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           {/* Estado del agente — SIEMPRE visible (3 estados, refresca con el
               polling/heartbeat de 30s; sin sockets). Verde=prendido,
               amarillo=instalado pero apagado, rojo=sin instalar (tocá → descargar). */}
           <button
-            onClick={() => {
-              if (agentConnected) toast(`Agente v${agentVersion} prendido y listo`, 'success', 2500)
+            onClick={async () => {
+              if (checkAgentRef.current) await checkAgentRef.current()
+              if (agentConnectedRef.current) toast(`Agente v${agentVersion} prendido y listo`, 'success', 2500)
               else if (agentRegistered) toast('Tu agente está apagado — abrilo en tu PC para poder descargar', 'warning', 4500)
               else setAgentInstallOpen(true)
             }}
             className={`h-8 flex items-center gap-1.5 px-2.5 rounded-lg border transition-all duration-200 active:scale-95 flex-shrink-0 ${
               agentConnected
-                ? 'border-green-500/40 bg-green-500/10 text-green-400'
+                ? agentErrRecent
+                  ? 'border-red-500/50 bg-red-500/10 text-red-400'
+                  : 'border-green-500/40 bg-green-500/10 text-green-400'
                 : agentRegistered
                   ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400'
                   : 'border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
             }`}
-            title={agentConnected ? `Agente v${agentVersion} conectado` : agentRegistered ? 'Agente instalado pero apagado — prendelo en tu PC' : 'Agente sin instalar — tocá para descargar'}
+            title={agentConnected
+              ? agentErrRecent
+                ? `El agente tuvo un error hace instantes (${agentErrMsg}) — suele recuperarse solo; tocá para re-chequear`
+                : `Agente v${agentVersion} conectado`
+              : agentRegistered ? 'Agente instalado pero apagado — prendelo en tu PC' : 'Agente sin instalar — tocá para descargar'}
           >
-            <span className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-500' : agentRegistered ? 'bg-yellow-500' : 'bg-red-500'}`} />
+            <span className={`w-2 h-2 rounded-full ${agentConnected ? (agentErrRecent ? 'bg-red-500 animate-pulse' : 'bg-green-500') : agentRegistered ? 'bg-yellow-500' : 'bg-red-500'}`} />
             <span className="text-[10px] font-semibold uppercase tracking-wider hidden sm:inline">
-              {agentConnected ? 'Agente ON' : agentRegistered ? 'Apagado' : 'Instalar'}
+              {agentConnected ? (agentErrRecent ? 'Timeout' : 'Agente ON') : agentRegistered ? 'Apagado' : 'Instalar'}
             </span>
           </button>
           {/* "Descargar agente" — SOLO si el agente NO está conectado (si ya está,
@@ -9706,7 +10803,7 @@ function App() {
             <a
               href={isMacOS
                 ? 'https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip'
-                : 'https://djfreeapp.ar/GrooveSyncAgent.exe'}
+                : (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '/GrooveSyncAgent.exe' : 'https://djfreeapp.ar/GrooveSyncAgent.exe')}
               className="h-full flex items-center gap-1.5 px-2.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
               title={agentConnected ? `Agente v${agentVersion} conectado` : 'Descargar agente — Click derecho para instrucciones'}
               onContextMenu={(e) => { e.preventDefault(); setAgentInstallOpen(true) }}
@@ -9720,7 +10817,7 @@ function App() {
             {/* Secondary platform link — the OS not auto-detected above */}
             <a
               href={isMacOS
-                ? 'https://djfreeapp.ar/GrooveSyncAgent.exe'
+                ? (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '/GrooveSyncAgent.exe' : 'https://djfreeapp.ar/GrooveSyncAgent.exe')
                 : 'https://github.com/arenazl/slsk-agent/releases/latest/download/GrooveSyncAgent-macOS.zip'}
               className="h-full w-7 flex items-center justify-center border-l border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95"
               title={isMacOS ? 'Descargar agente (Windows)' : 'Descargar agente (Mac) — Click derecho para Mac viejo'}
@@ -9835,7 +10932,7 @@ function App() {
                       Reportar bug
                     </a>
                     <a
-                      href="https://djfreeapp.ar/GrooveSyncAgent.exe"
+                      href={typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '/GrooveSyncAgent.exe' : 'https://djfreeapp.ar/GrooveSyncAgent.exe'}
                       onClick={() => setUserMenuOpen(false)}
                       className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3"
                     >
@@ -9846,6 +10943,16 @@ function App() {
                   {(agentRegistered || fsaBackend.supported) && (
                     <div className="border-t border-[var(--border-color)] px-4 py-3">
                       <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Modo descarga</div>
+                      {agentConnected && AGENT_MODE === 'local' ? (
+                        // El agente corre EN ESTA máquina (localhost): "Mi PC" y
+                        // "Este dispositivo" son la misma cosa — toggle bloqueado.
+                        // Además evita el camino frágil por el disco efímero del
+                        // server. El selector reaparece desde otro dispositivo.
+                        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-green-500/10 text-green-500 text-xs font-semibold">
+                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          Descargas en esta PC (agente conectado)
+                        </div>
+                      ) : (
                       <div className="flex gap-1.5">
                         <button
                           onClick={() => agentRegistered && setDownloadMode('remote')}
@@ -9878,6 +10985,7 @@ function App() {
                           Este dispositivo
                         </button>
                       </div>
+                      )}
                     </div>
                   )}
                   <div className="border-t border-[var(--border-color)] px-4 py-3">
@@ -9950,6 +11058,7 @@ function App() {
                 { id: 'discover', label: 'Discover', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
               ] : [
                 { id: 'discover', label: 'Discover', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+                { id: 'search', label: 'Buscar en SoulSeek', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
                 { id: 'library', label: 'Biblioteca', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
                 { id: 'set', label: 'Set Builder', icon: 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3' },
                 ...(mixTracks ? [{ id: 'mix', label: 'Mix Editor', icon: 'M9 19V6l12-3v13' }] : []),
@@ -10110,39 +11219,76 @@ function App() {
         />
       </div>
 
-      {/* Download page */}
-      <div className={`flex-1 flex flex-col min-h-0 ${page !== 'download' ? 'hidden' : ''}`}>
+      {/* Search / Download page */}
+      <div className={`flex-1 flex flex-col min-h-0 ${page !== 'download' && page !== 'search' ? 'hidden' : ''}`}>
 
-        {/* SoulSeek search bar */}
-        <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)]">
-          <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              value={dlSearch}
-              onChange={e => setDlSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSearchSlsk() }}
-              placeholder="Buscar en SoulSeek..."
-              className="w-full pl-9 pr-3 py-2 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
-            />
-          </div>
-          {searchStatus !== 'idle' && (
-            <span className="text-xs text-yellow-400 animate-pulse flex-shrink-0">
-              {searchStatus === 'connecting' ? 'Conectando...' : 'Buscando...'}
-            </span>
-          )}
-          {searchResults && (
-            <button
-              onClick={() => { setSearchResults(null); setDlSearch(''); setSearchDlStatus({}) }}
-              className="p-1.5 rounded-lg text-gray-500 hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all flex-shrink-0"
-              title="Cerrar resultados"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        {/* SoulSeek search bar - Modern & High Efficiency */}
+        <div className="flex-shrink-0 flex flex-col gap-2 px-3 md:px-6 py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)] shadow-md">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-accent)] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
+              <input
+                value={dlSearch}
+                onChange={e => setDlSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSearchSlsk() }}
+                placeholder="Buscar artista, tema o álbum en SoulSeek (Ej: Daft Punk, Tech House 2026, Dua Lipa...)"
+                className="w-full pl-10 pr-10 py-2.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm font-medium text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] transition-all shadow-inner"
+              />
+              {dlSearch && (
+                <button
+                  onClick={() => { setDlSearch(''); setSearchResults(null); setSearchDlStatus({}) }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleSearchSlsk}
+              disabled={!dlSearch.trim() || searchStatus !== 'idle'}
+              className="px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm text-white bg-[var(--color-accent)] hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2 flex-shrink-0 shadow-md"
+            >
+              {searchStatus !== 'idle' ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Buscando...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <span>Buscar</span>
+                </>
+              )}
             </button>
-          )}
+            <button
+              onClick={() => setDlPanelOpen(v => !v)}
+              title="Pegar una lista de tracks (Beatport / Rekordbox)"
+              className={`px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all active:scale-95 flex items-center gap-2 flex-shrink-0 border ${dlPanelOpen ? 'bg-white/15 text-white border-white/25' : 'bg-[var(--bg-input)] text-gray-200 border-[var(--border-color)] hover:bg-white/10 hover:text-white'}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h7" /></svg>
+              <span className="hidden md:inline">Lista</span>
+            </button>
+          </div>
+
+          {/* Quick Search Chips for fast discovery */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 text-xs text-[var(--text-muted)]">
+            <span className="font-semibold text-[10px] uppercase tracking-wider text-[var(--text-muted)] flex-shrink-0 mr-1">Búsquedas rápidas:</span>
+            {[
+              'Dua Lipa', 'The Weeknd', 'Melodic Techno 2026', 'Tech House Hits', 'Pop 80s Extended', 'Latin Pop 90s', 'Daft Punk', 'Gorillaz'
+            ].map(chip => (
+              <button
+                key={chip}
+                onClick={() => { setDlSearch(chip); setTimeout(handleSearchSlsk, 10) }}
+                className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-[var(--color-accent)]/20 hover:text-[var(--color-accent)] border border-white/5 transition-all text-xs font-medium whitespace-nowrap flex-shrink-0 active:scale-95"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 flex flex-col md:flex-row min-h-0">
@@ -10212,8 +11358,9 @@ function App() {
           )}
         </div>
 
-        {/* Desktop: Sidebar - Input */}
-        <aside className="hidden md:flex flex-shrink-0 w-80 flex-col bg-[var(--bg-panel)] border-r border-[var(--border-color)]">
+        {/* Desktop: Sidebar - Input. Oculto por defecto (mockup search-first);
+            se abre/cierra con el botón "Lista" de la barra de búsqueda. */}
+        <aside className={`${dlPanelOpen ? 'hidden md:flex' : 'hidden'} flex-shrink-0 w-80 flex-col bg-[var(--bg-panel)] border-r border-[var(--border-color)]`}>
           <div className="flex-1 min-h-0 flex flex-col px-4 pb-4">
             <label className="text-sm text-gray-400 mb-1">Estilo / Género:</label>
             <input
@@ -10268,17 +11415,17 @@ function App() {
 
         {/* Main - Track list */}
         <main className="flex-1 flex flex-col min-w-0 min-h-0">
-          {/* Tabs */}
-          {tracks.length > 0 && (
+          {/* Tabs — filtros toggleables: click de nuevo = ver todo */}
+          {(tracks.length > 0 || pendingTracks.length > 0 || failedTracks.length > 0) && (
             <div className="flex-shrink-0 flex items-center gap-1 px-3 md:px-4 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
               {tabs.map(tab => (
                 <button
                   key={tab.key}
-                  onClick={() => { setActiveTab(tab.key); setSearchResults(null); setDlSearch('') }}
+                  onClick={() => { setActiveTab(activeTab === tab.key ? 'all' : tab.key); setSearchResults(null); setDlSearch('') }}
                   className={`px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm transition-all duration-200 flex-shrink-0 ${
                     activeTab === tab.key
                       ? 'font-semibold'
-                      : 'text-gray-400 hover:text-[var(--text-primary,white)] hover:bg-gray-800'
+                      : 'text-gray-400 hover:text-[var(--text-primary,white)] hover:bg-[var(--bg-hover)]'
                   }`}
                   style={activeTab === tab.key ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
                 >
@@ -10317,116 +11464,56 @@ function App() {
             )
           })()}
 
-          {/* Pending tracks banner */}
-          {pendingTracks.length > 0 && !searchResults && (
-            <div className="flex-shrink-0 border-b border-[var(--border-color)] bg-yellow-500/5">
-              <button
-                onClick={() => setPendingExpanded(prev => !prev)}
-                className="w-full px-3 md:px-4 py-2 flex items-center justify-between text-sm hover:bg-yellow-500/10 transition-colors"
-              >
-                <span className="flex items-center gap-2 text-yellow-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  {pendingTracks.length} pendiente{pendingTracks.length > 1 ? 's' : ''}
-                </span>
-                <svg className={`w-4 h-4 text-gray-400 transition-transform ${pendingExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-              </button>
-              {pendingExpanded && (
-                <div className="px-3 md:px-4 pb-3 space-y-1">
-                  <button
-                    onClick={() => {
-                      if (isRunning) { toast('Ya hay una descarga en curso. Esperá que termine o tocá Forzar detención', 'warning', 4000); return }
-                      if (!wsRef.current || wsRef.current.readyState !== 1 || !username || !password) return
-                      // Use batch download flow: send all pending tracks as a single job
-                      const tracksText = pendingTracks.map(t => `${t.artist} - ${t.title}`).join('\n')
-                      setSearchResults(null) // Hide search results view so track list is visible
-                      setDlSearch('')
-                      setSummary(null)
-                      setLogs([])
-                      wsRef.current.send(JSON.stringify({
-                        type: 'start',
-                        tracks_text: tracksText,
-                        username,
-                        password,
-                        genre: '',
-                        app_user: authUser?.name || '',
-                      }))
-                      setPendingExpanded(false)
-                    }}
-                    disabled={!connected}
-                    className="w-full py-1.5 rounded-lg bg-yellow-500/20 text-yellow-400 text-xs font-semibold hover:bg-yellow-500/30 disabled:opacity-40 transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    Reintentar todos ({pendingTracks.length})
-                  </button>
-                  <div className="max-h-64 overflow-y-auto space-y-1 overscroll-contain">
-                    {pendingTracks.map((t, idx) => {
-                      // Estado de descarga en curso de ESTE tema (lo alimenta el
-                      // flujo por agente vía window.__setDlProgress). Si está
-                      // activo, mostramos progreso en vez de los botones.
-                      const dl = dlProgress[pendingKey(t.artist, t.title)]
-                      const st = dl?.status
-                      const active = st === 'searching' || st === 'queued' || st === 'downloading' || st === 'completed'
-                      return (
-                      <div key={idx} className="flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg bg-[var(--bg-input)] text-xs">
-                        <span className="truncate min-w-0 text-[var(--text-primary)]">{t.artist} - {t.title}</span>
-                        {active ? (
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {st === 'searching' ? (
-                              <span className="text-yellow-400"><SearchingLabel /></span>
-                            ) : st === 'queued' ? (
-                              <span className="text-yellow-400 animate-pulse truncate max-w-[8rem]">En cola{dl.source ? ` (${dl.source})` : ''}</span>
-                            ) : st === 'downloading' ? (
-                              <>
-                                <div className="w-16 md:w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-300" style={{ width: `${dl.pct || 0}%` }} />
-                                </div>
-                                <span className="text-[var(--color-accent)] w-9 text-right">{dl.pct || 0}%</span>
-                              </>
-                            ) : (
-                              <span className="text-green-400 flex items-center gap-1">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                Descargado
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => {
-                              if (isRunning) { toast('Esperá que termine la descarga actual o tocá Forzar detención', 'warning', 4000); return }
-                              if (!wsRef.current || wsRef.current.readyState !== 1) return
-                              setSearchResults(null)
-                              setDlSearch('')
-                              setSummary(null)
-                              setLogs([])
-                              wsRef.current.send(JSON.stringify({
-                                type: 'start',
-                                tracks_text: `${t.artist} - ${t.title}`,
-                                username, password,
-                                genre: '',
-                                app_user: authUser?.name || '',
-                              }))
-                              setPendingExpanded(false)
-                            }}
-                            disabled={isRunning}
-                            className="px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-                          >Bajar</button>
-                          <button
-                            onClick={() => removeFromPending(idx)}
-                            className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-                          >✕</button>
-                        </div>
-                        )}
-                      </div>
-                      )
-                    })}
+          {/* COLA VIVA — "En cola": se bajan SOLOS en secuencia (host+agente).
+              Sin Reintentar/Bajar: la unica accion es sacar de la cola. */}
+          {pendingTracks.length > 0 && !searchResults && (activeTab === 'activos' || activeTab === 'all' || !['bajados', 'fallidos'].includes(activeTab)) && (
+            <div className="flex-shrink-0 border-b border-[var(--border-color)]">
+              <div className="px-3 md:px-4 py-1.5 flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                <span className="font-semibold text-[var(--text-secondary)]">En cola ({pendingTracks.length})</span>
+                <span className="hidden sm:inline">— se bajan solos, en orden</span>
+              </div>
+              <div className="max-h-40 overflow-y-auto">
+                {pendingTracks.map((t, idx) => (
+                  <div key={`${t.artist}|${t.title}|${idx}`} className="flex items-center gap-2 px-3 md:px-4 py-1 border-t border-[var(--border-color)]/30 text-xs">
+                    <span className="flex-1 min-w-0 truncate text-[var(--text-primary)]">{t.artist ? `${t.artist} - ` : ''}{t.title}</span>
+                    {t.device_name && t.device_id !== DEVICE.id && (
+                      <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--color-accent)]/12 text-[var(--color-accent)]">{t.device_name}</span>
+                    )}
+                    <button
+                      onClick={() => removeFromPending(idx)}
+                      title="Sacar de la cola"
+                      className="flex-shrink-0 p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* COLA VIVA — "No conseguidos" persistidos (terminal tras 2 intentos):
+              acciones = Buscar de nuevo (re-encola) o descartar. */}
+          {failedTracks.length > 0 && activeTab === 'fallidos' && (
+            <div className="flex-shrink-0 border-b border-[var(--border-color)]">
+              {failedTracks.map((f, idx) => (
+                <div key={`${f.artist}|${f.title}|${idx}`} className="flex items-center gap-2 px-3 md:px-4 py-1.5 border-t border-[var(--border-color)]/30 text-xs">
+                  <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                  <span className="flex-1 min-w-0 truncate text-[var(--text-primary)]">{f.artist ? `${f.artist} - ` : ''}{f.title}</span>
                   <button
-                    onClick={() => savePending([])}
-                    className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-1"
-                  >Limpiar todos</button>
+                    onClick={() => retryFailed(f)}
+                    className="flex-shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:brightness-110 transition-all active:scale-95"
+                  >Buscar de nuevo</button>
+                  <button
+                    onClick={() => dismissFailed(f)}
+                    title="Descartar"
+                    className="flex-shrink-0 p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
@@ -10447,55 +11534,261 @@ function App() {
                 </div>
               ) : (
                 <div>
-                  <div className="sticky top-0 z-10 px-3 md:px-4 py-2 bg-[var(--bg-genre-header)] border-b border-[var(--border-color)] flex items-center gap-3">
-                    <span className="text-sm font-semibold text-[var(--color-accent)]">Resultados SoulSeek</span>
-                    <span className="text-xs text-gray-500">{(() => { const grouped = {}; searchResults.forEach(r => { if (!grouped[r.filename]) grouped[r.filename] = []; grouped[r.filename].push(r) }); return Object.keys(grouped).length })()} archivos</span>
+                  <div className="sticky top-0 z-10 px-3 md:px-4 pt-2 bg-[var(--bg-genre-header)] border-b border-[var(--border-color)]">
+                    {/* Título + contadores + filtros + orden (mockup PNG) */}
+                    <div className="flex items-center gap-2 md:gap-3 flex-wrap pb-2">
+                      <span className="text-sm font-bold text-[var(--text-primary)]">Resultados SoulSeek</span>
+                      <span className="text-xs text-gray-500">{(() => { const g = new Set(searchResults.map(r => r.filename)); return `${g.size} archivos · ${searchResults.length} indexados` })()}</span>
+                      {/* Toggle Archivos | Discos (carpetas completas del peer) */}
+                      <div className="flex items-center bg-white/[0.04] rounded-full p-0.5">
+                        {[['files', 'Archivos'], ['albums', 'Discos']].map(([id, label]) => (
+                          <button
+                            key={id}
+                            onClick={() => setSearchView(id)}
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all ${searchView === id ? '' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                            style={searchView === id ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' } : {}}
+                          >{label}</button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {[['all', 'Todos'], ['hq', 'Alta calidad'], ['flac', 'Solo FLAC'], ['multi', '2+ fuentes']].map(([id, label]) => (
+                          <button
+                            key={id}
+                            onClick={() => setSearchFilter(id)}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 ${searchFilter === id ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/40' : 'text-gray-500 hover:text-gray-300 bg-white/[0.04]'}`}
+                          >{label}</button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1 ml-auto">
+                        {searchSel.size > 0 && (
+                          <button
+                            onClick={() => {
+                              const grouped = {}
+                              searchResults.forEach(r => { if (!grouped[r.filename]) grouped[r.filename] = []; grouped[r.filename].push(r) })
+                              searchSel.forEach(fn => {
+                                const srcs = grouped[fn]
+                                if (!srcs) return
+                                const b = srcs[0]
+                                const ss = Array.isArray(b.sources) && b.sources.length > 0 ? b.sources : srcs
+                                handleDownloadSingle({ ...b, sources: ss })
+                              })
+                              setSearchSel(new Set())
+                            }}
+                            className="px-3 py-1 rounded-full text-[11px] font-bold transition-all active:scale-95 hover:brightness-110"
+                            style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                          >Descargar ({searchSel.size})</button>
+                        )}
+                        <span className="text-[10px] uppercase tracking-wider text-gray-600 font-semibold mr-1 hidden lg:inline">Ordenar</span>
+                        {[['rel', 'Relevancia'], ['quality', 'Calidad'], ['sources', 'Fuentes'], ['size', 'Tamaño']].map(([id, label]) => (
+                          <button
+                            key={id}
+                            onClick={() => setSearchSort(id)}
+                            className={`px-2 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all active:scale-95 ${searchSort === id ? 'font-bold' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                            style={searchSort === id ? { background: 'color-mix(in srgb, var(--color-accent) 18%, transparent)', color: 'var(--color-accent)' } : {}}
+                          >{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Encabezados de columnas (solo desktop, solo vista archivos) */}
+                    {searchView === 'files' && (
+                    <div className="hidden md:flex items-center gap-3 pb-1.5 text-[10px] uppercase tracking-wider text-gray-600 font-semibold select-none">
+                      <span className="w-3.5 flex-shrink-0" />
+                      <span className="w-7 flex-shrink-0" />
+                      <span className="flex-1 min-w-0">Archivo</span>
+                      <span className="w-16 flex-shrink-0">Formato</span>
+                      <span className="w-20 flex-shrink-0">Calidad</span>
+                      <span className="w-12 flex-shrink-0 text-right">Duración</span>
+                      <span className="w-24 flex-shrink-0">Fuentes</span>
+                      <span className="w-28 flex-shrink-0" />
+                    </div>
+                    )}
                   </div>
-                  {(() => {
+                  {searchView === 'albums' ? (() => {
+                    // Vista DISCOS: agrupar los resultados por carpeta del peer
+                    // (username + directorio del remote_path). 2+ archivos en la
+                    // misma carpeta = un "disco" descargable de una vez.
+                    const folderOf = (rp) => { const p = String(rp || '').replace(/\\/g, '/'); return p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '' }
+                    const groups = {}
+                    searchResults.forEach(r => {
+                      const folder = folderOf(r.remote_path)
+                      if (!folder) return
+                      const key = `${r.username}::${folder}`
+                      if (!groups[key]) groups[key] = { username: r.username, folder, files: {} }
+                      if (!groups[key].files[r.filename]) groups[key].files[r.filename] = r
+                    })
+                    const albums = Object.entries(groups)
+                      .map(([key, g]) => ({ key, ...g, list: Object.values(g.files) }))
+                      .filter(g => g.list.length >= 2)
+                      .sort((a, b) => b.list.length - a.list.length)
+                    if (albums.length === 0) {
+                      return (
+                        <div className="p-8 text-center text-sm text-gray-500">
+                          Ninguna carpeta con 2+ archivos en estos resultados.
+                          <br /><span className="text-xs text-gray-600">Tip: buscá "artista + álbum" (ej. "Madonna Ray of Light") para enganchar discos completos.</span>
+                        </div>
+                      )
+                    }
+                    return albums.map(g => {
+                      const totalMb = Math.round(g.list.reduce((acc, f) => acc + (f.size_mb || 0), 0))
+                      const fmts = [...new Set(g.list.map(f => String(f.ext || '').toUpperCase()))].slice(0, 3).join(' · ')
+                      const open = albumOpen.has(g.key)
+                      const folderName = g.folder.split('/').pop() || g.folder
+                      return (
+                        <div key={g.key} className="border-b border-[var(--border-color)]/40">
+                          <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 hover:bg-white/[0.03] transition-colors">
+                            <button
+                              onClick={() => setAlbumOpen(prev => { const n = new Set(prev); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n })}
+                              className="p-1 text-gray-500 hover:text-white transition-colors flex-shrink-0"
+                              title={open ? 'Ocultar archivos' : 'Ver archivos'}
+                            >
+                              <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                            <svg className="w-5 h-5 text-[var(--color-accent)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                            <div className="flex-1 min-w-0">
+                              <div className="truncate text-xs md:text-sm font-medium text-[var(--text-primary)]">{folderName}</div>
+                              <div className="truncate text-[11px] text-gray-500 mt-0.5">de {g.username} · {g.list.length} archivos · {totalMb} MB{fmts ? ` · ${fmts}` : ''}</div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                g.list.forEach(f => handleDownloadSingle({ ...f, sources: [f] }))
+                                toast(`Bajando disco: ${g.list.length} archivos de ${g.username}`, 'success', 3000)
+                              }}
+                              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 hover:brightness-110 shadow-sm"
+                              style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" /></svg>
+                              Descargar disco ({g.list.length})
+                            </button>
+                          </div>
+                          {open && (
+                            <div className="pb-2">
+                              {g.list.map(f => {
+                                const info = searchDlStatus[f.filename]
+                                const st = info?.status || info
+                                const isLoc = localFilesSet.has(info?.local_name || f.filename)
+                                return (
+                                  <div key={f.filename} className="flex items-center gap-2 pl-14 md:pl-16 pr-4 py-1 text-[11px] text-gray-400">
+                                    <span className="truncate flex-1">{f.filename}</span>
+                                    <span className="flex-shrink-0 text-gray-600">{f.size_mb} MB</span>
+                                    {isLoc ? <span className="text-green-400 flex-shrink-0 font-semibold">En biblioteca</span>
+                                      : st === 'downloading' ? <span className="text-[var(--color-accent)] flex-shrink-0">{info?.pct != null ? `${info.pct}%` : 'bajando…'}</span>
+                                        : st === 'queued' ? <span className="text-yellow-400 flex-shrink-0">en cola</span>
+                                          : st === 'completed' ? <span className="text-yellow-400 flex-shrink-0">guardando…</span>
+                                            : st === 'error' ? <span className="text-red-400 flex-shrink-0">error</span> : null}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  })() : (() => {
                     const grouped = {}
                     searchResults.forEach(r => {
                       if (!grouped[r.filename]) grouped[r.filename] = []
                       grouped[r.filename].push(r)
                     })
-                    return Object.entries(grouped).map(([filename, sources]) => {
+                    const isLossless = (b) => ['FLAC', 'WAV', 'AIFF', 'AIF'].includes(String(b.ext || '').toUpperCase())
+                    const isRemixEntry = (e) => {
+                      const fn = (e.filename || '').split(/[\\/]/).pop().toLowerCase()
+                      return /remix|flip|bootleg|rework|mashup|dub|kue|crissy|javi|loozbone/i.test(fn)
+                    }
+
+                    let entries = Object.entries(grouped).map(([filename, sources]) => {
                       const best = sources[0]
-                      // Server-side dedup groups multiple peers under best.sources.
-                      // Prefer that list (has queue/slots/speed per peer) over the
-                      // UI-level filename grouping, which would lose fallback peers.
                       const serverSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : null
                       const effectiveSources = serverSources || sources
                       const sourceCount = best.source_count || serverSources?.length || sources.length
+                      return { filename, best, effectiveSources, sourceCount }
+                    })
+                    // Filtros y orden del mockup (client-side, no re-busca)
+                    if (searchFilter === 'hq') entries = entries.filter(e => isLossless(e.best) || (e.best.bitrate || 0) >= 256)
+                    else if (searchFilter === 'flac') entries = entries.filter(e => isLossless(e.best))
+                    else if (searchFilter === 'multi') entries = entries.filter(e => e.sourceCount >= 2)
+                    if (searchSort === 'rel') {
+                      const relScore = (e) => (isLossless(e.best) ? 1000 : (e.best.bitrate || 0)) + Math.min(e.sourceCount, 50) * 10
+                      entries.sort((a, b) => relScore(b) - relScore(a))
+                    }
+                    else if (searchSort === 'quality') entries.sort((a, b) => (isLossless(b.best) ? 1000 : b.best.bitrate || 0) - (isLossless(a.best) ? 1000 : a.best.bitrate || 0))
+                    else if (searchSort === 'sources') entries.sort((a, b) => b.sourceCount - a.sourceCount)
+                    else if (searchSort === 'size') entries.sort((a, b) => (b.best.size_mb || 0) - (a.best.size_mb || 0))
+
+                    const mainHighQuality = entries.filter(e => isLossless(e.best) && !isRemixEntry(e))
+                    const remixes = entries.filter(e => isRemixEntry(e))
+                    const mp3Quality = entries.filter(e => !isLossless(e.best) && !isRemixEntry(e))
+
+                    const renderRow = ({ filename, best, effectiveSources, sourceCount }) => {
                       const dlInfo = searchDlStatus[filename]
                       const dlSt = dlInfo?.status || dlInfo
                       const dlPct = dlInfo?.pct
-                      // The badge MUST reflect filesystem reality: green only when
-                      // the file (under its real on-disk name, possibly renamed by
-                      // the peer) is in the user's local storage. The server's
-                      // `completed` event alone is not enough — /audio fetch +
-                      // FSA save can still fail and leave it on Cloud Run only.
                       const localName = dlInfo?.local_name || filename
                       const isLocal = localFilesSet.has(localName) || localFilesSet.has(filename)
+                      const lossless = isLossless(best)
+                      const rp = String(best.remote_path || '').replace(/\\/g, '/')
+                      const folder = rp.includes('/') ? '/' + rp.split('/').slice(-3, -1).join('/') : ''
+                      const q = lossless
+                        ? { label: 'Lossless', text: 'text-purple-400', bar: 'bg-purple-500', pct: 100 }
+                        : (best.bitrate || 0) >= 320
+                          ? { label: `${best.bitrate} kbps`, text: 'text-green-400', bar: 'bg-green-500', pct: 100 }
+                          : (best.bitrate || 0) >= 192
+                            ? { label: `${best.bitrate} kbps`, text: 'text-amber-400', bar: 'bg-amber-500', pct: Math.round((best.bitrate / 320) * 100) }
+                            : (best.bitrate || 0) > 0
+                              ? { label: `${best.bitrate} kbps`, text: 'text-gray-400', bar: 'bg-gray-500', pct: Math.round((best.bitrate / 320) * 100) }
+                              : { label: '—', text: 'text-gray-600', bar: 'bg-gray-700', pct: 15 }
+                      const dur = best.duration > 0 ? `${Math.floor(best.duration / 60)}:${String(best.duration % 60).padStart(2, '0')}` : '—'
+                      const srcColor = sourceCount >= 3 ? 'bg-green-500' : 'bg-yellow-500'
                       return (
                         <div key={filename}
                           onDoubleClick={() => isLocal && goToLibraryTrack(localName)}
-                          className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-2 border-b border-[var(--border-color)]/50 hover:bg-gray-800/30 transition-colors text-sm ${isLocal ? 'cursor-pointer' : ''}`}>
+                          className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 border-b border-[var(--border-color)]/40 hover:bg-white/[0.03] transition-colors text-sm ${isLocal ? 'cursor-pointer' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={searchSel.has(filename)}
+                            onClick={e => e.stopPropagation()}
+                            onChange={() => setSearchSel(prev => { const n = new Set(prev); if (n.has(filename)) n.delete(filename); else n.add(filename); return n })}
+                            className="hidden md:block w-3.5 h-3.5 flex-shrink-0 rounded accent-[var(--color-accent)] opacity-40 hover:opacity-100 checked:opacity-100 cursor-pointer transition-opacity"
+                          />
                           <PlayPauseBtn
                             isPlaying={playingFile === filename && isAudioPlaying}
                             loading={previewLoading === filename}
                             onClick={() => handlePreview(filename)}
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="truncate text-xs md:text-sm text-[var(--text-primary)]">{filename}</div>
-                            <div className="flex items-center gap-2 md:gap-3 text-xs text-gray-500 mt-0.5">
-                              <span className="text-purple-400">{best.ext}</span>
+                            <div className="truncate text-xs md:text-sm font-medium text-[var(--text-primary)]">{filename}</div>
+                            <div className="truncate text-[11px] text-gray-500 mt-0.5">
+                              {folder && <span className="text-gray-500">{folder} · </span>}
                               <span>{best.size_mb} MB</span>
-                              <span className="hidden sm:inline">{best.bitrate > 0 ? `${best.bitrate} kbps` : ''}</span>
-                              <span className="hidden sm:inline">{best.duration > 0 ? `${Math.floor(best.duration / 60)}:${String(best.duration % 60).padStart(2, '0')}` : ''}</span>
-                              <span className="text-gray-600">{sourceCount} fuente{sourceCount > 1 ? 's' : ''}</span>
+                              <span className="md:hidden"> · {lossless ? best.ext : (best.bitrate > 0 ? `${best.bitrate} kbps` : best.ext)} · {dur} · {sourceCount} fte</span>
                             </div>
                           </div>
+                          {/* FORMATO */}
+                          <span className={`hidden md:inline-flex w-16 flex-shrink-0 justify-center px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide ${lossless ? 'bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30' : 'bg-white/[0.06] text-gray-300 ring-1 ring-white/10'}`}>
+                            {lossless ? best.ext : `${best.ext || 'MP3'} ${best.bitrate > 0 ? best.bitrate : ''}`.trim()}
+                          </span>
+                          {/* CALIDAD */}
+                          <div className="hidden md:flex w-20 flex-shrink-0 flex-col">
+                            <span className={`text-[11px] font-semibold ${q.text}`}>{q.label}</span>
+                            <div className="w-full h-0.5 rounded-full bg-white/10 mt-1 overflow-hidden">
+                              <div className={`h-full rounded-full ${q.bar}`} style={{ width: `${q.pct}%` }} />
+                            </div>
+                          </div>
+                          {/* DURACIÓN */}
+                          <span className="hidden md:block w-12 flex-shrink-0 text-right text-xs text-gray-400 font-mono">{dur}</span>
+                          {/* FUENTES */}
+                          <div className="hidden md:flex w-24 flex-shrink-0 items-center gap-1.5">
+                            <span className="flex items-end gap-[2px]">
+                              {[0, 1, 2].map(i => (
+                                <span key={i} className={`w-[3px] rounded-sm ${i === 0 ? 'h-1.5' : i === 1 ? 'h-2.5' : 'h-3.5'} ${sourceCount > i ? srcColor : 'bg-white/10'}`} />
+                              ))}
+                            </span>
+                            <span className="text-[11px] text-gray-400">{sourceCount} fuente{sourceCount > 1 ? 's' : ''}</span>
+                          </div>
                           {isLocal ? (
-                            <span className="text-green-400 text-xs flex-shrink-0">Descargado</span>
+                            <span className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-semibold">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                              En biblioteca
+                            </span>
                           ) : dlSt === 'completed' ? (
                             <span className="text-yellow-400 text-xs flex-shrink-0 animate-pulse">Guardando local…</span>
                           ) : dlSt === 'queued' ? (
@@ -10536,24 +11829,83 @@ function App() {
                           ) : (
                             <button
                               onClick={() => handleDownloadSingle({ ...best, sources: effectiveSources })}
-                              className="flex-shrink-0 px-2 md:px-3 py-1 rounded text-xs transition-all duration-200 active:scale-95"
+                              className="flex-shrink-0 flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 hover:brightness-110 shadow-sm"
                               style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                             >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" /></svg>
                               Descargar
                             </button>
                           )}
                         </div>
                       )
-                    })
+                    }
+
+                    return (
+                      <div>
+                        {/* 1. VERSIÓN PRINCIPAL / ALTA CALIDAD */}
+                        {mainHighQuality.length > 0 && (
+                          <div>
+                            <div className="px-3 md:px-4 py-1.5 bg-purple-500/10 border-y border-purple-500/20 text-xs font-bold text-purple-300 flex items-center gap-2">
+                              <span>✨ Versión Principal — Alta Calidad (FLAC/WAV/AIFF)</span>
+                              <span className="text-[10px] bg-purple-500/20 px-2 py-0.5 rounded-full font-mono">{mainHighQuality.length}</span>
+                            </div>
+                            {mainHighQuality.map(renderRow)}
+                          </div>
+                        )}
+                        {/* 2. REMIXES Y EDICIONES ALTERNATIVAS */}
+                        {remixes.length > 0 && (
+                          <div>
+                            <div className="px-3 md:px-4 py-1.5 bg-amber-500/10 border-y border-amber-500/20 text-xs font-bold text-amber-300 flex items-center gap-2">
+                              <span>🎛️ Remixes y Ediciones Alternativas</span>
+                              <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full font-mono">{remixes.length}</span>
+                            </div>
+                            {remixes.map(renderRow)}
+                          </div>
+                        )}
+                        {/* 3. MP3 (CALIDAD ESTÁNDAR) */}
+                        {mp3Quality.length > 0 && (
+                          <div>
+                            <div className="px-3 md:px-4 py-1.5 bg-white/[0.03] border-y border-white/10 text-xs font-bold text-gray-400 flex items-center gap-2">
+                              <span>🎵 Calidad Estándar (MP3)</span>
+                              <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-mono">{mp3Quality.length}</span>
+                            </div>
+                            {mp3Quality.map(renderRow)}
+                          </div>
+                        )}
+                        {/* Fallback if no categorized entries match */}
+                        {mainHighQuality.length === 0 && remixes.length === 0 && mp3Quality.length === 0 && (
+                          entries.map(renderRow)
+                        )}
+                      </div>
+                    )
                   })()}
                 </div>
               )
             ) : tracks.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-600">
-                <div className="text-center space-y-2 px-6">
-                  <p className="text-4xl">&#127925;</p>
-                  <p className="text-sm md:text-base">Pega tu lista de tracks <span className="hidden md:inline">a la izquierda</span><span className="md:hidden">arriba</span></p>
-                  <p className="text-xs md:text-sm text-gray-500">Soporta Beatport (texto o HTML), Rekordbox</p>
+                <div className="text-center space-y-3 px-6">
+                  {isRunning ? (
+                    // Hay una descarga batch corriendo pero sin filas visibles:
+                    // mostrarla ACÁ (antes esta pantalla quedaba "vacía" y el
+                    // usuario recibía un toast de "descarga en curso" sin ver nada).
+                    <>
+                      <div className="w-8 h-8 mx-auto border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-sm md:text-base text-[var(--text-primary)] font-medium">Descarga en curso</p>
+                      {logs.length > 0 && <p className="text-xs text-gray-500 max-w-md mx-auto truncate">{logs[logs.length - 1]}</p>}
+                      <button
+                        onClick={() => { handleForceStop(); toast('Detenido — podés iniciar otra descarga', 'success', 2500) }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/25 transition-all active:scale-95"
+                      >
+                        Forzar detención
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-10 h-10 mx-auto text-gray-700" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg>
+                      <p className="text-sm md:text-base">Buscá un tema arriba, o tocá <span className="text-gray-300 font-semibold">Lista</span> para pegar tu tracklist</p>
+                      <p className="text-xs md:text-sm text-gray-500">Soporta Beatport (texto o HTML), Rekordbox</p>
+                    </>
+                  )}
                 </div>
               </div>
             ) : activeTab === 'by_genre' ? (
@@ -10565,7 +11917,7 @@ function App() {
                       <span className="text-xs text-gray-500">{tracksByGenre[g].length} tracks</span>
                       <span className="text-xs text-green-500">{tracksByGenre[g].filter(t => t.status === 'completed').length} completados</span>
                     </div>
-                    {tracksByGenre[g].map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} />)}
+                    {tracksByGenre[g].map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} onGoToLibrary={goToLibraryTrack} />)}
                   </div>
                 ))}
                 {ungrouped.length > 0 && (
@@ -10574,12 +11926,12 @@ function App() {
                       <span className="text-sm font-semibold text-gray-400">Sin estilo</span>
                       <span className="text-xs text-gray-500 ml-2">{ungrouped.length} tracks</span>
                     </div>
-                    {ungrouped.map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} />)}
+                    {ungrouped.map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} onGoToLibrary={goToLibraryTrack} />)}
                   </div>
                 )}
               </>
             ) : (
-              filteredTracks.map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} />)
+              filteredTracks.map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} onGoToLibrary={goToLibraryTrack} />)
             )}
           </div>
 
@@ -10738,10 +12090,10 @@ function App() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 12a7 7 0 0114 0M8.5 12a3.5 3.5 0 017 0" />
             <circle cx="12" cy="12" r="1" fill="currentColor" />
           </svg>
-          <span className="text-xs text-green-200/90 truncate">
-            Sonando en <span className="font-semibold text-green-100">{remoteNowPlaying.device || 'tu otro equipo'}</span>
-            <span className="text-green-300/60"> · </span>
-            <span className="font-semibold text-green-100">
+          <span className="text-xs text-[var(--text-secondary)] truncate">
+            Sonando en <span className="font-semibold text-[var(--text-primary)]">{remoteNowPlaying.device || 'tu otro equipo'}</span>
+            <span className="text-[var(--text-muted)]"> · </span>
+            <span className="font-semibold text-[var(--text-primary)]">
               {[remoteNowPlaying.artist, remoteNowPlaying.title].filter(Boolean).join(' — ') || remoteNowPlaying.filename}
             </span>
           </span>
@@ -11168,6 +12520,30 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
   // Context menu
   const [discoverCtx, setDiscoverCtx] = useState(null) // {x, y, track}
   const [shareDialog, setShareDialog] = useState(null)  // { track, url }
+  // Feature "Modernizar": remix AL AZAR del tema (SoundCloud) — primero suena,
+  // después botón para bajarlo. {base, title, artist, duration_sec}
+  const [remixPick, setRemixPick] = useState(null)
+  const modernizarTrack = async (track) => {
+    setDiscoverCtx(null)
+    toast('Buscando un remix para modernizar...', 'info', 2000)
+    try {
+      const params = new URLSearchParams({ q: `${track.artist} ${track.title}` })
+      if (track.duration_ms) params.set('avoid_dur', String(Math.round(track.duration_ms / 1000)))
+      const r = await fetch(`${API_BASE}/api/sc-remix?${params}`)
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.ok) { toast('No encontré remixes de este tema', 'warning', 2500); return }
+      setRemixPick({ base: track, title: d.title, artist: d.artist, duration_sec: d.duration_sec })
+      playPreview({
+        id: `remix-${track.id}`,
+        artist: track.artist,
+        title: d.title,
+        duration_ms: (d.duration_sec || 0) * 1000,
+        sample_url: `${API_BASE}/api/sc-audio?q=${encodeURIComponent(d.title)}&dur=${d.duration_sec || ''}`,
+      })
+    } catch {
+      toast('No pude buscar remixes', 'error', 2500)
+    }
+  }
   const discoverCtxRef = useRef(null)
 
   // Handle pending radio track from Library
@@ -11482,23 +12858,31 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Once genres load, if URL has ?genre=<slug>, auto-select it
+  // Once genres load, if URL has ?genre=<slug>, auto-select it.
+  // Solo aplica en EDM (beatport): en POP/LATIN el param es residuo de otro
+  // ecosistema y se limpia — el selector de colección MANDA sobre la URL.
   useEffect(() => {
-    if (!genreSlug || genres.length === 0) return
+    if (!genreSlug) return
+    if (discoverSource !== 'beatport') { setGenreSlug(''); return }
+    if (genres.length === 0) return
     if (selectedGenre?.slug === genreSlug) return
     const match = genres.find(g => g.slug === genreSlug)
     if (match) loadChart(match)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [genres, genreSlug])
+  }, [genres, genreSlug, discoverSource])
 
-  // Once Spotify categories load, if URL has ?playlist=<key>, auto-select it
+  // Once Spotify categories load, if URL has ?playlist=<key>, auto-select it.
+  // Solo aplica en POP/LATIN (spotify): estando en EDM un ?playlist= viejo en
+  // la URL dejaba los chips en EDM pero la LISTA en POP tras un refresh.
   useEffect(() => {
-    if (!spotifyKey || spotifyCategories.length === 0) return
+    if (!spotifyKey) return
+    if (discoverSource !== 'spotify') { setSpotifyKey(''); return }
+    if (spotifyCategories.length === 0) return
     if (selectedSpotifyCategory?.key === spotifyKey) return
     const match = spotifyCategories.find(c => c.key === spotifyKey)
     if (match) loadSpotifyPlaylist(match)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spotifyCategories, spotifyKey])
+  }, [spotifyCategories, spotifyKey, discoverSource])
 
   // Filter by label: call the server-side Beatport scraper that fetches the
   // full label catalog page (up to 150 tracks in one request).
@@ -11674,8 +13058,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
     // Candidatos en orden. POP/LATIN: SoundCloud (tema COMPLETO) primero;
     // después sample/preview; al final iTunes 30s. EDM: sample directo → iTunes.
     const candidates = []
-    if (collection !== 'edm') {
-      candidates.push(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(`${track.artist} ${track.title}`)}`)
+    if (collection !== 'edm' && !(track.sample_url || '').includes('/api/sc-audio')) {
+      // dur = duración esperada según la playlist → SoundCloud devuelve la
+      // VERSIÓN correcta (antes traía el remix más largo que encontrara,
+      // p.ej. 10 min de "Locked Out of Heaven" para el original de 3:53).
+      const durQ = track.duration_ms ? `&dur=${Math.round(track.duration_ms / 1000)}` : ''
+      candidates.push(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(`${track.artist} ${track.title}`)}${durQ}`)
     }
     if (track.sample_url) candidates.push(track.sample_url)
     if (track.preview_url && track.preview_url !== track.sample_url) candidates.push(track.preview_url)
@@ -11788,6 +13176,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       currentFilename = best.filename
       const bestSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : [best]
       setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'downloading', message: 'Descargando' } }))
+      setSearchDlStatus(prev => ({ ...prev, [best.filename]: { status: 'downloading', pct: 0 } }))
       window.__addLog?.(`[DL] Bajando: ${(best.filename || '').split(/[\\/]/).pop()}${ranked.length > 1 ? ` (opción ${idx + 1}/${ranked.length})` : ''}`)
       window.__setDlProgress?.(track.artist, track.title, { status: 'downloading', pct: 0 })
 
@@ -11829,33 +13218,60 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
       }, 90000)
     }
 
+    const getTitleScore = (candPath, targetTitle) => {
+      if (!targetTitle) return 10000
+      const fn = (candPath || '').split(/[\\/]/).pop().toLowerCase().replace(/^\d+[\s.\-_]+/, '')
+      const fnNorm = fn.replace(/[^a-z0-9]/g, ' ')
+
+      const stopw = new Set(['mix', 'the', 'and', 'ext', 'original', 'feat', 'ft', 'featuring', 'remix', 'extended', 'edit', 'club', 'radio', 'vocal', 'to', 'a', 'in', 'on', 'of', 'for', 'with', 'version', 'dub', 'instrumental', 'cut', 'rework', 'vip'])
+      const kw = (targetTitle || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 2 && !stopw.has(w))
+
+      if (kw.length === 0) return 10000
+
+      const matched = kw.filter(w => fnNorm.includes(w))
+      if (matched.length === 0) return 0
+      if (kw.length >= 2 && matched.length < Math.ceil(kw.length * 0.5)) return 0
+
+      return Math.round((matched.length / kw.length) * 10000)
+    }
+
     // Aplicar el ranking + dispatch a una lista de results — usado tanto
     // por el flujo agente (HTTP directo) como por el server (WS).
     const ingestResults = (results, source) => {
-      if (rankIdx >= 0) return  // ya estamos bajando
+      if (rankIdx >= 0) return true  // ya estamos bajando
       const hasDecentPeer = (r) => {
         const srcs = Array.isArray(r.sources) && r.sources.length ? r.sources : [r]
         return srcs.some(s => (s.queue || 0) <= 2000)
       }
       const viable = results.filter(hasDecentPeer)
       const pool = viable.length ? viable : results
-      ranked = [...pool].sort((a, b) => {
-        const dq = qScore(b) - qScore(a)
+      const scored = pool.map(r => ({
+        result: r,
+        tScore: getTitleScore(r.filename, track.title),
+        qScore: qScore(r),
+      })).filter(x => x.tScore > 0)
+
+      ranked = scored.sort((a, b) => {
+        const dt = b.tScore - a.tScore
+        if (dt) return dt
+        const dq = b.qScore - a.qScore
         if (dq) return dq
-        const ds = (b.source_count || 1) - (a.source_count || 1)
+        const ds = (b.result.source_count || 1) - (a.result.source_count || 1)
         if (ds) return ds
         return 0
-      })
-      console.info(`[DL] search_results via=${source}`, { track: track.title, total: results.length, viable: viable.length, ranked: ranked.length })
-      window.__addLog?.(`[SEARCH] ${results.length} resultados (${viable.length} con cola viable)`)
+      }).map(x => x.result)
+
+      console.info(`[DL] search_results via=${source}`, { track: track.title, total: results.length, viable: viable.length, titleMatched: scored.length, ranked: ranked.length })
+      window.__addLog?.(`[SEARCH] ${results.length} resultados (${viable.length} con cola viable, ${ranked.length} matchean título)`)
       if (ranked.length === 0) {
-        setDownloadQueue(prev => ({ ...prev, [track.id]: { status: 'not_found', message: 'No encontrado en SoulSeek' } }))
-        window.__setDlProgress?.(track.artist, track.title, { status: 'failed' });
-        (window.__markPendingFailure && window.__markPendingFailure({ artist: track.artist, title: track.title, source: 'discover', collection }))
-        wsRef.current?.removeEventListener('message', handler)
-        return
+        return false
       }
       dispatchPick(0)
+      return true
     }
 
     // Path 1 (preferido): si hay agente conectado, hacer search por el agente.
@@ -11905,9 +13321,12 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         const data = await r.json()
         if (!data.ok) throw new Error(data.error || 'agent search failed')
         const results = data.results || []
-        if (results.length > 0) { ingestResults(results, `agent#${idx + 1}`); return }
-        window.__addLog?.(`[SEARCH] 0 resultados para "${q}" — probando query más amplia`)
-        runSearchLadder(idx + 1)               // 0 resultados → variante más genérica
+        if (results.length > 0) {
+          const ok = ingestResults(results, `agent#${idx + 1}`)
+          if (ok) return
+        }
+        window.__addLog?.(`[SEARCH] 0 resultados válidos para "${q}" — probando variante más genérica`)
+        runSearchLadder(idx + 1)               // 0 resultados válidos → variante más genérica
       } catch (err) {
         console.warn('[SEARCH] agent variant failed, server fallback', err?.message || err)
         sendServerSearch(q)                     // fallback al server con esta variante
@@ -12184,12 +13603,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
 
       {/* Track list */}
       {loading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4 text-gray-400">
-            <div className="w-8 h-8 border-3 border-green-400 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm">Cargando chart...</span>
-          </div>
-        </div>
+        <SkeletonRows rows={12} />
       ) : tracks.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-gray-600">
           <div className="text-center space-y-2">
@@ -12399,15 +13813,16 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
                     )
                     if (alreadyInLibrary) return (
                       <div className="flex-shrink-0 flex items-center gap-1">
-                        <span
-                          title="Ya está en tu biblioteca"
-                          className="flex items-center gap-1 px-2 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/20"
+                        <button
+                          onClick={(e) => { e.stopPropagation(); const loc = isInLibrary.findLocation(t); onGoToLibrary?.(loc?.file || `${t.artist || ''} ${t.title || ''}`.trim()) }}
+                          title="Ya está en tu biblioteca — Clic para ir a la biblioteca"
+                          className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 md:py-2 rounded-full text-xs font-semibold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all duration-200 active:scale-95 cursor-pointer shadow-sm"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                           </svg>
-                          <span className="hidden md:inline">Descargado</span>
-                        </span>
+                          <span>Ya descargado</span>
+                        </button>
                         {clearBtn}
                       </div>
                     )
@@ -12688,6 +14103,11 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
             <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
             Radio
           </button>
+          <button onClick={() => modernizarTrack(discoverCtx.track)}
+            className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
+            <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Modernizar (remix al azar)
+          </button>
           <button onClick={() => handleShareTrack(discoverCtx.track)}
             className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary,white)] transition-colors flex items-center gap-2">
             <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
@@ -12813,6 +14233,13 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               </div>
               Radio - tracks similares
             </button>
+            <button onClick={() => modernizarTrack(discoverCtx.track)}
+              className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
+              <div className="w-8 h-8 rounded-full bg-purple-500/15 flex items-center justify-center">
+                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              </div>
+              Modernizar (remix al azar)
+            </button>
             <button onClick={() => handleShareTrack(discoverCtx.track)}
               className="w-full text-left px-4 py-3 rounded-xl text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3 active:scale-[0.98]">
               <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center">
@@ -12861,6 +14288,34 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
           </div>
         </div>
       </>)}
+
+      {/* Barra "Modernizado": el remix al azar está sonando — bajar u otro */}
+      {remixPick && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-[var(--bg-panel)] border border-[var(--border-color)] shadow-2xl max-w-[94vw]">
+          <svg className="w-4 h-4 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          <div className="min-w-0">
+            <div className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] font-bold">Modernizado{remixPick.artist ? ` · ${remixPick.artist}` : ''}</div>
+            <div className="text-xs font-medium text-[var(--text-primary)] truncate max-w-[15rem]" title={remixPick.title}>{remixPick.title}</div>
+          </div>
+          <button
+            onClick={() => {
+              searchAndDownload({ ...remixPick.base, id: `rmx-${remixPick.base.id}-${Date.now()}`, title: remixPick.title })
+              toast('Buscando ese remix en SoulSeek...', 'success', 2500)
+            }}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 hover:brightness-110"
+            style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" /></svg>
+            Descargar
+          </button>
+          <button onClick={() => modernizarTrack(remixPick.base)} className="flex-shrink-0 px-2 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all" title="Probar otro remix">
+            Otro
+          </button>
+          <button onClick={() => setRemixPick(null)} className="flex-shrink-0 p-1 rounded-lg text-gray-500 hover:text-red-400 transition-colors" title="Cerrar">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+      )}
 
       {/* Share dialog — modal in-app con preview del track + link copiable */}
       {shareDialog && (() => {
@@ -12954,31 +14409,32 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
         const errors = Object.entries(downloadQueue).filter(([, d]) => d.status === 'not_found' || d.status === 'error')
         if (active.length === 0 && done.length === 0) return null
         return (
-          <div className="flex-shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-panel)] px-3 md:px-6 py-2 md:py-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex-shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-genre-header)] px-3 md:px-6 py-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {active.length > 0 && (
-                <span className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[var(--color-accent)]/15 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30">
                   <div className="w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-                  {active.length} descargando...
+                  {active.length} descargando
                 </span>
               )}
               {done.length > 0 && (
-                <span className="flex items-center gap-2 text-xs text-green-400">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-500/10 text-green-400 ring-1 ring-green-500/30">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                   {done.length} descargados
                 </span>
               )}
               {errors.length > 0 && (
-                <span className="text-xs text-gray-500">{errors.length} no encontrados</span>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/[0.04] text-gray-500 ring-1 ring-white/10">{errors.length} no encontrados</span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {(done.length > 0 || active.length > 0) && (
                 <button
                   onClick={onGoToDownloads}
-                  className="text-xs text-[var(--color-accent)] hover:brightness-125 transition-all"
+                  className="px-3 py-1 rounded-full text-[11px] font-bold transition-all active:scale-95 hover:brightness-110"
+                  style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                 >
                   Ver descargas
                 </button>
@@ -12986,7 +14442,7 @@ function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, a
               {active.length === 0 && (
                 <button
                   onClick={() => setDownloadQueue({})}
-                  className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-all"
                 >
                   Limpiar
                 </button>
