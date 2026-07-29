@@ -619,6 +619,45 @@ function ScreenHint({ id, title, tips }) {
   )
 }
 
+function formatSmallMeta(f) {
+  if (!f) return ''
+  const parts = []
+
+  // Duración
+  const ms = f.duration_ms || f.duration
+  if (ms) {
+    const m = Math.floor(ms / 60000)
+    const s = Math.floor((ms % 60000) / 1000)
+    parts.push(`${m}:${s.toString().padStart(2, '0')}`)
+  }
+
+  // Tamaño MB
+  if (f.size_mb) {
+    parts.push(`${f.size_mb} MB`)
+  }
+
+  // Hora / Fecha de agregado
+  const dt = f.date_added || f.date || f.mtime
+  if (dt) {
+    try {
+      const d = new Date(dt)
+      if (!isNaN(d.getTime())) {
+        const dateStr = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+        const timeStr = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+        parts.push(`${dateStr} ${timeStr}`)
+      }
+    } catch {}
+  }
+
+  // Formato / Tipo de archivo
+  const fmt = f.format || (f.filename ? (f.filename.match(/\.(\w{3,4})$/) || [])[1]?.toUpperCase() : '')
+  if (fmt) {
+    parts.push(fmt)
+  }
+
+  return parts.join(' • ')
+}
+
 function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
   const [dragOver, setDragOver] = useState(false)
 
@@ -717,9 +756,8 @@ function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, c
                 <PlayPauseBtn isPlaying={isPlaying} onClick={(e) => { e.stopPropagation(); onPlay(f) }} size="xs" />
                 <div className="flex-1 min-w-0">
                   <div className={`text-xs truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]/90'}`}>{f.title || f.filename}</div>
-                  <div className="text-[10px] text-gray-500 truncate">{f.artist}</div>
+                  <div className="text-[10px] text-gray-400 font-mono truncate">{f.artist ? `${f.artist} · ` : ''}{formatSmallMeta(f)}</div>
                 </div>
-                <span className="text-[10px] text-gray-600 flex-shrink-0">{f.format}</span>
               </div>
             )
           })}
@@ -2558,13 +2596,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                   <div className="w-28 sm:w-40 flex-shrink-0 min-w-0">
                     <div className="text-xs md:text-sm truncate text-[var(--text-secondary)]" title={pm.artist}>{pm.artist || '—'}</div>
                   </div>
-                  <div className="flex-1 min-w-0 flex items-center gap-1">
-                    <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`} title={pm.title}>
-                      {pm.title}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-1">
+                      <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`} title={pm.title}>
+                        {pm.title}
+                      </div>
+                      <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((pm.artist || '') + ' ' + (pm.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hidden sm:flex flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
+                      </a>
                     </div>
-                    <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((pm.artist || '') + ' ' + (pm.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hidden sm:flex flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
-                    </a>
+                    <div className="text-[10px] text-gray-400 font-mono truncate">{formatSmallMeta(f)}</div>
                   </div>
                   {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-xs text-gray-600 truncate" title={f.filename}>{f.filename}</span>}
                   <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
@@ -2695,13 +2736,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(f)} />
                       </span>
                       <TrackThumb src={f.artwork} size="w-7 h-7" />
-                      <div className="flex-1 min-w-0 flex items-center gap-1">
-                        <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
-                          {f.title || f.filename}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <div className="flex items-center gap-1">
+                          <div className={`text-xs md:text-sm truncate ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
+                            {f.title || f.filename}
+                          </div>
+                          <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((f.artist || '') + ' ' + (f.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hidden sm:flex flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
+                          </a>
                         </div>
-                        <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent((f.artist || '') + ' ' + (f.title || f.filename))}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hidden sm:flex flex-shrink-0 text-gray-700 hover:text-red-500 transition-colors" title="YouTube">
-                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
-                        </a>
+                        <div className="text-[10px] text-gray-400 font-mono truncate">{formatSmallMeta(f)}</div>
                       </div>
                       <span className="w-24 sm:w-36 flex-shrink-0 text-xs md:text-sm text-gray-400 truncate">{f.artist}</span>
                       <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
