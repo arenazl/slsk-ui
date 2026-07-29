@@ -5,14 +5,57 @@ import { fsaBackend, makeStorage } from './storage'
 const ToastContext = createContext()
 function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
+
+  // Pedir permiso de notificaciones del sistema operativo al montar
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+  }, [])
+
   const show = useCallback((msg, type = 'success', duration = 3000) => {
-    const id = Date.now()
+    const id = Date.now() + Math.random()
     // Prevent duplicate messages (skip if same msg already showing)
     setToasts(prev => {
       if (prev.some(t => t.msg === msg)) return prev
       return [...prev.slice(-4), { id, msg, type }]
     })
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration)
+
+    // Notificación nativa del sistema (Windows Action Center / System Tray Toast)
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        const title = type === 'error' ? 'DJ Free App — Error' : type === 'warning' ? 'DJ Free App — Aviso' : 'DJ Free App'
+        const fireNative = () => {
+          if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+            navigator.serviceWorker.ready.then(reg => {
+              reg.showNotification(title, {
+                body: msg,
+                icon: '/icon-192.png',
+                tag: 'djfreeapp-toast-' + id,
+                renotify: true
+              }).catch(() => {
+                new Notification(title, { body: msg, icon: '/icon-192.png' })
+              })
+            }).catch(() => {
+              new Notification(title, { body: msg, icon: '/icon-192.png' })
+            })
+          } else {
+            new Notification(title, { body: msg, icon: '/icon-192.png' })
+          }
+        }
+
+        if (Notification.permission === 'granted') {
+          fireNative()
+        } else if (Notification.permission === 'default') {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') fireNative()
+          }).catch(() => {})
+        }
+      }
+    } catch (e) {
+      console.warn('Native notification error:', e)
+    }
   }, [])
   return (
     <ToastContext.Provider value={show}>
@@ -63,6 +106,8 @@ function ConfirmProvider({ children }) {
   )
 }
 const useConfirm = () => useContext(ConfirmContext)
+
+const isDirtyMeta = f => Boolean(f && (!f.artist || !f.title || f.artist === 'Unknown Artist' || f.title === 'Unknown Title' || !f.genre || !f.key || !f.bpm))
 
 // Per-user genre click tracking with persistence + 5-click reorder threshold.
 // Returns:
@@ -1583,6 +1628,8 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     const ok = (await r.json().catch(() => ({}))).ok
     if (!ok) throw new Error('no se pudo aplicar')
   }
+
+  const isDirtyMeta = f => Boolean(f && (!f.artist || !f.title || f.artist === 'Unknown Artist' || f.title === 'Unknown Title' || !f.genre || !f.key || !f.bpm))
 
   const startCurador = async () => {
     const targets = files.filter(isDirtyMeta)
