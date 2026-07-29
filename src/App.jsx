@@ -2071,36 +2071,40 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
         {/* Action buttons - hidden on mobile, shown on md+ */}
 
+        {/* Action buttons — compact icon-only badges with tooltips */}
         {(() => {
           const toOrganize = files.filter(f => !f.in_subfolder && f.genre).length
           const pending = ungrouped.length + toOrganize
           if (pending === 0) return null
           const busy = classifying || organizing
-          const label = classifying ? 'Clasificando...' : organizing ? 'Organizando...' : `Organizar (${pending})`
           return (
-          <button
-            onClick={classifyAndOrganize}
-            disabled={busy}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
-            style={{ background: 'var(--color-accent)' }}
-          >
-            {busy ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-            )}
-            {label}
-          </button>
+            <button
+              onClick={classifyAndOrganize}
+              disabled={busy}
+              className="hidden md:flex relative items-center justify-center h-8 w-8 disabled:opacity-50 rounded-lg text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
+              style={{ background: 'var(--color-accent)' }}
+              title={busy ? 'Organizando subcarpetas...' : `Organizar en subcarpetas (${pending})`}
+            >
+              {busy ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+              )}
+              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-4 text-[9px] font-bold rounded-full bg-blue-600 text-white shadow text-center leading-tight">
+                {pending}
+              </span>
+            </button>
           )
         })()}
         {files.some(f => !f.key) && (
           <button
             onClick={detectKeys}
             disabled={detectingKeys}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
+            className="hidden md:flex relative items-center justify-center h-8 w-8 disabled:opacity-50 rounded-lg text-[var(--color-accent-text)] transition-all duration-200 active:scale-95 flex-shrink-0"
             style={{ background: 'var(--color-accent)' }}
+            title={detectingKeys ? 'Detectando tonalidades (Keys)...' : `Detectar tonalidades Key (${files.filter(f => !f.key).length})`}
           >
             {detectingKeys ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -2109,32 +2113,41 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
               </svg>
             )}
-            {detectingKeys ? 'Detectando...' : `Keys (${files.filter(f => !f.key).length})`}
+            <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-4 text-[9px] font-bold rounded-full bg-indigo-600 text-white shadow text-center leading-tight">
+              {files.filter(f => !f.key).length}
+            </span>
           </button>
         )}
-        {/* Metatags se mudó ADENTRO del Curador ("Grabar tags en archivos"):
-            un solo botón inteligente en la barra, menos quilombo. */}
-        <button
-          onClick={() => setCuradorOpen(true)}
-          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all duration-200 active:scale-95 flex-shrink-0"
-          title="Curador en vivo: cascada determinística (Beatport primero). Auto-aplica solo lo seguro; lo dudoso lo decidís vos."
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-          Curador{files.filter(isDirtyMeta).length ? ` (${files.filter(isDirtyMeta).length})` : ''}
-        </button>
-        {/* Carátulas para los VISIBLES sin foto (iTunes→Deezer determinístico).
-            Solo aparece cuando hay faltantes en la grilla actual. */}
+        {(() => {
+          const count = files.filter(isDirtyMeta).length
+          return (
+            <button
+              onClick={() => setCuradorOpen(true)}
+              className="hidden md:flex relative items-center justify-center h-8 w-8 rounded-lg border border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all duration-200 active:scale-95 flex-shrink-0"
+              title={`Curador de metatags (${count} pendientes)`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+              {count > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-4 text-[9px] font-bold rounded-full bg-purple-600 text-white shadow text-center leading-tight">
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })()}
         {filtered.filter(f => !f.artwork).length > 0 && (
           <button
             onClick={() => fetchArtworkFor(filtered.filter(f => !f.artwork).map(f => f.filename).slice(0, 60))}
             disabled={fetchingArt}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0 disabled:opacity-50"
-            title="Busca carátulas (iTunes/Deezer) para los temas visibles que no tienen — hasta 60 por corrida"
+            className="hidden md:flex relative items-center justify-center h-8 w-8 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-200 active:scale-95 flex-shrink-0 disabled:opacity-50"
+            title={`Buscar carátulas iTunes/Deezer (${filtered.filter(f => !f.artwork).length} sin foto)`}
           >
             {fetchingArt
               ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
               : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-            Carátulas ({filtered.filter(f => !f.artwork).length})
+            <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-4 text-[9px] font-bold rounded-full bg-gray-700 text-white shadow text-center leading-tight">
+              {filtered.filter(f => !f.artwork).length}
+            </span>
           </button>
         )}
         {/* ── Side modal: Curador en vivo ── */}
@@ -2260,15 +2273,14 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
         {view === 'tracks' && (
           <button
             onClick={toggleFilename}
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 ${
-              showFilename ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-semibold' : 'text-gray-500 hover:text-gray-300 bg-[var(--bg-input)]/40'
+            className={`hidden md:flex items-center justify-center h-8 w-8 rounded-lg transition-all duration-200 active:scale-95 flex-shrink-0 ${
+              showFilename ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-semibold border border-[var(--color-accent)]/40' : 'text-gray-500 hover:text-gray-300 bg-[var(--bg-input)]/40 border border-[var(--border-color)]'
             }`}
-            title="Mostrar/ocultar la columna de nombre de archivo"
+            title="Mostrar / Ocultar columna de Filename"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
             </svg>
-            Filename
           </button>
         )}
 
@@ -2276,15 +2288,17 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           <button
             onClick={openDupes}
             disabled={deletingDupes}
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 active:scale-95 flex-shrink-0 disabled:opacity-50 ${
-              showDupes ? 'bg-red-600 text-[var(--text-primary)] font-semibold' : 'bg-red-900/50 hover:bg-red-800 text-red-300'
+            className={`hidden md:flex relative items-center justify-center h-8 w-8 rounded-lg transition-all duration-200 active:scale-95 flex-shrink-0 disabled:opacity-50 ${
+              showDupes ? 'bg-red-600 text-[var(--text-primary)]' : 'bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-500/40'
             }`}
-            title="Revisar y resolver duplicados"
+            title={`Revisar y resolver duplicados (${dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            Duplicados ({dupeGroups.reduce((s, g) => s + g.dupes.length, 0)})
+            <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-4 text-[9px] font-bold rounded-full bg-red-600 text-white shadow text-center leading-tight">
+              {dupeGroups.reduce((s, g) => s + g.dupes.length, 0)}
+            </span>
           </button>
         )}
 
@@ -10810,9 +10824,7 @@ function App() {
               </>
             )}
           </div>
-          {/* Estado del agente — SIEMPRE visible (3 estados, refresca con el
-              polling/heartbeat de 30s; sin sockets). Verde=prendido,
-              amarillo=instalado pero apagado, rojo=sin instalar (tocá → descargar). */}
+          {/* Estado del agente — SIEMPRE visible en icono comprimido con tooltip */}
           <button
             onClick={async () => {
               if (checkAgentRef.current) await checkAgentRef.current()
@@ -10820,7 +10832,7 @@ function App() {
               else if (agentRegistered) toast('Tu agente está apagado — abrilo en tu PC para poder descargar', 'warning', 4500)
               else setAgentInstallOpen(true)
             }}
-            className={`h-8 flex items-center gap-1.5 px-2.5 rounded-lg border transition-all duration-200 active:scale-95 flex-shrink-0 ${
+            className={`h-8 w-8 flex items-center justify-center rounded-lg border transition-all duration-200 active:scale-95 flex-shrink-0 ${
               agentConnected
                 ? agentErrRecent
                   ? 'border-red-500/50 bg-red-500/10 text-red-400'
@@ -10831,14 +10843,11 @@ function App() {
             }`}
             title={agentConnected
               ? agentErrRecent
-                ? `El agente tuvo un error hace instantes (${agentErrMsg}) — suele recuperarse solo; tocá para re-chequear`
-                : `Agente v${agentVersion} conectado`
+                ? `El agente tuvo un error (${agentErrMsg}) — tocá para re-chequear`
+                : `Agente v${agentVersion} conectado y listo`
               : agentRegistered ? 'Agente instalado pero apagado — prendelo en tu PC' : 'Agente sin instalar — tocá para descargar'}
           >
-            <span className={`w-2 h-2 rounded-full ${agentConnected ? (agentErrRecent ? 'bg-red-500 animate-pulse' : 'bg-green-500') : agentRegistered ? 'bg-yellow-500' : 'bg-red-500'}`} />
-            <span className="text-[10px] font-semibold uppercase tracking-wider hidden sm:inline">
-              {agentConnected ? (agentErrRecent ? 'Timeout' : 'Agente ON') : agentRegistered ? 'Apagado' : 'Instalar'}
-            </span>
+            <span className={`w-2.5 h-2.5 rounded-full ${agentConnected ? (agentErrRecent ? 'bg-red-500 animate-pulse' : 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]') : agentRegistered ? 'bg-yellow-500' : 'bg-red-500'}`} />
           </button>
           {agentConnected && (
             <button
