@@ -11842,6 +11842,18 @@ function App() {
                                   </div>
                                 )}
                               </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  fetch(`${API_BASE}/api/download/cancel_all`, { method: 'POST' }).catch(() => {})
+                                  setSearchDlStatus(prev => { const n = { ...prev }; delete n[filename]; return n })
+                                  toast('Descarga cancelada', 'info', 2000)
+                                }}
+                                className="px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 transition-all active:scale-95 flex-shrink-0"
+                                title="Cancelar esta descarga y liberar el hilo"
+                              >
+                                ✖ Cancelar
+                              </button>
                             </div>
                           ) : dlSt === 'downloading' ? (
                             <div className="flex-shrink-0 flex items-center gap-2">
@@ -11855,6 +11867,18 @@ function App() {
                               ) : (
                                 <span className="text-yellow-400 text-xs animate-pulse">Iniciando...</span>
                               )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  fetch(`${API_BASE}/api/download/cancel_all`, { method: 'POST' }).catch(() => {})
+                                  setSearchDlStatus(prev => { const n = { ...prev }; delete n[filename]; return n })
+                                  toast('Descarga cancelada', 'info', 2000)
+                                }}
+                                className="px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 transition-all active:scale-95 flex-shrink-0"
+                                title="Cancelar esta descarga y liberar el hilo"
+                              >
+                                ✖ Cancelar
+                              </button>
                             </div>
                           ) : dlSt === 'error' ? (
                             <button
