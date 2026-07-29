@@ -1,6 +1,6 @@
 {
-  "version": "2.12.18",
-  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.18/GrooveSyncAgent.exe",
-  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.18/GrooveSyncAgent-macOS.dmg",
-  "notes": "v2.12.18: nueva filosofía de búsqueda manual desde Discovery + botón Renovar Sesión"
+  "version": "2.12.19",
+  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.19/GrooveSyncAgent.exe",
+  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.19/GrooveSyncAgent-macOS.dmg",
+  "notes": "v2.12.19: auto-bump build"
 }

@@ -1,10 +1,11 @@
 {
   "name": "slsk-ui",
   "private": true,
-  "version": "2.12.18",
+  "version": "2.12.19",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/bump-version.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
