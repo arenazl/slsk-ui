@@ -461,7 +461,7 @@ export function formatSmallMeta(f) {
   return parts.join(' • ')
 }
 
-const GenreCard = React.memo(function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
+export const GenreCard = React.memo(function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
   const [dragOver, setDragOver] = useState(false)
 
   return (
