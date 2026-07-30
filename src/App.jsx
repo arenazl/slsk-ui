@@ -939,6 +939,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [starFilter, _setStarFilter] = useQS('stars', '0')
   const setStarFilter = useCallback((v) => _setStarFilter(String(v)), [_setStarFilter])
   const [exportName, setExportName] = useState('')
+  const [exportMode, setExportMode] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportWithTracks, setExportWithTracks] = useState(false)
   const [detectingKeys, setDetectingKeys] = useState(false)
@@ -1856,8 +1857,21 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
               {tab.icon}
             </button>
           ))}
+          
+          <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+          <button
+            onClick={() => setExportMode(v => !v)}
+            title="Mostrar panel de Exportación rápida"
+            className={`flex items-center gap-1 px-2.5 h-7 rounded-md text-xs font-semibold transition-colors duration-200 ${
+              exportMode 
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] hover:bg-[var(--bg-hover)]'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            Exportar...
+          </button>
         </div>
-
         {/* Star filter — 5-star interactive hover selector */}
         {(() => {
           const currentRating = selectedStars.length === 1 ? selectedStars[0] : (selectedStars.length === 0 ? 0 : null)
@@ -2454,31 +2468,33 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </div>
 
           {/* Export bar */}
-          <div className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
-            <span className="hidden sm:inline text-sm text-gray-400 flex-shrink-0">{finalList.length} tracks</span>
-            <input
-              value={exportName}
-              onChange={e => setExportName(e.target.value)}
-              placeholder="Nombre del set..."
-              className="flex-1 min-w-0 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
-              onKeyDown={e => e.key === 'Enter' && handleExport()}
-            />
-            <button
-              onClick={handleExport}
-              disabled={!exportName.trim() || exporting || finalList.length === 0}
-              className="flex items-center gap-1.5 px-4 py-1.5 disabled:opacity-40 rounded-lg text-sm text-[var(--color-accent-text)] font-medium transition-all duration-200 active:scale-95 flex-shrink-0"
-              style={{ background: 'var(--color-accent)' }}
-            >
-              {exporting ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              )}
-              {exporting ? 'Exportando...' : 'Exportar'}
-            </button>
-          </div>
+          {exportMode && (
+            <div className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
+              <span className="hidden sm:inline text-sm text-gray-400 flex-shrink-0">{finalList.length} tracks</span>
+              <input
+                value={exportName}
+                onChange={e => setExportName(e.target.value)}
+                placeholder="Nombre del set..."
+                className="flex-1 min-w-0 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+                onKeyDown={e => e.key === 'Enter' && handleExport()}
+              />
+              <button
+                onClick={handleExport}
+                disabled={!exportName.trim() || exporting || finalList.length === 0}
+                className="flex items-center gap-1.5 px-4 py-1.5 disabled:opacity-40 rounded-lg text-sm text-[var(--color-accent-text)] font-medium transition-all duration-200 active:scale-95 flex-shrink-0"
+                style={{ background: 'var(--color-accent)' }}
+              >
+                {exporting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                {exporting ? 'Exportando...' : 'Exportar'}
+              </button>
+            </div>
+          )}
         </div>
       ) : (view === 'cards' && !q) ? (
         /* Genre grid (cards view) */
@@ -2598,40 +2614,42 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
           </div>
 
           {/* Export bar */}
-          <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
-            <span className="text-sm text-gray-400 flex-shrink-0">{finalList.length} tracks en lista</span>
-            <input
-              value={exportName}
-              onChange={e => setExportName(e.target.value)}
-              placeholder="Nombre del set..."
-              className="flex-1 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
-              onKeyDown={e => e.key === 'Enter' && handleExport()}
-            />
-            <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos">
-              <div
-                onClick={() => setExportWithTracks(v => !v)}
-                className={`w-8 h-4 rounded-full transition-colors duration-200 ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
+          {exportMode && (
+            <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 bg-[var(--bg-panel)] border-t border-[var(--border-color)]">
+              <span className="text-sm text-gray-400 flex-shrink-0">{finalList.length} tracks en lista</span>
+              <input
+                value={exportName}
+                onChange={e => setExportName(e.target.value)}
+                placeholder="Nombre del set..."
+                className="flex-1 max-w-xs px-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+                onKeyDown={e => e.key === 'Enter' && handleExport()}
+              />
+              <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Incluir copia de archivos">
+                <div
+                  onClick={() => setExportWithTracks(v => !v)}
+                  className={`w-8 h-4 rounded-full transition-colors duration-200 ${exportWithTracks ? 'bg-[var(--color-accent)]' : 'bg-gray-600'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+                <span className="text-xs text-gray-400">+ Tracks</span>
+              </label>
+              <button
+                onClick={handleExport}
+                disabled={!exportName.trim() || exporting || finalList.length === 0}
+                className="flex items-center gap-1.5 px-4 py-1.5 disabled:opacity-40 rounded-lg text-sm text-[var(--color-accent-text)] font-medium transition-all duration-200 active:scale-95 flex-shrink-0"
+                style={{ background: 'var(--color-accent)' }}
               >
-                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${exportWithTracks ? 'translate-x-4' : 'translate-x-0'}`} />
-              </div>
-              <span className="text-xs text-gray-400">+ Tracks</span>
-            </label>
-            <button
-              onClick={handleExport}
-              disabled={!exportName.trim() || exporting || finalList.length === 0}
-              className="flex items-center gap-1.5 px-4 py-1.5 disabled:opacity-40 rounded-lg text-sm text-[var(--color-accent-text)] font-medium transition-all duration-200 active:scale-95 flex-shrink-0"
-              style={{ background: 'var(--color-accent)' }}
-            >
-              {exporting ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              )}
-              {exporting ? 'Exportando...' : 'Exportar'}
-            </button>
-          </div>
+                {exporting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                {exporting ? 'Exportando...' : 'Exportar'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
