@@ -134,7 +134,7 @@
   const KEY  = 'gsync_maint_bypass';
 
   // Si ya tiene el bypass, entrar directo
-  if (localStorage.getItem(KEY) === '1') {
+  if (localStorage.getItem(KEY) === '1' && !!localStorage.getItem('auth_token')) {
     window.location.replace('/');
   }
 

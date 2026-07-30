@@ -390,7 +390,7 @@ const STATUS_COLORS = {
   error: 'bg-red-500/20 text-red-400',
 }
 
-function TrackRow({ track, onCancel, onGoToLibrary }) {
+const TrackRow = React.memo(function TrackRow({ track, onCancel, onGoToLibrary }) {
   const fmt = String(track.format || '').toUpperCase()
   const lossless = ['FLAC', 'WAV', 'AIFF', 'AIF'].includes(fmt)
   const isDone = ['completed', 'skipped'].includes(track.status)
@@ -460,7 +460,11 @@ function TrackRow({ track, onCancel, onGoToLibrary }) {
       </div>
     </div>
   )
-}
+}, (prev, next) => {
+  return prev.track.id === next.track.id &&
+         prev.track.status === next.track.status &&
+         prev.track.progress === next.track.progress;
+});
 
 const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.us-east4.run.app'
 
@@ -704,7 +708,7 @@ function formatSmallMeta(f) {
   return parts.join(' • ')
 }
 
-function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
+const GenreCard = React.memo(function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, colorRgb, expanded, onToggle, playingFile, onPlay, onContextMenu }) {
   const [dragOver, setDragOver] = useState(false)
 
   return (
@@ -816,7 +820,15 @@ function GenreCard({ genre, files, onDrop, onOpenFolder, onDownloadZip, color, c
       )}
     </div>
   )
-}
+}, (prev, next) => {
+  const prevHasPlaying = prev.files.some(f => f.filename === prev.playingFile);
+  const nextHasPlaying = next.files.some(f => f.filename === next.playingFile);
+  return prev.expanded === next.expanded &&
+         prev.files.length === next.files.length &&
+         prev.genre === next.genre &&
+         prevHasPlaying === nextHasPlaying &&
+         prev.playingFile === next.playingFile;
+});
 
 const GENRE_COLORS = [
   { bg: 'bg-blue-500', rgb: '59,130,246' },
