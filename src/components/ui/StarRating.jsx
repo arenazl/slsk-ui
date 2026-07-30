@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react';
 
 export default function StarRating({ rating, onRate }) {
   const [localRating, setLocalRating] = useState(rating)

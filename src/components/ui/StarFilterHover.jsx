@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react';
 
 export default function StarFilterHover({ rating, selectedStars, onSelect }) {
   const [hoverRating, setHoverRating] = useState(0)
