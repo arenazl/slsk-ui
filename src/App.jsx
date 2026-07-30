@@ -329,7 +329,7 @@ function killAudio(a) {
 
 // ScreenHint — modern dismissible mini-guide shown above each main screen.
 // Auto-rotates tips, gradient bg, animated icon, persisted-dismiss per screen.
-function ScreenHint({ id, title, tips }) {
+export function ScreenHint({ id, title, tips }) {
   const TIP_MS = 4500
   const [dismissed, setDismissed] = useState(() => !!localStorage.getItem(`hint_${id}_dismissed`))
   const [activeTip, setActiveTip] = useState(0)

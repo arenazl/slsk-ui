@@ -8,7 +8,7 @@ import TrackThumb from '../components/ui/TrackThumb';
 import GenreCombo from '../components/ui/GenreCombo';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { API_BASE, agentFetch, getAudioUrl, normDupeKey, GENRE_COLORS } from '../App';
+import { API_BASE, agentFetch, getAudioUrl, normDupeKey, GENRE_COLORS, ScreenHint } from '../App';
 
 export default function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary, playNextRef, libraryRoot }) {
   const toast = useToast()
