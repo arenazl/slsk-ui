@@ -11,7 +11,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { API_BASE, agentFetch, agentUrl, formatSmallMeta, prettyMeta, normDupeKey, GENRE_COLORS, ScreenHint, useQS, IS_MOBILE_DEVICE, GenreCard } from '../App';
 import { fsaBackend } from '../storage';
 
-export default  forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
+export default React.memo(forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
   const toast = useToast()
   const confirmDialog = useConfirm()
   const [files, setFiles] = useState([])
@@ -815,7 +815,6 @@ export default  forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     }
   })
   const genres = Object.keys(byGenre).sort((a, b) => byGenre[b].length - byGenre[a].length)
-
   // All genres from unfiltered files (for context menu)
   const ALL_GENRE_OPTIONS = [
     'Tech House', 'Deep House', 'Melodic House', 'Progressive House', 'Minimal Tech', 'Afro House',
@@ -880,6 +879,16 @@ export default  forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       default: return 0
     }
   })
+
+  const [renderLimit, setRenderLimit] = useState(50)
+  useEffect(() => {
+    setRenderLimit(50)
+    const t = setTimeout(() => {
+      setRenderLimit(15000)
+    }, 10)
+    return () => clearTimeout(t)
+  }, [finalList])
+
 
   if (loading) {
     return <SkeletonRows rows={12} />
@@ -1514,7 +1523,7 @@ export default  forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
           {/* Table rows */}
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-            {finalList.map((f, i) => {
+            {finalList.slice(0, renderLimit).map((f, i) => {
               const isPlaying = playingFile === f.filename
               const pm = prettyMeta(f)
               return (
@@ -1657,7 +1666,7 @@ export default  forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {(() => {
               let lastGenre = null
               let idx = 0
-              return finalList.map((f, i) => {
+              return finalList.slice(0, renderLimit).map((f, i) => {
                 const isPlaying = playingFile === f.filename
                 const showGenreHeader = f.genre !== lastGenre
                 lastGenre = f.genre
@@ -1938,4 +1947,4 @@ export default  forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
     </div>
   )
-})
+}))

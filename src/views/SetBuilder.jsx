@@ -10,7 +10,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { API_BASE, agentFetch, getAudioUrl, normDupeKey, GENRE_COLORS, ScreenHint } from '../App';
 
-export default function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary, playNextRef, libraryRoot }) {
+export default React.memo(forwardRef(function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary, playNextRef, libraryRoot }, ref) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
   const [setSelectedStars, setSetSelectedStars] = useState([])
@@ -1416,4 +1416,4 @@ ${playlistEntries}
 
     </div>
   )
-}
+}))

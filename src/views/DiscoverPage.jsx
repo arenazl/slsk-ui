@@ -11,7 +11,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { API_BASE, IS_MOBILE_DEVICE, agentFetch, GENRE_COLORS, SwipeableRow, useQS, useGenreClicks } from '../App';
 import { fsaBackend } from '../storage';
 
-export default function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary, isRemoteOutput, sendRemoteCommand, discoverRemoteRef, outputDeviceName, onTriggerSearch }) {
+export default React.memo(function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary, isRemoteOutput, sendRemoteCommand, discoverRemoteRef, outputDeviceName, onTriggerSearch }) {
   const toast = useToast()
   // Per-user genre click tracking with 5-click reorder threshold (server-persisted)
   const beatportClicks = useGenreClicks('beatport_genre_clicks', authUser?.name || '')
@@ -2057,4 +2057,4 @@ export default function DiscoverPage({ wsRef, username, password, connected, onG
       )}
     </div>
   )
-}
+})
