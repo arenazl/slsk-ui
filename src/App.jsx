@@ -22,7 +22,7 @@ const isDirtyMeta = f => Boolean(f && (!f.artist || !f.title || f.artist === 'Un
 //   bump(name): increments live count, may trigger a new committed snapshot
 //   ready: true once initial load from server resolved
 const REORDER_THRESHOLD = 5
-function useGenreClicks(storeKey, user) {
+export function useGenreClicks(storeKey, user) {
   const [live, setLive] = useState({})       // running counter
   const [committed, setCommitted] = useState({}) // snapshot used for ordering
   const [ready, setReady] = useState(false)
