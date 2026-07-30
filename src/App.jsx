@@ -181,34 +181,7 @@ const SEARCHING_MESSAGES = [
   'Pateando la pista',
 ]
 
-function SearchingLabel({ className = '' }) {
-  // Arranca en un índice random para que filas simultáneas no muestren todas
-  // el mismo cartel sincronizado.
-  const [i, setI] = useState(() => Math.floor(Math.random() * SEARCHING_MESSAGES.length))
-  const [show, setShow] = useState(true)
-  useEffect(() => {
-    let swapTimer
-    const id = setInterval(() => {
-      setShow(false) // fade-out del cartel actual
-      swapTimer = setTimeout(() => {
-        setI(prev => (prev + 1) % SEARCHING_MESSAGES.length)
-        setShow(true) // fade-in del siguiente
-      }, 200)
-    }, 1800)
-    return () => { clearInterval(id); clearTimeout(swapTimer) }
-  }, [])
-  return (
-    <span className={className}>
-      <span
-        className={`inline-block transition-all duration-200 ease-out will-change-transform ${
-          show ? 'opacity-100 translate-y-0 blur-0' : 'opacity-0 -translate-y-1 blur-[1px]'
-        }`}
-      >
-        {SEARCHING_MESSAGES[i]}
-      </span>
-    </span>
-  )
-}
+import SearchingLabel from './components/ui/SearchingLabel';
 
 const PLAY_SIZES = {
   xs: { btn: 'w-6 h-6', icon: 'w-3 h-3' },
@@ -217,65 +190,15 @@ const PLAY_SIZES = {
   lg: { btn: 'w-9 h-9', icon: 'w-4 h-4' },
 }
 
-function PlayPauseBtn({ isPlaying, onClick, size = 'md', loading = false, className = '' }) {
-  const s = PLAY_SIZES[size] || PLAY_SIZES.md
-  return (
-    <button
-      onClick={onClick}
-      className={`${s.btn} flex items-center justify-center rounded-full flex-shrink-0 transition-all duration-200 active:scale-95 ${
-        loading ? 'bg-white/10 text-gray-400 animate-pulse' :
-        isPlaying ? 'bg-white text-black shadow-md' : 'text-gray-600 hover:text-[var(--text-primary,white)] hover:bg-white/10'
-      } ${className}`}
-    >
-      {loading ? (
-        <span className="text-xs">...</span>
-      ) : isPlaying ? (
-        <svg className={s.icon} fill="currentColor" viewBox="0 0 24 24">
-          <rect x="6" y="4" width="4" height="16" rx="1" />
-          <rect x="14" y="4" width="4" height="16" rx="1" />
-        </svg>
-      ) : (
-        <svg className={`${s.icon} ml-0.5`} fill="currentColor" viewBox="0 0 24 24">
-          <path d="M8 5v14l11-7z" />
-        </svg>
-      )}
-    </button>
-  )
-}
+import PlayPauseBtn from './components/ui/PlayPauseBtn';
 
 // Skeleton de carga: filas "fantasma" pulsantes con la silueta real de la
 // grilla (thumb + dos líneas + chips) — reemplaza los "Cargando..." pelados.
-function SkeletonRows({ rows = 10 }) {
-  return (
-    <div className="flex-1 min-h-0 overflow-hidden px-3 md:px-4 py-2 space-y-1 animate-pulse">
-      {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 py-2.5 border-b border-[var(--border-color)]/30" style={{ opacity: 1 - i * 0.07 }}>
-          <span className="w-8 h-8 rounded-md bg-[var(--bg-hover)] flex-shrink-0" />
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <div className="h-3 rounded bg-[var(--bg-hover)]" style={{ width: `${45 + ((i * 17) % 40)}%` }} />
-            <div className="h-2 rounded bg-[var(--bg-hover)]" style={{ width: `${25 + ((i * 11) % 25)}%` }} />
-          </div>
-          <span className="hidden md:block w-16 h-4 rounded-full bg-[var(--bg-hover)] flex-shrink-0" />
-          <span className="hidden md:block w-12 h-4 rounded bg-[var(--bg-hover)] flex-shrink-0" />
-        </div>
-      ))}
-    </div>
-  )
-}
+import SkeletonRows from './components/ui/SkeletonRows';
 
 // Mini-foto de carátula para las grillas (Biblioteca / Export). Si no hay
 // artwork o falla la carga, placeholder con nota musical — nunca rompe layout.
-function TrackThumb({ src, size = 'w-8 h-8' }) {
-  const [err, setErr] = useState(false)
-  if (!src || err) {
-    return (
-      <span className={`${size} rounded-md flex-shrink-0 bg-[var(--bg-hover)] border border-[var(--border-color)] flex items-center justify-center`}>
-        <svg className="w-3.5 h-3.5 text-[var(--text-dim)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg>
-      </span>
-    )
-  }
-  return <img src={src} alt="" loading="lazy" onError={() => setErr(true)} className={`${size} rounded-md object-cover flex-shrink-0 ring-1 ring-white/10`} />
-}
+import TrackThumb from './components/ui/TrackThumb';
 
 const STATUS_COLORS = {
   pending: 'bg-gray-700',
@@ -1017,31 +940,7 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
   )
 }
 
-function StarRating({ rating, onRate }) {
-  const [localRating, setLocalRating] = useState(rating)
-  useEffect(() => { setLocalRating(rating) }, [rating])
-  return (
-    <div className="flex gap-0.5" onClick={e => e.stopPropagation()}>
-      {[1, 2, 3, 4, 5].map(star => (
-        <button
-          key={star}
-          onClick={(e) => {
-            e.stopPropagation()
-            e.preventDefault()
-            const next = localRating === star ? 0 : star
-            setLocalRating(next)
-            onRate(next)
-          }}
-          className="transition-all duration-150 hover:scale-125"
-        >
-          <svg className={`w-4 h-4 pointer-events-none ${star <= localRating ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-700 hover:text-yellow-300'}`} fill="currentColor" viewBox="0 0 20 20">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-        </button>
-      ))}
-    </div>
-  )
-}
+import StarRating from './components/ui/StarRating';
 
 function useQS(key, defaultVal) {
   const [val, setVal] = useState(() => {
@@ -1096,43 +995,7 @@ function prettyMeta(f) {
   return { artist, title: title || (f.filename || '') }
 }
 
-function StarFilterHover({ rating, selectedStars, onSelect }) {
-  const [hoverRating, setHoverRating] = useState(0)
-
-  return (
-    <div className="hidden md:flex items-center gap-1 bg-[var(--bg-input)]/40 px-2 py-1 rounded-lg border border-[var(--border-color)] flex-shrink-0" onMouseLeave={() => setHoverRating(0)}>
-      <button
-        onClick={() => onSelect(0)}
-        title="Mostrar todas las estrellas"
-        className={`px-1.5 py-0.5 rounded text-[11px] font-semibold transition-all ${
-          selectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-gray-500 hover:text-gray-300'
-        }`}
-      >
-        Todas
-      </button>
-      <div className="flex items-center gap-0.5 ml-1">
-        {[1, 2, 3, 4, 5].map(star => {
-          const active = hoverRating ? star <= hoverRating : (rating !== null ? star <= rating : selectedStars.includes(star))
-          return (
-            <button
-              key={star}
-              onMouseEnter={() => setHoverRating(star)}
-              onClick={() => onSelect(star)}
-              title={`Filtrar por ${star} estrella${star > 1 ? 's' : ''}`}
-              className="p-0.5 transition-transform duration-150 hover:scale-125 focus:outline-none"
-            >
-              <span className={`text-base leading-none transition-colors ${
-                active ? 'text-amber-400 font-bold drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]' : 'text-gray-600 hover:text-gray-400'
-              }`}>
-                ★
-              </span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+import StarFilterHover from './components/ui/StarFilterHover';
 
 const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
   const toast = useToast()
