@@ -1,5 +1,5 @@
 import VirtualList from './components/VirtualList'
-import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react'
 import { fsaBackend, makeStorage } from './storage'
 
 // Toast notification system
