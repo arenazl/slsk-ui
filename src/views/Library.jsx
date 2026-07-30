@@ -20,6 +20,9 @@ export default  forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
   const [organizing, setOrganizing] = useState(false)
   const [expanded, setExpanded] = useState({})
   const [search, setSearch] = useQS('q', '')
+  const [localSearch, setLocalSearch] = useState(search)
+  useEffect(() => { setLocalSearch(search) }, [search])
+  const searchTimeoutRef = useRef(null)
   const [view, setView] = useQS('view', IS_MOBILE_DEVICE ? 'list' : 'cards')
   const [starFilter, _setStarFilter] = useQS('stars', '0')
   const setStarFilter = useCallback((v) => _setStarFilter(String(v)), [_setStarFilter])
@@ -1216,8 +1219,17 @@ export default  forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={localSearch}
+            onChange={e => {
+              const val = e.target.value
+              setLocalSearch(val)
+              clearTimeout(searchTimeoutRef.current)
+              searchTimeoutRef.current = setTimeout(() => {
+                if (val.length === 0 || val.length >= 3) {
+                  setSearch(val)
+                }
+              }, 300)
+            }}
             placeholder="Buscar..."
             className="w-full pl-7 pr-2 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-sm md:text-xs text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
           />
