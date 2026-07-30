@@ -1,3 +1,4 @@
+import VirtualList from './components/VirtualList'
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react'
 import { fsaBackend, makeStorage } from './storage'
 
@@ -1495,20 +1496,15 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
 
   const deleteFile = async (file) => {
     setCtxMenu(null)
-    const targetFilename = file.filename || file.local_name || isInLibrary?.findLocation?.(file)?.file
+    // OJO: acá había refs a isInLibrary/setLocalFilesSet que NO existen en este
+    // componente (ReferenceError al borrar) — se resuelven con filename directo.
+    const targetFilename = file.filename || file.local_name || ''
     if (!targetFilename && !file.title) {
       console.warn('deleteFile: no target filename found for', file)
       return
     }
     const fname = targetFilename || ''
     setFiles(prev => prev.filter(f => f.filename !== fname))
-    setLocalFilesSet(prev => {
-      const next = new Set(prev)
-      if (fname) next.delete(fname)
-      if (file.filename) next.delete(file.filename)
-      if (file.local_name) next.delete(file.local_name)
-      return next
-    })
     try {
       if (agentConnected) {
         await agentFetch('delete', {
@@ -1545,12 +1541,23 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
     const fileQs = file ? `&file=${encodeURIComponent(file)}` : ''
     if (agentConnected) {
       const r = await agentFetch(`open-folder?folder=${encodeURIComponent(folder || '')}${fileQs}`).catch(() => null)
-      // Un tema recién bajado vive en la RAÍZ (todavía sin organizar en su
-      // subcarpeta de género). Si la subcarpeta da 404, reintentamos en la raíz
-      // para resaltarlo igual en vez de fallar.
-      if (file && folder && (!r || !r.ok)) {
-        await agentFetch(`open-folder?file=${encodeURIComponent(file)}`).catch(() => {})
-      }
+      if (r?.ok || !file) return
+      // El subfolder de la UI puede estar VIEJO (recategorización movió el
+      // archivo) o el tema estar aún en la raíz. Cadena de rescate:
+      // 1) raíz → 2) ubicación REAL según el listado fresco del agente →
+      // 3) toast honesto (antes fallaba mudo y "no llevaba al tema").
+      const r2 = await agentFetch(`open-folder?file=${encodeURIComponent(file)}`).catch(() => null)
+      if (r2?.ok) return
+      try {
+        const lib = await agentFetch('library').then(x => x.json())
+        const hit = Array.isArray(lib) ? lib.find(t => t.filename === file) : null
+        if (hit?.subfolder) {
+          const r3 = await agentFetch(`open-folder?folder=${encodeURIComponent(hit.subfolder)}&file=${encodeURIComponent(file)}`).catch(() => null)
+          if (r3?.ok) return
+        }
+      } catch {}
+      toast('No encontré el archivo en el disco (¿se movió o se borró?)', 'warning', 3500)
+      return
     } else {
       await fetch(`${API_BASE}/api/open-folder`, {
         method: 'POST',
@@ -2078,6 +2085,7 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
       case 'rating': return dir * ((a.rating || 0) - (b.rating || 0))
       case 'format': return dir * (a.format || '').localeCompare(b.format || '')
       case 'size': return dir * ((a.size_mb || 0) - (b.size_mb || 0))
+      case 'duration': return dir * ((a.duration || 0) - (b.duration || 0))
       case 'date': return dir * (a.date || '').localeCompare(b.date || '')
       default: return 0
     }
@@ -2682,6 +2690,12 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
             {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-left text-gray-600 normal-case">Filename</span>}
             <button onClick={() => toggleSort('genre')} className={`hidden md:block w-32 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'genre' ? 'text-[var(--color-accent)]' : ''}`}>Género<SortArrow col="genre" /></button>
             <button onClick={() => toggleSort('key')} className={`hidden sm:block w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'key' ? 'text-[var(--color-accent)]' : ''}`}>Key<SortArrow col="key" /></button>
+            {/* Columnas nuevas: el renglón 2 de la fila ("MB • hora • FLAC") era
+                confuso (la hora de DESCARGA parecía duración) — ahora son
+                columnas propias, ordenables, y el título respira. */}
+            <button onClick={() => toggleSort('format')} className={`hidden md:block w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'format' ? 'text-[var(--color-accent)]' : ''}`}>Fmt<SortArrow col="format" /></button>
+            <button onClick={() => toggleSort('duration')} className={`hidden md:block w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'duration' ? 'text-[var(--color-accent)]' : ''}`}>Dur<SortArrow col="duration" /></button>
+            <button onClick={() => toggleSort('size')} className={`hidden md:block w-14 flex-shrink-0 text-right hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'size' ? 'text-[var(--color-accent)]' : ''}`}>MB<SortArrow col="size" /></button>
             <button onClick={() => toggleSort('rating')} className={`hidden md:block w-20 md:w-24 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'rating' ? 'text-[var(--color-accent)]' : ''}`}>Rating<SortArrow col="rating" /></button>
             <button onClick={() => toggleSort('date')} className={`hidden lg:block w-20 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'date' ? 'text-[var(--color-accent)]' : ''}`}>Fecha<SortArrow col="date" /></button>
           </div>
@@ -2720,11 +2734,16 @@ const Library = forwardRef(function Library({ playingFile, onPlay, onPlayPause, 
                         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.5V8.5l6.4 3.5-6.4 3.5z"/></svg>
                       </a>
                     </div>
-                    <div className="text-[10px] text-gray-400 font-mono truncate">{formatSmallMeta(f)}</div>
+                    {/* En desktop la data del renglón 2 vive en columnas; en mobile
+                        queda esta línea compacta porque no hay ancho para columnas. */}
+                    <div className="md:hidden text-[10px] text-gray-400 font-mono truncate">{formatSmallMeta(f)}</div>
                   </div>
                   {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-xs text-gray-600 truncate" title={f.filename}>{f.filename}</span>}
                   <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
                   <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
+                  <span className="hidden md:block w-14 flex-shrink-0 text-center text-xs text-gray-500">{(f.format || f.filename?.split('.').pop() || '').toUpperCase()}</span>
+                  <span className="hidden md:block w-14 flex-shrink-0 text-center text-xs text-gray-500 font-mono">{f.duration ? `${Math.floor(f.duration / 60)}:${String(Math.floor(f.duration % 60)).padStart(2, '0')}` : '—'}</span>
+                  <span className="hidden md:block w-14 flex-shrink-0 text-right text-xs text-gray-500 font-mono">{f.size_mb ? Math.round(f.size_mb) : '—'}</span>
                   <div className="hidden md:flex w-20 md:w-24 flex-shrink-0 justify-center" onClick={(e) => e.stopPropagation()}>
                     <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
                   </div>
@@ -8472,6 +8491,10 @@ function App() {
   // El server broadcastea sus búsquedas internas (auto-pick del batch) por el
   // mismo WS; sin este flag pisaban la vista de resultados.
   const userSearchRef = useRef(false)
+  // req_id de MI última búsqueda: los broadcasts de búsqueda del server llegan
+  // a TODAS las pestañas del user — solo se pintan los que traen MI req_id
+  // (regla del dueño: nada te saca de lo que estás buscando).
+  const searchReqIdRef = useRef('')
   // Rediseño resultados (mockup PNG): filtro, orden y selección múltiple
   const [searchFilter, setSearchFilter] = useState('all')   // all | hq | flac | multi
   const [searchSort, setSearchSort] = useState('rel')       // rel | quality | sources | size
@@ -8898,18 +8921,22 @@ function App() {
       // si la búsqueda la inició EL USUARIO (userSearchRef, prendido por el
       // botón Buscar) — sino la pantalla quedaba secuestrada mostrando la
       // cocina del auto-pick mientras bajaba una lista.
-      if (data.type === 'search_status' && userSearchRef.current) {
+      // Y ADEMÁS: si el mensaje trae req_id, tiene que ser el de MI búsqueda —
+      // una búsqueda desde otra pestaña/dispositivo del mismo user NO te pisa
+      // la pantalla (regla del dueño: nada te saca de lo que estás buscando).
+      const isMineSearch = (d) => !d.req_id || d.req_id === searchReqIdRef.current
+      if (data.type === 'search_status' && userSearchRef.current && isMineSearch(data)) {
         setSearchStatus(data.status)
       }
 
       // Streaming: cada peer que contesta llega como partial result. Acumulamos
       // in-place para que la UI se llene en vivo (slskd-style). El final
       // `search_results` reemplaza con la versión deduplicada cuando cierra.
-      if (data.type === 'search_result_partial' && data.result && userSearchRef.current) {
+      if (data.type === 'search_result_partial' && data.result && userSearchRef.current && isMineSearch(data)) {
         setSearchResults(prev => Array.isArray(prev) ? [...prev, data.result] : [data.result])
       }
 
-      if (data.type === 'search_results' && userSearchRef.current) {
+      if (data.type === 'search_results' && userSearchRef.current && isMineSearch(data)) {
         setSearchResults(data.results)
         setSearchStatus('idle')
       }
@@ -9172,6 +9199,10 @@ function App() {
     // OJO TDZ: isRunning se declara más abajo — acá se deriva de serverStatus.
     const engineBusy = ['connecting', 'connected', 'waiting_downloads'].includes(serverStatus)
     if (!agentConnected || AGENT_MODE !== 'local') return
+    // El motor es TUYO mientras estás parado en el Buscar: la cola NO drena ahí
+    // (el 'start' del drenaje hacía que el server te pisara la vista con
+    // tracks_parsed en plena búsqueda). Al salir de la pantalla, sigue sola.
+    if (page === 'download') return
     if (engineBusy || drainBusyRef.current) return
     if (!wsRef.current || wsRef.current.readyState !== 1) return
     if (!authUser || !pendingTracks.length) return
@@ -9219,7 +9250,7 @@ function App() {
     }))
     window.__addLog?.(`[COLA] Auto-bajando: ${next.artist} - ${next.title} (intento ${attempts[k]}/2)`)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentConnected, serverStatus, pendingTracks, authUser])
+  }, [agentConnected, serverStatus, pendingTracks, authUser, page])
 
   // "Buscar de nuevo" de un No conseguido: resetea intentos y re-encola.
   const retryFailed = (f) => {
@@ -9414,6 +9445,7 @@ function App() {
     const q = (typeof overrideQuery === 'string' ? overrideQuery : dlSearch).trim()
     if (!wsRef.current || wsRef.current.readyState !== 1 || !q || !username || !password) return
     userSearchRef.current = true
+    searchReqIdRef.current = `${DEVICE?.id || 'dev'}-${Date.now()}`
     setSearchResults([])
     setSearchStatus('connecting')
     setSearchDlStatus({})
@@ -9422,6 +9454,7 @@ function App() {
       query: q,
       username,
       password,
+      req_id: searchReqIdRef.current,
     }))
   }
 
@@ -11925,19 +11958,34 @@ function App() {
                       return /remix|flip|bootleg|rework|mashup|dub|kue|crissy|javi|loozbone/i.test(fn)
                     }
 
+                    // DISPONIBILIDAD de una fuente: 0 = slot libre y cola 0 (baja en
+                    // segundos — receta verificada con el test A/B contra el cliente
+                    // de escritorio), 1 = slot libre, 2/3/4 = cola creciente.
+                    const availKey = (s) => (s.free_slots && !(s.queue > 0)) ? 0
+                      : s.free_slots ? 1
+                      : (s.queue || 0) < 50 ? 2
+                      : (s.queue || 0) < 500 ? 3 : 4
                     let entries = Object.entries(grouped).map(([filename, sources]) => {
                       const best = sources[0]
                       const serverSources = Array.isArray(best.sources) && best.sources.length > 0 ? best.sources : null
-                      const effectiveSources = serverSources || sources
+                      // Fuentes ORDENADAS por disponibilidad: el agente las prueba en
+                      // este orden con fail-fast — nunca más 300s clavado en una cola
+                      // ajena teniendo un peer libre en la lista.
+                      const effectiveSources = [...(serverSources || sources)].sort((a, b) =>
+                        availKey(a) - availKey(b) || (a.queue || 0) - (b.queue || 0) || (b.speed || 0) - (a.speed || 0))
                       const sourceCount = best.source_count || serverSources?.length || sources.length
-                      return { filename, best, effectiveSources, sourceCount }
+                      return { filename, best, effectiveSources, sourceCount, avail: Math.min(...(serverSources || sources).map(availKey)) }
                     })
                     // Filtros y orden del mockup (client-side, no re-busca)
                     if (searchFilter === 'hq') entries = entries.filter(e => isLossless(e.best) || (e.best.bitrate || 0) >= 256)
                     else if (searchFilter === 'flac') entries = entries.filter(e => isLossless(e.best))
                     else if (searchFilter === 'multi') entries = entries.filter(e => e.sourceCount >= 2)
                     if (searchSort === 'rel') {
-                      const relScore = (e) => (isLossless(e.best) ? 1000 : (e.best.bitrate || 0)) + Math.min(e.sourceCount, 50) * 10
+                      // DISPONIBILIDAD manda; calidad (FLAC/bitrate) desempata entre
+                      // igual disponibilidad; fuentes al final. Un FLAC inalcanzable
+                      // pierde contra un MP3 con slot libre — el bug que dejó a la app
+                      // 300s esperando la cola de Rems con dos peers libres al lado.
+                      const relScore = (e) => (9 - e.avail) * 100000 + (isLossless(e.best) ? 1000 : (e.best.bitrate || 0)) + Math.min(e.sourceCount, 50) * 10
                       entries.sort((a, b) => relScore(b) - relScore(a))
                     }
                     else if (searchSort === 'quality') entries.sort((a, b) => (isLossless(b.best) ? 1000 : b.best.bitrate || 0) - (isLossless(a.best) ? 1000 : a.best.bitrate || 0))
@@ -11948,7 +11996,7 @@ function App() {
                     const remixes = entries.filter(e => isRemixEntry(e))
                     const mp3Quality = entries.filter(e => !isLossless(e.best) && !isRemixEntry(e))
 
-                    const renderRow = ({ filename, best, effectiveSources, sourceCount }) => {
+                    const renderRow = ({ filename, best, effectiveSources, sourceCount, avail }) => {
                       const dlInfo = searchDlStatus[filename]
                       const dlSt = dlInfo?.status || dlInfo
                       const dlPct = dlInfo?.pct
@@ -12005,14 +12053,19 @@ function App() {
                           </div>
                           {/* DURACIÓN */}
                           <span className="hidden md:block w-12 flex-shrink-0 text-right text-xs text-gray-400 font-mono">{dur}</span>
-                          {/* FUENTES */}
-                          <div className="hidden md:flex w-24 flex-shrink-0 items-center gap-1.5">
-                            <span className="flex items-end gap-[2px]">
-                              {[0, 1, 2].map(i => (
-                                <span key={i} className={`w-[3px] rounded-sm ${i === 0 ? 'h-1.5' : i === 1 ? 'h-2.5' : 'h-3.5'} ${sourceCount > i ? srcColor : 'bg-white/10'}`} />
-                              ))}
+                          {/* FUENTES + DISPONIBILIDAD (por qué el orden es este) */}
+                          <div className="hidden md:flex w-28 flex-shrink-0 flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="flex items-end gap-[2px]">
+                                {[0, 1, 2].map(i => (
+                                  <span key={i} className={`w-[3px] rounded-sm ${i === 0 ? 'h-1.5' : i === 1 ? 'h-2.5' : 'h-3.5'} ${sourceCount > i ? srcColor : 'bg-white/10'}`} />
+                                ))}
+                              </span>
+                              <span className="text-[11px] text-gray-400">{sourceCount} fuente{sourceCount > 1 ? 's' : ''}</span>
+                            </div>
+                            <span className={`text-[10px] font-semibold ${avail === 0 ? 'text-green-400' : avail === 1 ? 'text-green-400/80' : avail === 2 ? 'text-amber-400' : 'text-red-400'}`}>
+                              {avail === 0 ? 'libre · al toque' : avail === 1 ? 'slot libre' : avail === 2 ? `cola ${best.queue || '<50'}` : `cola larga (${best.queue})`}
                             </span>
-                            <span className="text-[11px] text-gray-400">{sourceCount} fuente{sourceCount > 1 ? 's' : ''}</span>
                           </div>
                           {isLocal ? (
                             <span className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-semibold">
@@ -12094,42 +12147,43 @@ function App() {
                       )
                     }
 
+                    // Orden de SECCIONES por la disponibilidad de su mejor entrada:
+                    // si todos los lossless están en cola ajena y hay MP3 libres,
+                    // la sección MP3 sube — la trampa del "WAV primero con cola
+                    // 6653" no vuelve a encabezar la pantalla.
+                    const sections = [
+                      { key: 'hq', list: mainHighQuality, header: (
+                        <div className="px-3 md:px-4 py-1.5 bg-purple-500/10 border-y border-purple-500/20 text-xs font-bold text-purple-300 flex items-center gap-2">
+                          <span>Versión Principal — Alta Calidad (FLAC/WAV/AIFF)</span>
+                          <span className="text-[10px] bg-purple-500/20 px-2 py-0.5 rounded-full font-mono">{mainHighQuality.length}</span>
+                        </div>
+                      ) },
+                      { key: 'mp3', list: mp3Quality, header: (
+                        <div className="px-3 md:px-4 py-1.5 bg-white/[0.03] border-y border-white/10 text-xs font-bold text-gray-400 flex items-center gap-2">
+                          <span>Calidad Estándar (MP3)</span>
+                          <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-mono">{mp3Quality.length}</span>
+                        </div>
+                      ) },
+                      { key: 'rmx', list: remixes, header: (
+                        <div className="px-3 md:px-4 py-1.5 bg-amber-500/10 border-y border-amber-500/20 text-xs font-bold text-amber-300 flex items-center gap-2">
+                          <span>Remixes y Ediciones Alternativas</span>
+                          <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full font-mono">{remixes.length}</span>
+                        </div>
+                      ) },
+                    ].filter(s => s.list.length > 0)
+                    if (searchSort === 'rel') {
+                      const secAvail = (s) => Math.min(...s.list.map(e => e.avail))
+                      sections.sort((a, b) => secAvail(a) - secAvail(b))
+                    }
                     return (
                       <div>
-                        {/* 1. VERSIÓN PRINCIPAL / ALTA CALIDAD */}
-                        {mainHighQuality.length > 0 && (
-                          <div>
-                            <div className="px-3 md:px-4 py-1.5 bg-purple-500/10 border-y border-purple-500/20 text-xs font-bold text-purple-300 flex items-center gap-2">
-                              <span>✨ Versión Principal — Alta Calidad (FLAC/WAV/AIFF)</span>
-                              <span className="text-[10px] bg-purple-500/20 px-2 py-0.5 rounded-full font-mono">{mainHighQuality.length}</span>
-                            </div>
-                            {mainHighQuality.map(renderRow)}
+                        {sections.map(s => (
+                          <div key={s.key}>
+                            {s.header}
+                            {s.list.map(renderRow)}
                           </div>
-                        )}
-                        {/* 2. REMIXES Y EDICIONES ALTERNATIVAS */}
-                        {remixes.length > 0 && (
-                          <div>
-                            <div className="px-3 md:px-4 py-1.5 bg-amber-500/10 border-y border-amber-500/20 text-xs font-bold text-amber-300 flex items-center gap-2">
-                              <span>🎛️ Remixes y Ediciones Alternativas</span>
-                              <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full font-mono">{remixes.length}</span>
-                            </div>
-                            {remixes.map(renderRow)}
-                          </div>
-                        )}
-                        {/* 3. MP3 (CALIDAD ESTÁNDAR) */}
-                        {mp3Quality.length > 0 && (
-                          <div>
-                            <div className="px-3 md:px-4 py-1.5 bg-white/[0.03] border-y border-white/10 text-xs font-bold text-gray-400 flex items-center gap-2">
-                              <span>🎵 Calidad Estándar (MP3)</span>
-                              <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-mono">{mp3Quality.length}</span>
-                            </div>
-                            {mp3Quality.map(renderRow)}
-                          </div>
-                        )}
-                        {/* Fallback if no categorized entries match */}
-                        {mainHighQuality.length === 0 && remixes.length === 0 && mp3Quality.length === 0 && (
-                          entries.map(renderRow)
-                        )}
+                        ))}
+                        {sections.length === 0 && entries.map(renderRow)}
                       </div>
                     )
                   })()}
@@ -12205,7 +12259,14 @@ function App() {
                 )}
               </>
             ) : (
-              filteredTracks.map(track => <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} onGoToLibrary={goToLibraryTrack} />)
+              <VirtualList
+                items={filteredTracks}
+                estimateSize={61}
+                className="w-full h-full min-h-[500px]"
+                renderItem={(track) => (
+                  <TrackRow key={track.id} track={track} onCancel={handleCancelTrack} onGoToLibrary={goToLibraryTrack} />
+                )}
+              />
             )}
           </div>
 
