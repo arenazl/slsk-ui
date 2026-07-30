@@ -1,5 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react';
 
+const SEARCHING_MESSAGES = [
+  'Buscando...',
+  'En camino...',
+  'Vamos guacho',
+  'Con este la rompés',
+  'Rastreando la red',
+  'Cazando el tema',
+  'Escarbando SoulSeek',
+  'Ya casi lo tengo',
+  'Afilando la púa',
+  'Esto va a sonar',
+  'Tremendo temazo',
+  'Pateando la pista',
+]
+
+
 export default function SearchingLabel({ className = '' }) {
   // Arranca en un índice random para que filas simultáneas no muestren todas
   // el mismo cartel sincronizado.
