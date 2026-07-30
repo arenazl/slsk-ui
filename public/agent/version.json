@@ -1,6 +1,6 @@
 {
-  "version": "2.12.36",
-  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.36/GrooveSyncAgent.exe",
-  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.36/GrooveSyncAgent-macOS.dmg",
-  "notes": "v2.12.36: auto-bump build"
+  "version": "2.12.50",
+  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.50/GrooveSyncAgent.exe",
+  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.50/GrooveSyncAgent-macOS.dmg",
+  "notes": "v2.12.50: auto-bump build"
 }
