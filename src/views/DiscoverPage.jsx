@@ -8,7 +8,7 @@ import TrackThumb from '../components/ui/TrackThumb';
 import GenreCombo from '../components/ui/GenreCombo';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { API_BASE, IS_MOBILE_DEVICE, agentFetch, GENRE_COLORS, SwipeableRow } from '../App';
+import { API_BASE, IS_MOBILE_DEVICE, agentFetch, GENRE_COLORS, SwipeableRow, useQS } from '../App';
 
 export default function DiscoverPage({ wsRef, username, password, connected, onGoToDownloads, audioRef, autoplayCancelRef, playingFile, setPlayingFile, setNowPlaying, setIsAudioPlaying, addToPending, isFavorite, toggleFavorite, isGuest, pendingRadioTrack, onRadioConsumed, agentConnected, agentHasSlsk, downloadMode, authUser, collection, onGoToLibrary, isRemoteOutput, sendRemoteCommand, discoverRemoteRef, outputDeviceName, onTriggerSearch }) {
   const toast = useToast()

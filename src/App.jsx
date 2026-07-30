@@ -874,7 +874,7 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
 }
 
 
-function useQS(key, defaultVal) {
+export function useQS(key, defaultVal) {
   const [val, setVal] = useState(() => {
     const p = new URLSearchParams(window.location.search)
     return p.get(key) || defaultVal
