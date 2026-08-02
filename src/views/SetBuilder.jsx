@@ -623,6 +623,43 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
     URL.revokeObjectURL(url)
   }
 
+  const runLabTest = async () => {
+    setExporting(true)
+    try {
+      const t1 = {
+        filename: "57 Giv Me Luv Jerome IsmaAe Remix - Alcatraz Jerome Isma-Ae.mp3",
+        subfolder: "Melodic House"
+      }
+      const t2 = {
+        filename: "DE SOFFER - Smalltown Boy.flac",
+        subfolder: "Nu Disco"
+      }
+      const a1 = await fetch(`${API_BASE}/api/analyze-audio`, {method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(t1)}).then(r=>r.json())
+      const a2 = await fetch(`${API_BASE}/api/analyze-audio`, {method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(t2)}).then(r=>r.json())
+      t1.bpm = a1.bpm
+      t1.mix = a1.mix
+      t1.duration_sec = a1.duration
+      t1.title = "Giv Me Luv (Jerome IsmaAe Remix)"
+      t1.artist = "Alcatraz"
+      t1.rating = 5
+      
+      t2.bpm = a2.bpm
+      t2.mix = a2.mix
+      t2.duration_sec = a2.duration
+      t2.title = "Smalltown Boy"
+      t2.artist = "DE SOFFER"
+      t2.rating = 5
+      
+      setSetTracks([t1, t2])
+      setTransitions({ 0: { type: 'auto' } })
+    } catch(e) {
+      console.error(e)
+      toast.error('Error in Lab Test')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // Export 1: Rekordbox-compatible M3U playlist (paths only, no metadata)
   const exportM3U = async () => {
     const name = computeSetName()
@@ -1443,6 +1480,7 @@ ${playlistEntries}
                 { id: 'xml', label: 'Rekordbox XML' },
                 { id: 'mix', label: 'Editor DAW' },
                 { id: 'md', label: 'MiniDisc' },
+                { id: 'lab', label: '🧪 AI Mix Lab' },
               ].map(t => (
                 <button
                   key={t.id}
@@ -1525,6 +1563,21 @@ ${playlistEntries}
                 </button>
                 </>
               )}
+            {exportTarget === 'lab' && (
+              <button
+                onClick={runLabTest}
+                disabled={exporting}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md transition-all active:scale-95 disabled:opacity-40"
+                title="Cargar los 2 temas de prueba, analizarlos con la IA y listos para reproducir"
+              >
+                {exporting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span>🧪</span>
+                )}
+                Preparar Dual-Deck Automático
+              </button>
+            )}
             </div>
           </div>
         </div>

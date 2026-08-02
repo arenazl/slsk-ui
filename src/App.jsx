@@ -6019,6 +6019,19 @@ function App() {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
       
+      // Beatmatching & Phase Alignment
+      if (file.mix && file.mix.mixIn) {
+        audio.currentTime = file.mix.mixIn
+      }
+      
+      // We need master BPM to sync speed. `nowPlaying` has the master track info if we are crossfading.
+      if (crossfadeSec > 0 && nowPlaying && nowPlaying.bpm && file.bpm) {
+        const rate = nowPlaying.bpm / file.bpm
+        audio.playbackRate = rate
+        audio.preservesPitch = true
+        console.log(`[CROSSFADE ENGINE] Beatmatching: Master ${nowPlaying.bpm} BPM -> Incoming ${file.bpm} BPM. Rate: ${rate.toFixed(3)}`)
+      }
+      
       if (crossfadeSec > 0) {
         console.log(`[CROSSFADE ENGINE] Fading in new audio over ${crossfadeSec}s...`)
         audio.volume = 0
@@ -6049,8 +6062,14 @@ function App() {
 
       audio.onended = handleEnded
       audio.ontimeupdate = () => {
-        const xfadeSec = playNextRef.current?.getCrossfadeSec ? playNextRef.current.getCrossfadeSec(file.filename) : 0
-        const triggerTime = Math.max(0, (audio.duration || 0) - xfadeSec - 0.3)
+        let xfadeSec = playNextRef.current?.getCrossfadeSec ? playNextRef.current.getCrossfadeSec(file.filename) : 0
+        let triggerTime = Math.max(0, (audio.duration || 0) - xfadeSec - 0.3)
+        
+        // Use intelligent mixOut marker if available
+        if (file.mix && file.mix.mixOut) {
+          triggerTime = file.mix.mixOut
+          xfadeSec = file.mix.recommendedFade || 12
+        }
         
         if (audio.duration > 0 && audio.currentTime >= triggerTime && !audio.paused && !audio.seeking) {
           if (!audio.crossfadeTriggered) {
