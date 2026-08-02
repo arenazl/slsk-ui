@@ -604,7 +604,7 @@ export const GENRE_COLORS = [
   { bg: 'bg-slate-400', rgb: '148,163,184' },
 ]
 
-function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPause, onStop, onRadio, agentConnected }) {
+function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPause, onStop, onRadio, agentConnected, crossfadeState }) {
   // Helper: always read fresh audio from ref
   const getAudio = () => audioRef?.current || audioProp
   const audio = getAudio()
@@ -813,10 +813,15 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
           }`}
           title="Tocar para ver la onda"
         >
-          <div className="text-sm text-[var(--text-primary)] truncate font-medium">
+          <div className="text-sm text-[var(--text-primary)] truncate font-medium flex items-center gap-2">
             {file.title || file.filename}
           </div>
-          {file.artist && (
+          {crossfadeState && (
+            <div className="text-[10px] uppercase font-bold text-emerald-400 animate-pulse bg-emerald-500/20 border border-emerald-500/50 px-1.5 py-0.5 rounded-full mt-1 inline-block">
+              🎛️ Mezclando ({crossfadeState.duration}s)...
+            </div>
+          )}
+          {file.artist && !crossfadeState && (
             <div className="text-xs text-gray-500 truncate">{file.artist}</div>
           )}
         </button>
@@ -5933,12 +5938,14 @@ function App() {
     playAt(0)
   }
 
+  const [crossfadeState, setCrossfadeState] = useState(null)
+
   const handleAppPlay = async (file, crossfadeSec = 0) => {
+    console.log('[CROSSFADE ENGINE] handleAppPlay called:', file.filename, 'crossfadeSec:', crossfadeSec)
     stopPreviewModeApp()
-    setRemotePlayPrompt(null)  // al reproducir algo, sacamos el botón "tocar para escuchar acá"
+    setRemotePlayPrompt(null)
     if (remotePlayCheckRef.current) { clearTimeout(remotePlayCheckRef.current); remotePlayCheckRef.current = null }
     if (playingFile === file.filename) {
-      // Toggle pause/resume
       if (audioRef.current?.paused) {
         audioRef.current.play()
         setIsAudioPlaying(true)
@@ -5954,6 +5961,8 @@ function App() {
     // Crossfade Logic: fade out old audio instead of killing it instantly
     if (crossfadeSec > 0 && audioRef.current && !audioRef.current.paused) {
       const oldAudio = audioRef.current
+      console.log(`[CROSSFADE ENGINE] Fading out old audio (${oldAudio.src}) over ${crossfadeSec}s...`)
+      setCrossfadeState({ outgoing: playingFile, incoming: file.filename, duration: crossfadeSec })
       oldAudio.onended = null
       oldAudio.onerror = null
       oldAudio.ontimeupdate = null
@@ -5967,17 +5976,18 @@ function App() {
         const ratio = step / steps
         if (ratio >= 1) {
           clearInterval(fader)
+          console.log('[CROSSFADE ENGINE] Old audio fade out complete, killing audio.')
           killAudio(oldAudio)
+          setCrossfadeState(null)
         } else {
-          // Equal power crossfade curve
           oldAudio.volume = Math.max(0, Math.cos(ratio * 0.5 * Math.PI))
         }
       }, fadeInterval)
     } else {
+      console.log('[CROSSFADE ENGINE] No crossfade requested or old audio paused/null. Killing old audio instantly.')
       killAudio(audioRef.current)
     }
 
-    // Preview mode: 30s iTunes preview instead of the actual file.
     if (playbackMode === 'preview') {
       setPlayingFile(file.filename)
       setNowPlaying({ ...file, isPreview: true })
@@ -6005,11 +6015,12 @@ function App() {
       }
     }
     try {
+      console.log('[CROSSFADE ENGINE] Creating new audio element for:', file.filename)
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
       
-      // If crossfading in, start volume at 0 and fade in
       if (crossfadeSec > 0) {
+        console.log(`[CROSSFADE ENGINE] Fading in new audio over ${crossfadeSec}s...`)
         audio.volume = 0
         const fadeInterval = 50
         const steps = (crossfadeSec * 1000) / fadeInterval
@@ -6020,6 +6031,7 @@ function App() {
           if (ratio >= 1) {
             clearInterval(inFader)
             audio.volume = 1
+            console.log('[CROSSFADE ENGINE] New audio fade in complete.')
           } else {
             audio.volume = Math.min(1, Math.sin(ratio * 0.5 * Math.PI))
           }
@@ -6028,33 +6040,29 @@ function App() {
 
       const handleEnded = () => {
         const ended = file.filename
-        console.log('[App Audio] Track ended:', ended, 'Calling playNextRef...')
+        console.log('[CROSSFADE ENGINE] Track completely ended:', ended)
         setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
         if (playNextRef.current) {
-          console.log('[App Audio] Executing playNextRef.current(', ended, ')')
           playNextRef.current(ended)
-        } else {
-          console.warn('[App Audio] playNextRef.current is null!')
         }
       }
 
       audio.onended = handleEnded
       audio.ontimeupdate = () => {
-        // Query next crossfade duration from SetBuilder
         const xfadeSec = playNextRef.current?.getCrossfadeSec ? playNextRef.current.getCrossfadeSec(file.filename) : 0
         const triggerTime = Math.max(0, (audio.duration || 0) - xfadeSec - 0.3)
         
         if (audio.duration > 0 && audio.currentTime >= triggerTime && !audio.paused && !audio.seeking) {
           if (!audio.crossfadeTriggered) {
             audio.crossfadeTriggered = true
-            console.log(`[App Audio] Trigger time reached (${triggerTime}s). xfadeSec: ${xfadeSec}s`)
+            console.log(`[CROSSFADE ENGINE] Trigger time reached (${triggerTime.toFixed(2)}s / ${audio.duration.toFixed(2)}s). Triggering crossfadeSec: ${xfadeSec}s`)
             
             if (xfadeSec <= 0) {
               audio.pause()
               handleEnded()
             } else {
-              // Trigger the next track EARLY to start the overlap
               if (playNextRef.current) {
+                console.log(`[CROSSFADE ENGINE] Calling playNextRef.current for ${file.filename} with ${xfadeSec}s...`)
                 playNextRef.current(file.filename, xfadeSec)
               }
             }
@@ -6063,13 +6071,14 @@ function App() {
       }
 
       audio.onerror = (e) => {
-        console.error('[App Audio] Audio error:', e)
+        console.error('[CROSSFADE ENGINE] Audio error:', e)
         setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
       }
-      audio.play().catch(e => console.error('[App Audio] Play error:', e))
+      console.log('[CROSSFADE ENGINE] Starting playback of new audio...')
+      audio.play().catch(e => console.error('[CROSSFADE ENGINE] Play error:', e))
       audioRef.current = audio
     } catch (e) {
-      console.error('Failed to load audio', e)
+      console.error('[CROSSFADE ENGINE] Failed to load audio', e)
       setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
     }
   }
@@ -8929,6 +8938,7 @@ function App() {
           setPage('discover')
         }}
         agentConnected={agentConnected}
+        crossfadeState={crossfadeState}
       />
     </div>
   )
