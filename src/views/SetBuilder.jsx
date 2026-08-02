@@ -822,52 +822,65 @@ ${playlistEntries}
             </div>
           </div>
 
-          {/* Header Action Buttons (Slim & Compact) */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Header Action Row (Spotify Exact Design) */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Circular Spotify Play Button */}
             <button
               onClick={() => startPlayAll(false)}
               disabled={!setTracks.length}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-md transition-all active:scale-95 disabled:opacity-40"
-              title="Reproducción continua del set"
+              className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-40 flex-shrink-0"
+              title={isMixMode ? "Reproducir mezclado continuo (Modo Mixear ON)" : "Reproducir lista"}
             >
-              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-              <span>Preview Mix</span>
+              <svg className="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
             </button>
 
-            <button
-              onClick={() => setIsMixMode(!isMixMode)}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                isMixMode
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
-                  : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border-color)]'
-              }`}
-              title="Mostrar/ocultar conectores de transición entre temas"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              <span>{isMixMode ? 'Transiciones (On)' : 'Transiciones'}</span>
-            </button>
+            {/* Action Pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => {
+                  const el = document.getElementById('set-bottom-panel')
+                  if (el) el.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/10 transition-all active:scale-95"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                Agregar
+              </button>
 
-            <button
-              onClick={() => {
-                const newName = prompt('Nombre del Set / Playlist:', setName || computeSetName())
-                if (newName !== null) setSetName(newName)
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-white transition-all"
-              title="Renombrar set"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-              <span>Renombrar</span>
-            </button>
+              <button
+                onClick={() => setIsMixMode(!isMixMode)}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
+                  isMixMode
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                    : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
+                }`}
+                title="Activar/Desactivar Modo Mezcla (Mixear)"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                {isMixMode ? '✨ Mixear' : 'Mixear'}
+              </button>
 
-            <button
-              onClick={() => onEditMix(setTracks)}
-              disabled={!setTracks.length}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 transition-all disabled:opacity-40"
-              title="Editor DAW Multitrack"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" /><circle cx="15" cy="7" r="2" fill="currentColor" /><circle cx="9" cy="12" r="2" fill="currentColor" /><circle cx="13" cy="17" r="2" fill="currentColor" /></svg>
-              <span>Editor DAW</span>
-            </button>
+              <button
+                onClick={() => {
+                  const newName = prompt('Nombre del Set / Playlist:', setName || computeSetName())
+                  if (newName !== null) setSetName(newName)
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/10 transition-all active:scale-95"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                Nombre y datos
+              </button>
+
+              <button
+                onClick={() => onEditMix(setTracks)}
+                disabled={!setTracks.length}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
+                title="Editor DAW Multitrack"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" /><circle cx="15" cy="7" r="2" fill="currentColor" /><circle cx="9" cy="12" r="2" fill="currentColor" /><circle cx="13" cy="17" r="2" fill="currentColor" /></svg>
+                Editor DAW
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1001,9 +1014,9 @@ ${playlistEntries}
 
                   {/* SPOTIFY DJ TRANSITION CONNECTOR BADGE BETWEEN TRACKS */}
                   {isMixMode && i < setTracks.length - 1 && (
-                    <div className="relative py-2.5 flex items-center justify-center my-0.5 group">
+                    <div className="relative py-0.5 flex items-center justify-center my-0 group">
                       {/* Vertical line connecting track rows */}
-                      <div className="absolute top-0 bottom-0 left-10 md:left-14 w-0.5 bg-gradient-to-b from-emerald-500/50 via-blue-500/40 to-purple-500/50 group-hover:w-1 transition-all" />
+                      <div className="absolute top-0 bottom-0 left-10 md:left-14 w-0.5 bg-gradient-to-b from-emerald-500/40 via-blue-500/30 to-purple-500/40 group-hover:w-1 transition-all" />
 
                       {/* Transition Pill Badge Button */}
                       {(() => {
@@ -1011,11 +1024,11 @@ ${playlistEntries}
                         return (
                           <button
                             onClick={() => setActiveTransitionPopover(activeTransitionPopover === i ? null : i)}
-                            className={`relative z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-950/90 border ${badge.color} text-[11px] font-bold backdrop-blur-md hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer`}
+                            className={`relative z-10 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-zinc-950/90 border ${badge.color} text-[10px] font-bold backdrop-blur-md hover:scale-105 active:scale-95 transition-all shadow cursor-pointer`}
                             title="Click para cambiar el tipo de mezcla/transición"
                           >
                             <span>{badge.label}</span>
-                            <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                           </button>
                         )
                       })()}
