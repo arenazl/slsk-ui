@@ -248,8 +248,8 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
   // so the closure always sees the current list. Handles 2s gap for MiniDisc track marking.
   useEffect(() => {
     if (!playNextRef || page !== 'set') return
-    playNextRef.current = (endedFilename) => {
-      console.log('[SetBuilder playNextRef] Triggered with endedFilename:', endedFilename)
+    const fn = (endedFilename, crossfadeSec = 0) => {
+      console.log('[SetBuilder playNextRef] Triggered with endedFilename:', endedFilename, 'crossfadeSec:', crossfadeSec)
       let idx = setTracks.findIndex(t =>
         t.filename === endedFilename ||
         t.title === endedFilename ||
@@ -270,10 +270,10 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
         if (mdGap && isMd) {
           toast(`[MiniDisc] Pausa 2s (Track Mark)... Siguiente: ${nextTrack.title || nextTrack.filename}`, 'info', 2000)
           setTimeout(() => {
-            onPlay(nextTrack)
+            onPlay(nextTrack, 0)
           }, 2000)
         } else {
-          onPlay(nextTrack)
+          onPlay(nextTrack, crossfadeSec)
         }
       } else if (idx >= 0 && idx + 1 === setTracks.length) {
         console.log('[SetBuilder playNextRef] Reached end of set!')
@@ -283,7 +283,31 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
         console.warn('[SetBuilder playNextRef] Could not match endedFilename in setTracks. endedFilename:', endedFilename, 'playingFile:', playingFile)
       }
     }
-    return () => { if (playNextRef.current) playNextRef.current = null }
+
+    fn.getCrossfadeSec = (filename) => {
+      if (!isMixMode || (isMd && mdGap)) return 0
+      let idx = setTracks.findIndex(t =>
+        t.filename === filename || t.title === filename ||
+        (t.filename && filename && (t.filename.includes(filename) || filename.includes(t.filename)))
+      )
+      if (idx === -1 && playingFile) idx = setTracks.findIndex(t => t.filename === playingFile || t.title === playingFile)
+      if (idx >= 0 && idx < setTracks.length) {
+        const trans = transitions[idx]
+        const type = trans?.type || 'auto'
+        switch (type) {
+          case 'quick': return 8
+          case 'long': return 32
+          case 'cut': return 0.2
+          case 'eqmix': return 45
+          case 'auto':
+          default: return 12
+        }
+      }
+      return 0
+    }
+
+    playNextRef.current = fn
+    return () => { if (playNextRef.current === fn) playNextRef.current = null }
   }, [setTracks, onPlay, playNextRef, page, mdGap, isMd, playingFile])
 
   // Generador de playlists (estrategia POP/LATIN de la barra polimórfica).

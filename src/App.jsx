@@ -5933,7 +5933,7 @@ function App() {
     playAt(0)
   }
 
-  const handleAppPlay = async (file) => {
+  const handleAppPlay = async (file, crossfadeSec = 0) => {
     stopPreviewModeApp()
     setRemotePlayPrompt(null)  // al reproducir algo, sacamos el botón "tocar para escuchar acá"
     if (remotePlayCheckRef.current) { clearTimeout(remotePlayCheckRef.current); remotePlayCheckRef.current = null }
@@ -5950,9 +5950,34 @@ function App() {
     }
     autoplayCancelRef.current?.()
     autoplayCancelRef.current = null
-    killAudio(audioRef.current)
+
+    // Crossfade Logic: fade out old audio instead of killing it instantly
+    if (crossfadeSec > 0 && audioRef.current && !audioRef.current.paused) {
+      const oldAudio = audioRef.current
+      oldAudio.onended = null
+      oldAudio.onerror = null
+      oldAudio.ontimeupdate = null
+      
+      const fadeInterval = 50
+      const steps = (crossfadeSec * 1000) / fadeInterval
+      let step = 0
+      
+      const fader = setInterval(() => {
+        step++
+        const ratio = step / steps
+        if (ratio >= 1) {
+          clearInterval(fader)
+          killAudio(oldAudio)
+        } else {
+          // Equal power crossfade curve
+          oldAudio.volume = Math.max(0, Math.cos(ratio * 0.5 * Math.PI))
+        }
+      }, fadeInterval)
+    } else {
+      killAudio(audioRef.current)
+    }
+
     // Preview mode: 30s iTunes preview instead of the actual file.
-    // Call synchronously to keep iOS autoplay gesture valid.
     if (playbackMode === 'preview') {
       setPlayingFile(file.filename)
       setNowPlaying({ ...file, isPreview: true })
@@ -5963,23 +5988,14 @@ function App() {
     setPlayingFile(file.filename)
     setNowPlaying(file)
     setIsAudioPlaying(true)
-    // Formatos que el <audio> del navegador NO decodifica (AIFF/AIF, WMA): el
-    // archivo está en disco (ej. los .aiff de Ben Van Kuringen) pero el browser
-    // no lo reproduce → silencio. Caemos al preview online (iTunes/SoundCloud/
-    // YouTube por artista+título) para que igual se escuche. Chrome/Edge tocan
-    // mp3/wav/flac/m4a/ogg; aiff/aif/wma no.
+    
     const _ext = (file.filename || '').split('.').pop().toLowerCase()
     if (['aif', 'aiff', 'wma'].includes(_ext)) {
       setNowPlaying({ ...file, isPreview: true })
       playLibraryPreview(file)
       return
     }
-    // Sin forma de alcanzar el archivo real (no hay agente conectado) caemos al
-    // preview online (iTunes por artista+título), igual que Discovery — así la
-    // biblioteca SUENA en tablet/iPhone sin agente, donde antes "no andaba nada".
-    // En mobile/Safari `fsaBackend.supported` es false → el ternario NO ejecuta
-    // el await, preservando el gesto de autoplay de iOS. En desktop con FSA
-    // chequeamos si hay carpeta local antes de decidir.
+    
     if (!agentConnected) {
       const reachable = fsaBackend.supported ? await fsaBackend.ready() : false
       if (!reachable) {
@@ -5992,6 +6008,24 @@ function App() {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
       
+      // If crossfading in, start volume at 0 and fade in
+      if (crossfadeSec > 0) {
+        audio.volume = 0
+        const fadeInterval = 50
+        const steps = (crossfadeSec * 1000) / fadeInterval
+        let step = 0
+        const inFader = setInterval(() => {
+          step++
+          const ratio = step / steps
+          if (ratio >= 1) {
+            clearInterval(inFader)
+            audio.volume = 1
+          } else {
+            audio.volume = Math.min(1, Math.sin(ratio * 0.5 * Math.PI))
+          }
+        }, fadeInterval)
+      }
+
       const handleEnded = () => {
         const ended = file.filename
         console.log('[App Audio] Track ended:', ended, 'Calling playNextRef...')
@@ -6006,11 +6040,25 @@ function App() {
 
       audio.onended = handleEnded
       audio.ontimeupdate = () => {
-        // Fallback: if user seeks near end or browser is at track duration end
-        if (audio.duration > 0 && audio.currentTime >= audio.duration - 0.3 && !audio.paused && !audio.seeking) {
-          console.log('[App Audio] Timeupdate reached duration end (currentTime >= duration - 0.3), triggering handleEnded()')
-          audio.pause()
-          handleEnded()
+        // Query next crossfade duration from SetBuilder
+        const xfadeSec = playNextRef.current?.getCrossfadeSec ? playNextRef.current.getCrossfadeSec(file.filename) : 0
+        const triggerTime = Math.max(0, (audio.duration || 0) - xfadeSec - 0.3)
+        
+        if (audio.duration > 0 && audio.currentTime >= triggerTime && !audio.paused && !audio.seeking) {
+          if (!audio.crossfadeTriggered) {
+            audio.crossfadeTriggered = true
+            console.log(`[App Audio] Trigger time reached (${triggerTime}s). xfadeSec: ${xfadeSec}s`)
+            
+            if (xfadeSec <= 0) {
+              audio.pause()
+              handleEnded()
+            } else {
+              // Trigger the next track EARLY to start the overlap
+              if (playNextRef.current) {
+                playNextRef.current(file.filename, xfadeSec)
+              }
+            }
+          }
         }
       }
 
