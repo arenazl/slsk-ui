@@ -5942,7 +5942,7 @@ function App() {
 
   const handleAppPlay = async (file, crossfadeSec = 0) => {
     console.log('[CROSSFADE ENGINE] handleAppPlay called:', file.filename, 'crossfadeSec:', crossfadeSec)
-    stopPreviewModeApp()
+    stopPreviewModeApp(true) // keep audio alive so crossfade can fade it out!
     setRemotePlayPrompt(null)
     if (remotePlayCheckRef.current) { clearTimeout(remotePlayCheckRef.current); remotePlayCheckRef.current = null }
     if (playingFile === file.filename) {
@@ -6140,22 +6140,24 @@ function App() {
     stopPreviewModeApp()
   }
 
-  const stopPreviewModeApp = () => {
+  const stopPreviewModeApp = (keepAudio = false) => {
     setPreviewMode(false)
     if (previewTimerRef.current) {
       clearTimeout(previewTimerRef.current)
       previewTimerRef.current = null
     }
-    if (audioRef.current) {
-      audioRef.current.oncanplaythrough = null
-      audioRef.current.onended = null
-      audioRef.current.onerror = null
-      audioRef.current.pause()
-      audioRef.current = null
+    if (!keepAudio) {
+      if (audioRef.current) {
+        audioRef.current.oncanplaythrough = null
+        audioRef.current.onended = null
+        audioRef.current.onerror = null
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+      setPlayingFile(null)
+      setNowPlaying(null)
+      setIsAudioPlaying(false)
     }
-    setPlayingFile(null)
-    setNowPlaying(null)
-    setIsAudioPlaying(false)
   }
 
   const playPreviewTrack = async (list, idx) => {
