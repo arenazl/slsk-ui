@@ -92,7 +92,7 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
   const [suggestions, setSuggestions] = useState([])
   const [suggestionOffset, setSuggestionOffset] = useState(0) // page index into 9-track grid
   const [bottomTab, setBottomTab] = useState('sugerencias') // 'sugerencias' | 'biblioteca'
-  const [panelCollapsed, setPanelCollapsed] = useState(false)
+  const [panelCollapsed, setPanelCollapsed] = useState(true)
   const [libBrowserSearch, setLibBrowserSearch] = useState('')
   const [libBrowserGenre, setLibBrowserGenre] = useState('')
   const [libBrowserPage, setLibBrowserPage] = useState(0)
@@ -790,121 +790,84 @@ ${playlistEntries}
         })()}
       </div>
 
-      {/* ═══ SPOTIFY-STYLE PLAYLIST DJ MIX HEADER BANNER ═══ */}
+      {/* ═══ COMPACT DJ SET HEADER BAR (ULTRA-SLIM) ═══ */}
       {setTracks.length > 0 && (
-        <div className="flex-shrink-0 px-3 md:px-6 pt-4 pb-2">
-          <div className="relative overflow-hidden bg-gradient-to-b from-blue-950/70 via-[var(--bg-panel)] to-[var(--bg-panel)] p-4 md:p-6 rounded-2xl border border-white/10 shadow-2xl">
-            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5">
-              {/* Collage Artwork */}
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-xl overflow-hidden shadow-2xl border border-white/15 flex-shrink-0 relative group bg-black/50">
-                {setTracks.length >= 4 ? (
-                  <div className="grid grid-cols-2 grid-rows-2 w-full h-full">
-                    {setTracks.slice(0, 4).map((t, idx) => (
-                      <img key={idx} src={t.artwork || '/default-cover.png'} alt="" className="w-full h-full object-cover" />
-                    ))}
-                  </div>
-                ) : setTracks.length > 0 && setTracks[0].artwork ? (
-                  <img src={setTracks[0].artwork} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 text-3xl">
-                    🎧
-                  </div>
-                )}
-              </div>
+        <div className="flex-shrink-0 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Mini Cover Thumbnail */}
+            <div className="w-9 h-9 rounded-lg overflow-hidden border border-white/10 flex-shrink-0 bg-black/40 relative">
+              {setTracks[0]?.artwork ? (
+                <img src={setTracks[0].artwork} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xs">🎧</div>
+              )}
+            </div>
 
-              {/* Playlist Title & Meta */}
-              <div className="flex-1 text-center sm:text-left min-w-0">
-                <div className="flex items-center justify-center sm:justify-start gap-2 mb-1.5 flex-wrap">
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                    Playlist pública
-                  </span>
-                  {isMixMode && (
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Continuous DJ Mix
-                    </span>
-                  )}
-                </div>
-
-                <h1 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight truncate drop-shadow">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  Set DJ Local
+                </span>
+                <span className="text-xs md:text-sm font-bold text-white truncate max-w-[220px] sm:max-w-[350px] md:max-w-[500px]">
                   {computeSetName()}
-                </h1>
-
-                <div className="flex items-center justify-center sm:justify-start gap-2 text-xs md:text-sm text-gray-300 mt-2">
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-bold text-white shadow">
-                    {(curatorName || 'L')[0].toUpperCase()}
-                  </div>
-                  <span>Mixeada por <strong className="text-white">{curatorName || authUser?.name || 'Lucas Arenaz'}</strong></span>
-                  <span>•</span>
-                  <span className="font-mono text-emerald-400 font-medium">{setTracks.length} canciones, {totalPlaylistMin} min</span>
-                </div>
+                </span>
+              </div>
+              <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2 mt-0.5">
+                <span className="font-mono text-emerald-400 font-semibold">{setTracks.length} tracks</span>
+                <span>•</span>
+                <span className="font-mono">{totalPlaylistMin} min</span>
+                <span>•</span>
+                <span>Colección {(collection || 'EDM').toUpperCase()}</span>
               </div>
             </div>
+          </div>
 
-            {/* Spotify Controls Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mt-5 pt-4 border-t border-white/10">
-              <div className="flex items-center gap-3">
-                {/* Play Continuous Mix Button */}
-                <button
-                  onClick={() => startPlayAll(false)}
-                  disabled={!setTracks.length}
-                  className="w-12 h-12 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-40"
-                  title="Reproducir mix continuo de la playlist"
-                >
-                  <svg className="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </button>
+          {/* Header Action Buttons (Slim & Compact) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => startPlayAll(false)}
+              disabled={!setTracks.length}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-md transition-all active:scale-95 disabled:opacity-40"
+              title="Reproducción continua del set"
+            >
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              <span>Preview Mix</span>
+            </button>
 
-                {/* Action Pills */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => {
-                      const el = document.getElementById('set-bottom-panel')
-                      if (el) el.scrollIntoView({ behavior: 'smooth' })
-                    }}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/10 transition-all active:scale-95"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-                    Agregar
-                  </button>
+            <button
+              onClick={() => setIsMixMode(!isMixMode)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                isMixMode
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+                  : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border-color)]'
+              }`}
+              title="Mostrar/ocultar conectores de transición entre temas"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              <span>{isMixMode ? 'Transiciones (On)' : 'Transiciones'}</span>
+            </button>
 
-                  <button
-                    onClick={() => setIsMixMode(!isMixMode)}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
-                      isMixMode
-                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
-                        : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
-                    }`}
-                    title="Activar/Desactivar Modo Mezcla DJ con conectores de transición"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    {isMixMode ? '✨ Mixear (On)' : '✨ Mixear'}
-                  </button>
+            <button
+              onClick={() => {
+                const newName = prompt('Nombre del Set / Playlist:', setName || computeSetName())
+                if (newName !== null) setSetName(newName)
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-white transition-all"
+              title="Renombrar set"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+              <span>Renombrar</span>
+            </button>
 
-                  <button
-                    onClick={() => {
-                      const newName = prompt('Nombre de la playlist:', setName || computeSetName())
-                      if (newName !== null) setSetName(newName)
-                    }}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/10 transition-all active:scale-95"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                    Nombre y datos
-                  </button>
-
-                  <button
-                    onClick={() => onEditMix(setTracks)}
-                    disabled={!setTracks.length}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
-                    title="Abrir editor multitrack DAW completo"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2} d="M4 7h16M4 12h16M4 17h16" /><circle cx="15" cy="7" r="2" fill="currentColor" /><circle cx="9" cy="12" r="2" fill="currentColor" /><circle cx="13" cy="17" r="2" fill="currentColor" /></svg>
-                    Editor DAW
-                  </button>
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={() => onEditMix(setTracks)}
+              disabled={!setTracks.length}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 transition-all disabled:opacity-40"
+              title="Editor DAW Multitrack"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" /><circle cx="15" cy="7" r="2" fill="currentColor" /><circle cx="9" cy="12" r="2" fill="currentColor" /><circle cx="13" cy="17" r="2" fill="currentColor" /></svg>
+              <span>Editor DAW</span>
+            </button>
           </div>
         </div>
       )}
