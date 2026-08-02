@@ -249,9 +249,24 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
   useEffect(() => {
     if (!playNextRef || page !== 'set') return
     playNextRef.current = (endedFilename) => {
-      const idx = setTracks.findIndex(t => t.filename === endedFilename)
+      console.log('[SetBuilder playNextRef] Triggered with endedFilename:', endedFilename)
+      let idx = setTracks.findIndex(t =>
+        t.filename === endedFilename ||
+        t.title === endedFilename ||
+        (t.filename && endedFilename && (t.filename.includes(endedFilename) || endedFilename.includes(t.filename)))
+      )
+
+      // Fallback: if not found by filename, find using playingFile or default
+      if (idx === -1 && playingFile) {
+        idx = setTracks.findIndex(t => t.filename === playingFile || t.title === playingFile)
+      }
+
+      console.log('[SetBuilder playNextRef] Matched index:', idx, 'of', setTracks.length)
+
       if (idx >= 0 && idx + 1 < setTracks.length) {
         const nextTrack = setTracks[idx + 1]
+        console.log('[SetBuilder playNextRef] Advancing to next track:', nextTrack.title || nextTrack.filename)
+        toast(`▶ Siguiente tema: ${nextTrack.title || nextTrack.filename}`, 'info', 2000)
         if (mdGap && isMd) {
           toast(`[MiniDisc] Pausa 2s (Track Mark)... Siguiente: ${nextTrack.title || nextTrack.filename}`, 'info', 2000)
           setTimeout(() => {
@@ -261,12 +276,15 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
           onPlay(nextTrack)
         }
       } else if (idx >= 0 && idx + 1 === setTracks.length) {
-        toast('🔴 [MiniDisc] ¡Grabación finalizada! Todos los temas reproducidos.', 'success', 5000)
+        console.log('[SetBuilder playNextRef] Reached end of set!')
+        toast('✨ Set finalizado', 'success', 4000)
         setIsRecordingMode(false)
+      } else {
+        console.warn('[SetBuilder playNextRef] Could not match endedFilename in setTracks. endedFilename:', endedFilename, 'playingFile:', playingFile)
       }
     }
     return () => { if (playNextRef.current) playNextRef.current = null }
-  }, [setTracks, onPlay, playNextRef, page, mdGap, isMd])
+  }, [setTracks, onPlay, playNextRef, page, mdGap, isMd, playingFile])
 
   // Generador de playlists (estrategia POP/LATIN de la barra polimórfica).
   // 'auto' respeta los filtros activos (géneros + estrellas); los presets

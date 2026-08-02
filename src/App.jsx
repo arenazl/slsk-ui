@@ -5991,13 +5991,34 @@ function App() {
     try {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
-      audio.onended = () => {
+      
+      const handleEnded = () => {
         const ended = file.filename
+        console.log('[App Audio] Track ended:', ended, 'Calling playNextRef...')
         setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
-        playNextRef.current?.(ended)
+        if (playNextRef.current) {
+          console.log('[App Audio] Executing playNextRef.current(', ended, ')')
+          playNextRef.current(ended)
+        } else {
+          console.warn('[App Audio] playNextRef.current is null!')
+        }
       }
-      audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-      audio.play().catch(() => {})
+
+      audio.onended = handleEnded
+      audio.ontimeupdate = () => {
+        // Fallback: if user seeks near end or browser is at track duration end
+        if (audio.duration > 0 && audio.currentTime >= audio.duration - 0.3 && !audio.paused && !audio.seeking) {
+          console.log('[App Audio] Timeupdate reached duration end (currentTime >= duration - 0.3), triggering handleEnded()')
+          audio.pause()
+          handleEnded()
+        }
+      }
+
+      audio.onerror = (e) => {
+        console.error('[App Audio] Audio error:', e)
+        setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
+      }
+      audio.play().catch(e => console.error('[App Audio] Play error:', e))
       audioRef.current = audio
     } catch (e) {
       console.error('Failed to load audio', e)
