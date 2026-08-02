@@ -10,6 +10,69 @@ import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { API_BASE, agentFetch, getAudioUrl, normDupeKey, GENRE_COLORS, ScreenHint } from '../App';
 
+// Popover selector for Spotify-style DJ mix transitions
+function TransitionPopover({ track1, track2, currentTransition, onSelect, onClose }) {
+  const bpm1 = track1.bpm || 128
+  const bpm2 = track2.bpm || 128
+  const diffPercent = bpm1 && bpm2 ? Math.round(((bpm2 - bpm1) / bpm1) * 100 * 10) / 10 : 0
+  const isHarmonic = track1.camelot && track2.camelot && (track1.camelot === track2.camelot || Math.abs(parseInt(track1.camelot) - parseInt(track2.camelot)) <= 1)
+
+  const options = [
+    { id: 'auto', label: '⚡ Auto (AI Smart Mix)', desc: 'Superposición inteligente intro/outro (~16s) calculada automáticamente', overlap: 16 },
+    { id: 'quick', label: '🎚️ Crossfade Corto (8s)', desc: 'Mezcla rápida y suave de 8 segundos', overlap: 8 },
+    { id: 'long', label: '🎚️ Long Blend (32s)', desc: 'Mezcla progresiva larga de 32 segundos', overlap: 32 },
+    { id: 'cut', label: '🎛️ Drop on 1 / Cut (0s)', desc: 'Corte directo al primer golpe del siguiente tema', overlap: 0 },
+    { id: 'eqmix', label: '🎵 EQ Mix (45s)', desc: 'Intercambio de bajos extendido para pistas de club', overlap: 45 },
+  ]
+
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2 w-80 bg-zinc-950/95 border border-emerald-500/30 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-white font-sans animate-in fade-in zoom-in-95 duration-150">
+      <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
+        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          Configurar Transición DJ
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-white text-xs font-bold px-1.5 py-0.5 rounded-md hover:bg-white/10">✕</button>
+      </div>
+
+      {/* Analysis badge */}
+      <div className="bg-white/5 rounded-xl p-2.5 mb-3 border border-white/5 space-y-1.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-gray-400">Análisis BPM:</span>
+          <span className="font-mono text-emerald-400 font-bold">{bpm1} ➔ {bpm2} {diffPercent === 0 ? '(100% Match)' : `(Sync ${diffPercent > 0 ? '+' : ''}${diffPercent}%)`}</span>
+        </div>
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-gray-400">Harmonic Key:</span>
+          <span className={`font-mono text-[11px] font-bold ${isHarmonic ? 'text-green-400' : 'text-amber-400'}`}>
+            {track1.camelot || track1.key || '?'} ➔ {track2.camelot || track2.key || '?'} {isHarmonic ? '✨ Armónico' : '⚡ Cambio energía'}
+          </span>
+        </div>
+      </div>
+
+      {/* Options */}
+      <div className="space-y-1.5">
+        {options.map(opt => (
+          <button
+            key={opt.id}
+            onClick={() => onSelect({ type: opt.id, duration: opt.overlap })}
+            className={`w-full text-left p-2.5 rounded-xl transition-all border ${
+              (currentTransition.type || 'auto') === opt.id
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-white shadow-md'
+                : 'bg-white/5 border-transparent hover:bg-white/10 text-gray-300'
+            }`}
+          >
+            <div className="text-xs font-bold flex items-center justify-between">
+              <span>{opt.label}</span>
+              {(currentTransition.type || 'auto') === opt.id && <span className="text-[10px] text-emerald-400">Activo ✓</span>}
+            </div>
+            <div className="text-[10px] text-gray-400 leading-tight mt-0.5">{opt.desc}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default React.memo(forwardRef(function SetBuilder({ page, playingFile, onPlay, onPlayPause, onStop, agentConnected, onEditMix, authUser, collection, onGoToLibrary, playNextRef, libraryRoot }, ref) {
   const toast = useToast()
   const [minStars, setMinStars] = useState(3)
@@ -41,6 +104,24 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
   const [searchQuery, setSearchQuery] = useState('')
   const [allTracks, setAllTracks] = useState([])
   const [dupeCtx, setDupeCtx] = useState(null) // { x, y, index, track } — right-click version-swap popover
+
+  // Spotify DJ Mix Mode & Transitions state
+  const [isMixMode, setIsMixMode] = useState(true)
+  const [transitions, setTransitions] = useState({})
+  const [activeTransitionPopover, setActiveTransitionPopover] = useState(null)
+  const [curatorName, setCuratorName] = useState(() => authUser?.name || 'Lucas Arenaz')
+
+  const getTransitionBadge = (trans) => {
+    const type = trans?.type || 'auto'
+    switch (type) {
+      case 'quick': return { label: '🎚️ Crossfade 8s', color: 'border-blue-500/40 text-blue-400' }
+      case 'long': return { label: '🎚️ Long Blend 32s', color: 'border-purple-500/40 text-purple-400' }
+      case 'cut': return { label: '🎛️ Drop on 1 (0s)', color: 'border-amber-500/40 text-amber-400' }
+      case 'eqmix': return { label: '🎵 EQ Mix 45s', color: 'border-pink-500/40 text-pink-400' }
+      case 'auto':
+      default: return { label: '⚡ Auto', color: 'border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.25)]' }
+    }
+  }
 
   // MiniDisc Recording Studio state
   const [mdCapacity, setMdCapacityState] = useState(() => {
@@ -709,6 +790,125 @@ ${playlistEntries}
         })()}
       </div>
 
+      {/* ═══ SPOTIFY-STYLE PLAYLIST DJ MIX HEADER BANNER ═══ */}
+      {setTracks.length > 0 && (
+        <div className="flex-shrink-0 px-3 md:px-6 pt-4 pb-2">
+          <div className="relative overflow-hidden bg-gradient-to-b from-blue-950/70 via-[var(--bg-panel)] to-[var(--bg-panel)] p-4 md:p-6 rounded-2xl border border-white/10 shadow-2xl">
+            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5">
+              {/* Collage Artwork */}
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-xl overflow-hidden shadow-2xl border border-white/15 flex-shrink-0 relative group bg-black/50">
+                {setTracks.length >= 4 ? (
+                  <div className="grid grid-cols-2 grid-rows-2 w-full h-full">
+                    {setTracks.slice(0, 4).map((t, idx) => (
+                      <img key={idx} src={t.artwork || '/default-cover.png'} alt="" className="w-full h-full object-cover" />
+                    ))}
+                  </div>
+                ) : setTracks.length > 0 && setTracks[0].artwork ? (
+                  <img src={setTracks[0].artwork} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 text-3xl">
+                    🎧
+                  </div>
+                )}
+              </div>
+
+              {/* Playlist Title & Meta */}
+              <div className="flex-1 text-center sm:text-left min-w-0">
+                <div className="flex items-center justify-center sm:justify-start gap-2 mb-1.5 flex-wrap">
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    Playlist pública
+                  </span>
+                  {isMixMode && (
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Continuous DJ Mix
+                    </span>
+                  )}
+                </div>
+
+                <h1 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight truncate drop-shadow">
+                  {computeSetName()}
+                </h1>
+
+                <div className="flex items-center justify-center sm:justify-start gap-2 text-xs md:text-sm text-gray-300 mt-2">
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-bold text-white shadow">
+                    {(curatorName || 'L')[0].toUpperCase()}
+                  </div>
+                  <span>Mixeada por <strong className="text-white">{curatorName || authUser?.name || 'Lucas Arenaz'}</strong></span>
+                  <span>•</span>
+                  <span className="font-mono text-emerald-400 font-medium">{setTracks.length} canciones, {totalPlaylistMin} min</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Spotify Controls Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-5 pt-4 border-t border-white/10">
+              <div className="flex items-center gap-3">
+                {/* Play Continuous Mix Button */}
+                <button
+                  onClick={() => startPlayAll(false)}
+                  disabled={!setTracks.length}
+                  className="w-12 h-12 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-40"
+                  title="Reproducir mix continuo de la playlist"
+                >
+                  <svg className="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </button>
+
+                {/* Action Pills */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => {
+                      const el = document.getElementById('set-bottom-panel')
+                      if (el) el.scrollIntoView({ behavior: 'smooth' })
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/10 transition-all active:scale-95"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                    Agregar
+                  </button>
+
+                  <button
+                    onClick={() => setIsMixMode(!isMixMode)}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
+                      isMixMode
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
+                        : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
+                    }`}
+                    title="Activar/Desactivar Modo Mezcla DJ con conectores de transición"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    {isMixMode ? '✨ Mixear (On)' : '✨ Mixear'}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const newName = prompt('Nombre de la playlist:', setName || computeSetName())
+                      if (newName !== null) setSetName(newName)
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/10 transition-all active:scale-95"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    Nombre y datos
+                  </button>
+
+                  <button
+                    onClick={() => onEditMix(setTracks)}
+                    disabled={!setTracks.length}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
+                    title="Abrir editor multitrack DAW completo"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2} d="M4 7h16M4 12h16M4 17h16" /><circle cx="15" cy="7" r="2" fill="currentColor" /><circle cx="9" cy="12" r="2" fill="currentColor" /><circle cx="13" cy="17" r="2" fill="currentColor" /></svg>
+                    Editor DAW
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tracklist */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {setTracks.length === 0 ? (
@@ -732,78 +932,147 @@ ${playlistEntries}
               if (candidate && !setTracks.some(t => t.filename === filename)) addToSet(candidate)
             }}
           >
+            {/* Spotify Track Table Header */}
+            <div className="flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 border-b border-white/10 text-[11px] font-bold uppercase tracking-wider text-gray-400 bg-black/40 sticky top-0 backdrop-blur-md z-20">
+              <span className="w-5 md:w-6 text-center">#</span>
+              <span className="w-6" /> {/* Play button space */}
+              <span className="w-8" /> {/* Thumb space */}
+              <span className="flex-1">Título</span>
+              <span className="hidden lg:block w-24 text-center">Género</span>
+              <span className="w-16 md:w-20 text-center">BPM</span>
+              <span className="hidden sm:block w-14 text-center">Clave</span>
+              <span className="hidden sm:block w-12 text-center font-mono">Duración</span>
+              <span className="w-10 text-center" />
+            </div>
+
             {setTracks.map((t, i) => {
               const isPlaying = playing === t.filename
               return (
-                <div
-                  key={t.filename}
-                  draggable
-                  onDragStart={(e) => {
-                    const url = getAudioUrl(t, agentConnected)
-                    e.dataTransfer.effectAllowed = 'copy'
-                    e.dataTransfer.setData('text/uri-list', url)
-                    e.dataTransfer.setData('text/plain', url)
-                    e.dataTransfer.setData('DownloadURL', `audio/mpeg:${t.filename}:${url}`)
-                  }}
-                  onContextMenu={(e) => { e.preventDefault(); setDupeCtx({ x: e.clientX, y: e.clientY, index: i, track: t }) }}
-                  className={`flex items-center gap-2 md:gap-3 px-3 md:px-6 py-1 md:py-1.5 transition-all duration-150 border-b border-[var(--border-color)]/30 cursor-grab active:cursor-grabbing ${
-                    isPlaying ? 'bg-[var(--color-accent)]/5' : 'hover:bg-[var(--bg-hover)]'}`}
-                >
-                  {/* Move buttons */}
-                  <div className="flex flex-col gap-0.5 flex-shrink-0">
-                    <button
-                      onClick={() => moveTrack(i, i - 1)}
-                      disabled={i === 0}
-                      className="w-5 h-4 flex items-center justify-center text-gray-700 hover:text-[var(--text-primary,white)] disabled:opacity-20 disabled:hover:text-gray-700 transition-colors"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
-                    </button>
-                    <button
-                      onClick={() => moveTrack(i, i + 1)}
-                      disabled={i === setTracks.length - 1}
-                      className="w-5 h-4 flex items-center justify-center text-gray-700 hover:text-[var(--text-primary,white)] disabled:opacity-20 disabled:hover:text-gray-700 transition-colors"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                    </button>
-                  </div>
-                  <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(t)} />
-                  <span className="w-5 md:w-6 text-center text-xs text-gray-600 font-mono flex-shrink-0">{i + 1}</span>
-                  <TrackThumb src={t.artwork} />
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-xs md:text-sm truncate flex items-center gap-1.5 ${isPlaying ? 'font-medium text-[var(--color-accent)]' : 'text-[var(--text-primary)]'}`}>
-                      {t.is_classic && <span className="flex-shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/25 text-amber-400">CLÁSICO</span>}
-                      {t.beatport_pos && <span className="flex-shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-green-500/20 text-green-400">BP#{t.beatport_pos}</span>}
-                      <span className="truncate">{t.artist ? `${t.artist} - ` : ''}{t.title || t.filename}</span>
-                    </div>
-                  </div>
-                  <span className="hidden lg:block w-24 flex-shrink-0 text-xs text-gray-500 truncate text-center">{t.genre || '-'}</span>
-                  <span className={`hidden md:block w-10 flex-shrink-0 text-xs text-center ${
-                    t.format === 'FLAC' || t.format === 'flac' ? 'text-purple-400' : 'text-gray-500'
-                  }`}>{(t.format || t.filename?.split('.').pop() || '').toUpperCase()}</span>
-                  <span className="hidden md:block w-14 flex-shrink-0 text-xs text-gray-500 text-center">{t.size_mb ? `${t.size_mb}MB` : `~${t.duration_est || 6}m`}</span>
-                  {/* Duración REAL (mm:ss); solo estimación → ~Xm; sin dato → — (no se inventa) */}
-                  <span className="hidden sm:block w-12 flex-shrink-0 text-xs text-gray-500 font-mono text-center">{(() => {
-                    const sec = t.duration_ms ? Math.round(t.duration_ms / 1000) : t.duration_sec ? Math.round(t.duration_sec) : t.duration ? Math.round(t.duration) : 0
-                    if (sec > 0) return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
-                    return t.duration_est ? `~${t.duration_est}m` : '—'
-                  })()}</span>
-                  <span className={`w-16 md:w-20 flex-shrink-0 text-[10px] md:text-xs font-mono px-1 md:px-2 py-0.5 rounded text-center ${
-                    i > 0 && t.camelot === setTracks[i-1].camelot ? 'bg-green-500/20 text-green-400' :
-                    'bg-amber-500/20 text-amber-400'
-                  }`}>
-                    {t.key}{t.camelot ? <span className="hidden sm:inline"> · {t.camelot}</span> : ''}
-                  </span>
-                  <span className="hidden sm:block w-16 flex-shrink-0 text-xs text-[var(--text-primary)] text-center">{'★'.repeat(t.rating || 0)}</span>
-                  <button
-                    onClick={() => removeFromSet(i)}
-                    className="w-6 h-6 flex items-center justify-center rounded-full text-gray-700 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 active:scale-95 flex-shrink-0"
-                    title="Quitar del set"
+                <React.Fragment key={t.filename || i}>
+                  <div
+                    draggable
+                    onDragStart={(e) => {
+                      const url = getAudioUrl(t, agentConnected)
+                      e.dataTransfer.effectAllowed = 'copy'
+                      e.dataTransfer.setData('text/uri-list', url)
+                      e.dataTransfer.setData('text/plain', url)
+                      e.dataTransfer.setData('DownloadURL', `audio/mpeg:${t.filename}:${url}`)
+                    }}
+                    onContextMenu={(e) => { e.preventDefault(); setDupeCtx({ x: e.clientX, y: e.clientY, index: i, track: t }) }}
+                    className={`flex items-center gap-2 md:gap-3 px-3 md:px-6 py-1.5 md:py-2 transition-all duration-150 border-b border-white/5 cursor-grab active:cursor-grabbing ${
+                      isPlaying ? 'bg-emerald-500/10 border-emerald-500/30' : 'hover:bg-white/5'}`}
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+                    {/* Move buttons */}
+                    <div className="flex flex-col gap-0.5 flex-shrink-0">
+                      <button
+                        onClick={() => moveTrack(i, i - 1)}
+                        disabled={i === 0}
+                        className="w-5 h-3 flex items-center justify-center text-gray-600 hover:text-white disabled:opacity-20 transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
+                      </button>
+                      <button
+                        onClick={() => moveTrack(i, i + 1)}
+                        disabled={i === setTracks.length - 1}
+                        className="w-5 h-3 flex items-center justify-center text-gray-600 hover:text-white disabled:opacity-20 transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                    </div>
+
+                    {/* Number or Animated Equalizer */}
+                    {isPlaying ? (
+                      <div className="w-5 md:w-6 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
+                          <rect x="3" y="8" width="3" height="8" rx="1" className="animate-pulse" />
+                          <rect x="9" y="4" width="3" height="16" rx="1" className="animate-pulse" style={{ animationDelay: '150ms' }} />
+                          <rect x="15" y="10" width="3" height="6" rx="1" className="animate-pulse" style={{ animationDelay: '300ms' }} />
+                        </svg>
+                      </div>
+                    ) : (
+                      <span className="w-5 md:w-6 text-center text-xs text-gray-500 font-mono flex-shrink-0">{i + 1}</span>
+                    )}
+
+                    <PlayPauseBtn isPlaying={isPlaying} onClick={() => handlePlay(t)} />
+                    <TrackThumb src={t.artwork} />
+
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-xs md:text-sm truncate flex items-center gap-1.5 ${isPlaying ? 'font-bold text-emerald-400' : 'text-white font-medium'}`}>
+                        {t.is_classic && <span className="flex-shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/25 text-amber-400">CLÁSICO</span>}
+                        {t.beatport_pos && <span className="flex-shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-green-500/20 text-green-400">BP#{t.beatport_pos}</span>}
+                        <span className="truncate">{t.artist ? `${t.artist} - ` : ''}{t.title || t.filename}</span>
+                      </div>
+                    </div>
+
+                    <span className="hidden lg:block w-24 flex-shrink-0 text-xs text-gray-400 truncate text-center">{t.genre || '-'}</span>
+
+                    {/* BPM Column */}
+                    <span className="w-16 md:w-20 flex-shrink-0 text-xs font-mono font-bold text-emerald-400 text-center">
+                      {t.bpm ? `${t.bpm} BPM` : '128 BPM'}
+                    </span>
+
+                    {/* Key Column */}
+                    <span className={`hidden sm:block w-14 flex-shrink-0 text-[10px] md:text-xs font-mono px-1 py-0.5 rounded text-center ${
+                      i > 0 && t.camelot === setTracks[i-1].camelot ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'
+                    }`}>
+                      {t.key}{t.camelot ? ` · ${t.camelot}` : ''}
+                    </span>
+
+                    {/* Duration Column */}
+                    <span className="hidden sm:block w-12 flex-shrink-0 text-xs text-gray-400 font-mono text-center">{(() => {
+                      const sec = t.duration_ms ? Math.round(t.duration_ms / 1000) : t.duration_sec ? Math.round(t.duration_sec) : t.duration ? Math.round(t.duration) : 0
+                      if (sec > 0) return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
+                      return t.duration_est ? `~${t.duration_est}m` : '—'
+                    })()}</span>
+
+                    <button
+                      onClick={() => removeFromSet(i)}
+                      className="w-6 h-6 flex items-center justify-center rounded-full text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 active:scale-95 flex-shrink-0"
+                      title="Quitar del set"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* SPOTIFY DJ TRANSITION CONNECTOR BADGE BETWEEN TRACKS */}
+                  {isMixMode && i < setTracks.length - 1 && (
+                    <div className="relative py-2.5 flex items-center justify-center my-0.5 group">
+                      {/* Vertical line connecting track rows */}
+                      <div className="absolute top-0 bottom-0 left-10 md:left-14 w-0.5 bg-gradient-to-b from-emerald-500/50 via-blue-500/40 to-purple-500/50 group-hover:w-1 transition-all" />
+
+                      {/* Transition Pill Badge Button */}
+                      {(() => {
+                        const badge = getTransitionBadge(transitions[i])
+                        return (
+                          <button
+                            onClick={() => setActiveTransitionPopover(activeTransitionPopover === i ? null : i)}
+                            className={`relative z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-950/90 border ${badge.color} text-[11px] font-bold backdrop-blur-md hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer`}
+                            title="Click para cambiar el tipo de mezcla/transición"
+                          >
+                            <span>{badge.label}</span>
+                            <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                        )
+                      })()}
+
+                      {/* Transition Popover */}
+                      {activeTransitionPopover === i && (
+                        <TransitionPopover
+                          track1={t}
+                          track2={setTracks[i + 1]}
+                          currentTransition={transitions[i] || { type: 'auto' }}
+                          onSelect={(newTrans) => {
+                            setTransitions(prev => ({ ...prev, [i]: newTrans }))
+                            setActiveTransitionPopover(null)
+                          }}
+                          onClose={() => setActiveTransitionPopover(null)}
+                        />
+                      )}
+                    </div>
+                  )}
+                </React.Fragment>
               )
             })}
           </div>
