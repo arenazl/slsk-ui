@@ -1,7 +1,7 @@
 {
   "name": "slsk-ui",
   "private": true,
-  "version": "2.12.68",
+  "version": "2.12.70",
   "type": "module",
   "scripts": {
     "dev": "vite",

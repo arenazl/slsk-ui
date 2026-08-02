@@ -757,7 +757,11 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const wasPlaying = !a.paused
     try {
-      a.currentTime = pct * dur
+      if (pct >= 0.98) {
+        a.currentTime = Math.max(0, dur - 0.2)
+      } else {
+        a.currentTime = pct * dur
+      }
     } catch {}
     if (wasPlaying) {
       a.play().catch(() => {})
@@ -5890,10 +5894,14 @@ function App() {
     }
     if (file.preview_url) candidates.push(file.preview_url)
 
-    const audio = new Audio()
-    audio.preload = 'auto'
-    audioRef.current = audio
-    audio.onended = fail
+    const handleEnded = () => {
+      const ended = file.filename
+      setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
+      if (playNextRef.current) {
+        playNextRef.current(ended)
+      }
+    }
+    audio.onended = handleEnded
 
     const playAt = (i) => {
       if (i < candidates.length) {

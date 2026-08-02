@@ -672,43 +672,144 @@ ${playlistEntries}
         { icon: '📀', text: <>Elegí <strong>MiniDisc</strong> como destino y el límite pasa a capacidad de disco (74/80/LP2), con etiqueta imprimible y grabación autoplay.</> },
         { icon: '📤', text: <>Destinos digitales: <strong>.m3u</strong> (Rekordbox playlist), <strong>.xml</strong> (con rating + BPM + key) o el <strong>mezclador</strong>.</> },
       ]} />
-      {/* Controls: single compact row - duration + algorithms + search */}
-      <div className="flex-shrink-0 flex items-center gap-1.5 md:gap-3 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
-        {/* Star filter - desktop only */}
-        <div className="hidden lg:flex items-center gap-1">
+      {/* Controls: Generador, Regenerar, Tiempo/Duración, Estrellas y Búsqueda */}
+      <div className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 bg-[var(--bg-panel)] border-b border-[var(--border-color)] overflow-x-auto scrollbar-none">
+        {/* 1. Generador + Regenerar */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-bold">Generador</span>
+          {genStrategy === 'club' ? (
+            <>
+              <select
+                value={method || 'pro'}
+                onChange={e => {
+                  const m = e.target.value
+                  if (m === 'pro' && !selectedGenres.length) { setMethod('pro'); toast('Marcá un género arriba para Set Pro', 'info', 2500); return }
+                  generateSet(m)
+                }}
+                className="px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+              >
+                <option value="pro">Set Pro</option>
+                <option value="camelot">Camelot</option>
+                <option value="energy">Energy</option>
+                <option value="genre">Genre</option>
+                <option value="peak">Peak</option>
+              </select>
+
+              {(method || 'pro') === 'pro' && (
+                <div className="flex items-center gap-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-0.5">
+                  {[
+                    { id: 'warmup', label: 'Warm-up' },
+                    { id: 'peak', label: 'Peak' },
+                    { id: 'closing', label: 'Closing' },
+                  ].map(mo => (
+                    <button
+                      key={mo.id}
+                      onClick={() => { setSetProMode(mo.id); if (method === 'pro' && setTracks.length > 0 && selectedGenres.length) generateSet('pro', undefined, undefined, undefined, undefined, mo.id) }}
+                      className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all ${setProMode === mo.id ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                    >
+                      {mo.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => { const m = method || 'pro'; generateSet(m) }}
+                disabled={generating}
+                className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold text-[var(--color-accent-text)] disabled:opacity-50 active:scale-95 transition-all flex-shrink-0"
+                style={{ background: 'var(--color-accent)' }}
+                title="Generar set"
+              >
+                {generating
+                  ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+                Generar
+              </button>
+
+              {/* REGENERAR BUTTON */}
+              <button
+                onClick={() => { const m = method || 'pro'; generateSet(m) }}
+                disabled={generating}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-white transition-all active:scale-95 flex-shrink-0"
+                title="Generar otra combinación variante del set"
+              >
+                <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                Regenerar
+              </button>
+            </>
+          ) : (
+            <>
+              {(collection === 'latin'
+                ? [{ id: 'latin', label: 'Pop Latino' }, { id: 'top', label: 'Top ★' }]
+                : [{ id: 'pop', label: 'Pop Hits' }, { id: 'latin', label: 'Pop Latino' }, { id: 'top', label: 'Top ★' }]
+              ).map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => generateCuratedPlaylist(c.id)}
+                  className="px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-white transition-all"
+                >
+                  {c.label}
+                </button>
+              ))}
+              <button
+                onClick={() => generateCuratedPlaylist(lastPresetRef.current || 'auto')}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-emerald-400 hover:text-emerald-300 transition-all"
+                title="Regenerar playlist"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                Regenerar
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="w-px h-5 bg-[var(--border-color)] flex-shrink-0" />
+
+        {/* 2. Límite / Tiempo (Duración) */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-bold">Tiempo</span>
+          {[60, 90, 120, ...(genStrategy === 'playlist' ? [0] : [])].map(d => (
+            <button
+              key={d}
+              onClick={() => { setDuration(d); if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { limitMin: d }); else if (method) generateSet(method, undefined, d) }}
+              className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${duration === d ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-white'}`}
+            >
+              {d === 0 ? 'Sin límite' : `${d}'`}
+            </button>
+          ))}
+          <span className="text-[11px] font-mono text-emerald-400 font-bold whitespace-nowrap pl-1">
+            {setTracks.length}t · ~{totalPlaylistMin || totalMin}'
+          </span>
+        </div>
+
+        <div className="w-px h-5 bg-[var(--border-color)] flex-shrink-0 hidden lg:block" />
+
+        {/* 3. Star filter */}
+        <div className="hidden lg:flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => { setSetSelectedStars([]); setMinStars(1); if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { stars: [] }); else if (method) generateSet(method, 1, undefined, []) }}
-            className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
-              setSelectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
+            className={`px-2 py-1 rounded text-xs transition-all ${setSelectedStars.length === 0 ? 'bg-[var(--color-accent)]/20 text-white font-bold' : 'text-gray-400 hover:text-white'}`}
           >All</button>
-          {[1, 2, 3, 4, 5].map(s => {
-            const active = setSelectedStars.includes(s)
-            return (
-              <button
-                key={s}
-                onClick={() => {
-                  const next = active ? setSelectedStars.filter(x => x !== s) : [...setSelectedStars, s]
-                  setSetSelectedStars(next)
-                  const newMin = next.length > 0 ? Math.min(...next) : 1
-                  setMinStars(newMin)
-                  if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { stars: next })
-                  else if (method) generateSet(method, newMin, undefined, next)
-                }}
-                className={`px-2 py-1 rounded text-xs transition-all duration-200 ${
-                  active ? 'bg-[var(--color-accent)]/20 text-[var(--text-primary)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                {'★'.repeat(s)}
-              </button>
-            )
-          })}
+          {[1, 2, 3, 4, 5].map(s => (
+            <button
+              key={s}
+              onClick={() => {
+                const next = setSelectedStars.includes(s) ? setSelectedStars.filter(x => x !== s) : [...setSelectedStars, s]
+                setSetSelectedStars(next)
+                const newMin = next.length > 0 ? Math.min(...next) : 1
+                setMinStars(newMin)
+                if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { stars: next })
+                else if (method) generateSet(method, newMin, undefined, next)
+              }}
+              className={`px-1.5 py-1 rounded text-xs transition-all ${setSelectedStars.includes(s) ? 'bg-[var(--color-accent)]/20 text-white font-bold' : 'text-gray-400 hover:text-white'}`}
+            >
+              {'★'.repeat(s)}
+            </button>
+          ))}
         </div>
-        {/* Duración, métodos y MiniDisc viven en la barra polimórfica de abajo
-            (Generador | Límite | Destino) — acá quedan solo filtros. */}
-        <div className="w-px h-5 bg-[var(--border-color)] flex-shrink-0 hidden lg:block" />
-        {/* Search inline */}
-        <div className="flex-1 min-w-32 md:min-w-48 relative flex-shrink-0">
+
+        {/* 4. Search inline */}
+        <div className="flex-1 min-w-32 md:min-w-44 relative flex-shrink-0">
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -716,7 +817,7 @@ ${playlistEntries}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Agregar track..."
-            className="w-full pl-8 pr-3 py-1.5 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+            className="w-full pl-8 pr-3 py-1 bg-[var(--bg-input)] border border-gray-700 rounded-lg text-xs text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
           />
         </div>
       </div>
@@ -1286,296 +1387,105 @@ ${playlistEntries}
         </div>
       )}
 
-      {/* ═══ BARRA POLIMÓRFICA — Generador | Límite | Destino ═══
-          Cada slot resuelve su estrategia según contexto y lo que no aplica no
-          se rendea: Generador por colección (club en EDM / playlist en POP-LATIN),
-          Límite por destino (minutos digital / capacidad de disco en MiniDisc),
-          Destino define la acción de exportación. */}
-      <div className="flex-shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-panel)] px-3 md:px-6 py-2 overflow-x-auto scrollbar-none">
-        <div className="flex items-end gap-3 min-w-max">
-
-          {/* ── GENERADOR (por colección) ── */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">
-              {genStrategy === 'club' ? 'Generador · Set Club (Mixed in Key)' : 'Generador · Playlist'}
-            </span>
-            <div className="flex items-center gap-1.5">
-              {genStrategy === 'club' ? (
-                <>
-                  <select
-                    value={method || 'pro'}
-                    onChange={e => {
-                      const m = e.target.value
-                      if (m === 'pro' && !selectedGenres.length) { setMethod('pro'); toast('Marcá un género arriba para Set Pro', 'info', 2500); return }
-                      generateSet(m)
-                    }}
-                    title="Método de armado — todos respetan compatibilidad armónica"
-                    className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
-                  >
-                    <option value="pro">Set Pro</option>
-                    <option value="camelot">Camelot</option>
-                    <option value="energy">Energy</option>
-                    <option value="genre">Genre</option>
-                    <option value="peak">Peak</option>
-                  </select>
-                  {(method || 'pro') === 'pro' && (
-                    <div className="flex items-center gap-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-0.5">
-                      {[
-                        { id: 'warmup', label: 'Warm-up', desc: 'apertura, grooves suaves, BPM bajo' },
-                        { id: 'peak', label: 'Peak', desc: 'pico, los más fuertes/rankeados' },
-                        { id: 'closing', label: 'Closing', desc: 'cierre melódico/emotivo' },
-                      ].map(mo => (
-                        <button
-                          key={mo.id}
-                          onClick={() => { setSetProMode(mo.id); if (method === 'pro' && setTracks.length > 0 && selectedGenres.length) generateSet('pro', undefined, undefined, undefined, undefined, mo.id) }}
-                          title={mo.desc}
-                          className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all active:scale-95 ${setProMode === mo.id ? 'text-[var(--color-accent-text)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                          style={setProMode === mo.id ? { background: 'var(--color-accent)' } : undefined}
-                        >
-                          {mo.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => { const m = method || 'pro'; if (m === 'pro' && !selectedGenres.length) { toast('Marcá un género arriba primero', 'info', 2500); return } generateSet(m) }}
-                    disabled={generating}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-[var(--color-accent-text)] disabled:opacity-50 active:scale-95 transition-all flex-shrink-0"
-                    style={{ background: 'var(--color-accent)' }}
-                  >
-                    {generating
-                      ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
-                    Generar
-                  </button>
-                </>
-              ) : (
-                <>
-                  {(collection === 'latin'
-                    ? [{ id: 'latin', label: 'Pop Latino', dot: 'bg-amber-400', title: 'Lista curada Pop Latino & Rock Nacional' }, { id: 'top', label: 'Top ★', dot: 'bg-yellow-400', title: 'Solo temas con 4-5 estrellas' }]
-                    : [{ id: 'pop', label: 'Pop Hits', dot: 'bg-pink-400', title: 'Lista curada Pop Hits & Classics' }, { id: 'latin', label: 'Pop Latino', dot: 'bg-amber-400', title: 'Lista curada Pop Latino & Rock Nacional' }, { id: 'top', label: 'Top ★', dot: 'bg-yellow-400', title: 'Solo temas con 4-5 estrellas' }]
-                  ).map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => generateCuratedPlaylist(c.id)}
-                      title={c.title}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-95"
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-                      {c.label}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => generateCuratedPlaylist('auto')}
-                    title="Arma una playlist al azar respetando los filtros de género y estrellas, hasta el límite elegido"
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-[var(--color-accent-text)] active:scale-95 transition-all flex-shrink-0"
-                    style={{ background: 'var(--color-accent)' }}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h4l3 5 3-5h6m0 0l-2-2m2 2l-2 2M4 17h4l3-5m6 5h3m0 0l-2-2m2 2l-2 2" /></svg>
-                    Generar Playlist
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="w-px h-9 bg-[var(--border-color)] flex-shrink-0" />
-
-          {/* ── LÍMITE (por destino) ── */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">
-              {isMd ? 'Límite · Capacidad del disco' : 'Límite · Duración'}
-            </span>
-            <div className="flex items-center gap-1">
-              {isMd ? (
-                <>
-                  {[
-                    { id: '74', label: 'MD 74m' },
-                    { id: '80', label: 'MD 80m' },
-                    { id: '148', label: 'LP2 148m' },
-                  ].map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => { setMdCapacity(c.id); const lim = parseInt(c.id, 10); if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { limitMin: lim }); else if (method) generateSet(method, undefined, lim) }}
-                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${mdCapacity === c.id ? 'text-[var(--color-accent-text)]' : 'bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                      style={mdCapacity === c.id ? { background: 'var(--color-accent)' } : undefined}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                  <div className="flex items-center gap-1.5 pl-1">
-                    <div className="w-20 md:w-28 h-2 bg-[var(--bg-hover)] rounded-full overflow-hidden border border-[var(--border-color)]">
-                      <div
-                        className={`h-full transition-all duration-300 ${isMdOverCapacity ? 'bg-red-500' : mdUsagePercent > 85 ? 'bg-amber-400' : 'bg-emerald-400'}`}
-                        style={{ width: `${mdUsagePercent}%` }}
-                      />
-                    </div>
-                    <span className={`text-[10px] font-mono font-semibold whitespace-nowrap ${isMdOverCapacity ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>
-                      {totalPlaylistMin}/{maxMdMin}m{isMdOverCapacity ? ` (+${(totalPlaylistMin - maxMdMin).toFixed(1)})` : ''}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {[60, 90, 120, ...(genStrategy === 'playlist' ? [0] : [])].map(d => (
-                    <button
-                      key={d}
-                      onClick={() => { setDuration(d); if (genStrategy === 'playlist') generateCuratedPlaylist(lastPresetRef.current || 'auto', { limitMin: d }); else if (method) generateSet(method, undefined, d) }}
-                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${duration === d ? 'text-[var(--color-accent-text)]' : 'bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                      style={duration === d ? { background: 'var(--color-accent)' } : undefined}
-                    >
-                      {d === 0 ? 'Sin límite' : `${d}'`}
-                    </button>
-                  ))}
-                  <span className="pl-1 text-[10px] text-[var(--text-muted)] font-mono whitespace-nowrap">{setTracks.length}t · ~{totalMin}'</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="w-px h-9 bg-[var(--border-color)] flex-shrink-0" />
-
-          {/* ── ESCUCHAR — acción de la LISTA, vale para cualquier destino ── */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Escuchar</span>
-            {(() => {
-              // Activo = está sonando un tema de la lista (el autoplay encadena solo).
-              // El contenido cambia CON el tema: mini carátula + posición + título.
-              const curIdx = setTracks.findIndex(t => t.filename === playing)
-              const cur = curIdx >= 0 ? setTracks[curIdx] : null
-              return (
+      {/* ═══ BARRA DE EXPORTACIÓN (EXCLUSIVA) ═══ */}
+      <div
+        onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY }}
+        className="flex-shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-panel)] px-3 md:px-6 py-2.5 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700/50 scrollbar-track-transparent"
+      >
+        <div className="flex items-center justify-between gap-4 min-w-max">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-bold">Destino de Exportación:</span>
+            <div className="flex items-center gap-1 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-0.5">
+              {[
+                { id: 'm3u', label: 'Rekordbox (.m3u)' },
+                { id: 'xml', label: 'Rekordbox XML' },
+                { id: 'mix', label: 'Editor DAW' },
+                { id: 'md', label: 'MiniDisc' },
+              ].map(t => (
                 <button
-                  onClick={() => startPlayAll(false)}
+                  key={t.id}
+                  onClick={() => setExportTarget(t.id)}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all active:scale-95 ${exportTarget === t.id ? 'bg-[var(--color-accent)] text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Export actions */}
+          <div className="flex items-center gap-2">
+            {exportTarget === 'm3u' && (
+              <button
+                onClick={exportM3U}
+                disabled={exporting || !setTracks.length}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-40 hover:brightness-110"
+                style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
+                title="Exportar playlist para Rekordbox (.m3u)"
+              >
+                {exporting
+                  ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v16m0 0l-4-4m4 4l4-4" /></svg>}
+                Exportar .m3u
+              </button>
+            )}
+
+            {exportTarget === 'xml' && (
+              <button
+                onClick={exportRekordboxXML}
+                disabled={exporting || !setTracks.length}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-40 hover:brightness-110"
+                style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
+                title="Exportar Rekordbox XML con metadatos completos"
+              >
+                {exporting
+                  ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v16m0 0l-4-4m4 4l4-4" /></svg>}
+                Exportar Rekordbox XML
+              </button>
+            )}
+
+            {exportTarget === 'mix' && (
+              <button
+                onClick={() => onEditMix(setTracks)}
+                disabled={!setTracks.length}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md transition-all active:scale-95 disabled:opacity-40"
+                title="Abrir editor multitrack"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" /><circle cx="15" cy="7" r="2.2" fill="currentColor" /><circle cx="9" cy="12" r="2.2" fill="currentColor" /><circle cx="13" cy="17" r="2.2" fill="currentColor" /></svg>
+                Abrir Editor DAW Multitrack
+              </button>
+            )}
+
+            {exportTarget === 'md' && (
+              <>
+                <button
+                  onClick={() => setMdGap(!mdGap)}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${mdGap ? 'border-transparent text-emerald-400 bg-emerald-500/20' : 'bg-[var(--bg-input)] border-[var(--border-color)] text-gray-400 hover:text-white'}`}
+                  title="Pausa 2s entre temas para que el grabador marque el track"
+                >
+                  Pausa 2s (Track Mark)
+                </button>
+                <button
+                  onClick={printMDLabel}
                   disabled={!setTracks.length}
-                  title={cur ? `Sonando: ${cur.artist ? cur.artist + ' - ' : ''}${cur.title || cur.filename} — click para reiniciar desde el primer tema` : 'Reproduce la lista completa de corrido (autoplay tema a tema)'}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-40 flex-shrink-0 ${
-                    cur
-                      ? 'text-[var(--color-accent-text)] shadow-md'
-                      : 'bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-                  }`}
-                  style={cur ? { background: 'var(--color-accent)' } : undefined}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-gray-300 hover:text-white transition-all disabled:opacity-40"
+                  title="Imprimir etiqueta MiniDisc"
                 >
-                  {cur ? (
-                    <>
-                      <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="4" y="8" width="4" height="8" rx="1" className="animate-pulse" />
-                        <rect x="10" y="4" width="4" height="16" rx="1" className="animate-pulse" style={{ animationDelay: '150ms' }} />
-                        <rect x="16" y="10" width="4" height="6" rx="1" className="animate-pulse" style={{ animationDelay: '300ms' }} />
-                      </svg>
-                      {cur.artwork && <img src={cur.artwork} alt="" className="w-4 h-4 rounded object-cover flex-shrink-0" />}
-                      <span className="font-mono text-[10px] flex-shrink-0">{curIdx + 1}/{setTracks.length}</span>
-                      <span className="truncate max-w-[9rem]">{cur.title || cur.filename}</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                      Reproducir
-                    </>
-                  )}
+                  Etiqueta MD
                 </button>
-              )
-            })()}
-          </div>
-
-          <div className="w-px h-9 bg-[var(--border-color)] flex-shrink-0" />
-
-          {/* ── DESTINO (acción polimórfica) ── */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[8px] uppercase tracking-widest text-[var(--text-muted)] font-bold pl-0.5">Destino</span>
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center gap-0.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-0.5">
-                {[
-                  { id: 'm3u', label: 'M3U' },
-                  { id: 'xml', label: 'XML' },
-                  { id: 'mix', label: 'Mezcla' },
-                  { id: 'md', label: 'MiniDisc' },
-                ].map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setExportTarget(t.id)}
-                    className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all active:scale-95 ${exportTarget === t.id ? 'text-[var(--color-accent-text)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                    style={exportTarget === t.id ? { background: 'var(--color-accent)' } : undefined}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              {exportTarget === 'm3u' && (
                 <button
-                  onClick={exportM3U}
-                  disabled={exporting || !setTracks.length}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-40 shadow-md hover:brightness-110 flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
-                  title="Rekordbox playlist (.m3u)"
-                >
-                  {exporting
-                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" /></svg>}
-                  Exportar .m3u
-                </button>
-              )}
-              {exportTarget === 'xml' && (
-                <button
-                  onClick={exportRekordboxXML}
-                  disabled={exporting || !setTracks.length}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-40 shadow-md hover:brightness-110 flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #ff5500, #ff2266)' }}
-                  title="Rekordbox XML (con rating, BPM, key, género)"
-                >
-                  {exporting
-                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" /></svg>}
-                  Exportar .xml
-                </button>
-              )}
-              {exportTarget === 'mix' && (
-                <button
-                  onClick={() => onEditMix(setTracks)}
+                  onClick={startMDAutoplay}
                   disabled={!setTracks.length}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition-all active:scale-95 disabled:opacity-40 flex-shrink-0"
-                  title="Editor de mezcla"
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-40 ${isRecordingMode ? 'bg-red-600 animate-pulse' : 'bg-emerald-600 hover:bg-emerald-500'}`}
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" /><circle cx="15" cy="7" r="2.2" fill="currentColor" /><circle cx="9" cy="12" r="2.2" fill="currentColor" /><circle cx="13" cy="17" r="2.2" fill="currentColor" /></svg>
-                  Abrir mezclador
+                  <span>{isRecordingMode ? 'Grabación Activa' : 'Grabar (Autoplay)'}</span>
                 </button>
-              )}
-              {exportTarget === 'md' && (
-                <>
-                  <button
-                    onClick={() => setMdGap(!mdGap)}
-                    title="Inserta 2 segundos de silencio entre canciones para que el grabador de MiniDisc marque los cortes de tema"
-                    className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${mdGap ? 'border-transparent' : 'bg-[var(--bg-input)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                    style={mdGap ? { background: 'color-mix(in srgb, var(--color-accent) 20%, transparent)', color: 'var(--color-accent)' } : {}}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Pausa 2s
-                  </button>
-                  <button
-                    onClick={printMDLabel}
-                    disabled={!setTracks.length}
-                    title="Imprimir etiqueta a tamaño real de MiniDisc (54×38 mm)"
-                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all disabled:opacity-40"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Etiqueta
-                  </button>
-                  <button
-                    onClick={startMDAutoplay}
-                    disabled={!setTracks.length}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-40 flex-shrink-0 ${isRecordingMode ? 'bg-red-600 hover:bg-red-500 animate-pulse' : 'bg-emerald-600 hover:bg-emerald-500'}`}
-                  >
-                    {isRecordingMode
-                      ? <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse flex-shrink-0" />
-                      : <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>}
-                    <span>{isRecordingMode ? 'Grabación Activa' : 'Grabar (Autoplay)'}</span>
-                  </button>
                 </>
               )}
             </div>
           </div>
-
         </div>
-      </div>
 
       {/* Right-click version-swap popover: other versions of the song with a
           play to preview + "Usar" to replace; footer removes from set or trashes. */}
