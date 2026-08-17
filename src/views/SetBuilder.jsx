@@ -8,7 +8,7 @@ import TrackThumb from '../components/ui/TrackThumb';
 import GenreCombo from '../components/ui/GenreCombo';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { API_BASE, agentFetch, getAudioUrl, normDupeKey, GENRE_COLORS, ScreenHint } from '../App';
+import { API_BASE, agentFetch, agentUrl, getAudioUrl, normDupeKey, GENRE_COLORS, ScreenHint } from '../App';
 
 // Popover selector for Spotify-style DJ mix transitions
 function TransitionPopover({ track1, track2, currentTransition, onSelect, onClose }) {
@@ -243,6 +243,89 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
     }
   }
 
+  // La "cocina": análisis de mezcla pre-calculado (grilla rígida + markers)
+  // que viaja con la UI como JSON estático. Clave = filename. Un tema sin
+  // entrada acá NO es apto para mezclar (regla: sin análisis no hay Mixear).
+  const [mixAnalysis, setMixAnalysis] = useState({})
+  useEffect(() => {
+    fetch('/mix-analysis.json')
+      .then(r => (r.ok ? r.json() : {}))
+      .then(setMixAnalysis)
+      .catch(() => {})
+  }, [])
+
+  // Cues manuales del dueño (marcados sobre la waveform): PISAN al análisis.
+  // { filename: { mixIn?, mixOut? } } en localStorage.
+  const readUserCues = () => {
+    try { return JSON.parse(localStorage.getItem('mix_user_cues') || '{}') } catch { return {} }
+  }
+  const [userCues, setUserCues] = useState(readUserCues)
+
+  // Devuelve el track enriquecido con su análisis (mix+grid) o null si no
+  // está analizado. Acepta análisis propio (lab) o del JSON de la cocina.
+  // Los cues manuales del dueño mandan sobre todo (anchorSource 'user').
+  const trackAnalysis = (t) => {
+    if (!t) return null
+    let base = null
+    if (t.mix && t.grid) base = t
+    else {
+      const a = mixAnalysis[t.filename]
+      if (a) base = { ...t, bpm: a.bpm, duration_sec: a.duration, mix: a.mix, grid: a.grid, sections: a.sections, subfolder: a.subfolder || t.subfolder, in_subfolder: true }
+    }
+    if (!base) return null
+    const uc = userCues[t.filename]
+    if (uc && base.grid?.beatLen) {
+      const mix = { ...base.mix }
+      let grid = base.grid
+      if (uc.mixIn != null) {
+        mix.mixIn = uc.mixIn
+        grid = { ...grid, offset: uc.mixIn % grid.beatLen, anchorSource: 'user' }
+      }
+      if (uc.mixOut != null) mix.mixOut = uc.mixOut
+      base = { ...base, mix, grid }
+    }
+    return base
+  }
+
+  // Mixear disponible solo si TODO el set está analizado (>=2 temas)
+  const mixAvailable = setTracks.length >= 2 && setTracks.every(t => !!trackAnalysis(t))
+
+  // Dedup de set ("esto no puede pasar": Alive x2 y On My Knees x2 en el
+  // mismo set): la misma canción entra UNA vez, y queda la mejor copia —
+  // la de mejor grilla en la cocina; empate, la primera.
+  const dedupeSetTracks = (list) => {
+    const best = new Map()
+    for (const t of list) {
+      const k = normDupeKey(t.filename || t.title || '')
+      const q = mixAnalysis[t.filename]?.grid?.quality ?? 999
+      const prev = best.get(k)
+      if (!prev || q < prev.q) best.set(k, { t, q })
+    }
+    const out = list.filter(t => best.get(normDupeKey(t.filename || t.title || ''))?.t === t)
+    if (out.length < list.length) toast(`Se quitaron ${list.length - out.length} duplicados del set`, 'info', 3000)
+    return out
+  }
+
+  // Continuidad de BPM ("está mal poner uno de 132 pegado a uno de 122"):
+  // NO se reordena (el sort ascendente hacía que todo set arranque con el
+  // mismo tema) — se respeta el orden del generador y se AVISAN los saltos
+  // >6% entre vecinos para que el dueño decida.
+  const orderSetByBpm = (list) => {
+    const eff = (t) => {
+      const a = mixAnalysis[t.filename]
+      if (a?.grid?.quality != null && a.grid.quality <= 80) return a.bpm
+      return t.bpm || a?.bpm || 0
+    }
+    let jumps = 0
+    for (let i = 1; i < list.length; i++) {
+      const b1 = eff(list[i - 1])
+      const b2 = eff(list[i])
+      if (b1 > 0 && b2 > 0 && Math.abs(b2 - b1) / b1 > 0.06) jumps++
+    }
+    if (jumps > 0) toast(`Ojo: ${jumps} salto(s) de BPM >6% entre temas vecinos`, 'info', 3500)
+    return list
+  }
+
   // Autoplay-next: when a set track finishes (real audio, not preview/stop),
   // advance to the next one. Re-registered on every setTracks/onPlay change
   // so the closure always sees the current list. Handles 2s gap for MiniDisc track marking.
@@ -285,7 +368,8 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
     }
 
     fn.getCrossfadeSec = (filename) => {
-      if (!isMixMode || (isMd && mdGap)) return 0
+      // Sin análisis completo del set no hay mezcla: reproducción lista simple
+      if (!isMixMode || (isMd && mdGap) || !mixAvailable) return 0
       let idx = setTracks.findIndex(t =>
         t.filename === filename || t.title === filename ||
         (t.filename && filename && (t.filename.includes(filename) || filename.includes(t.filename)))
@@ -308,7 +392,1153 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
 
     playNextRef.current = fn
     return () => { if (playNextRef.current === fn) playNextRef.current = null }
-  }, [setTracks, onPlay, playNextRef, page, mdGap, isMd, playingFile])
+  }, [setTracks, onPlay, playNextRef, page, mdGap, isMd, playingFile, mixAnalysis]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lab dual-deck por Web Audio API (chau HTMLAudioElement): ambos temas
+  // decodificados a AudioBuffer y programados sobre el MISMO reloj
+  // (ctx.currentTime) con precisión de sample. Como mixOut de A y mixIn de B
+  // están snapeados a la grilla rígida de cada tema, arrancarlos en el mismo
+  // instante deja los golpes matemáticamente clavados — sin latencia de
+  // decode, sin jitter de currentTime, sin glitches de streaming.
+  const [labState, setLabState] = useState(null) // null | 'loading' | 'playing'
+  const [mixSessionInfo, setMixSessionInfo] = useState(null) // {mode, idx, label} de la sesión Web Audio del set
+  // Log de sesión de mezcla: consola + panel UI + backend (/api/client-log →
+  // visible en los logs de Cloud Run) para diagnosticar sin copiar nada.
+  const [mixLog, setMixLog] = useState([])
+  const logMix = (line) => {
+    const stamp = new Date().toISOString().slice(11, 19)
+    const entry = `[${stamp}] ${line}`
+    console.log('[MIX]', entry)
+    setMixLog(prev => [...prev.slice(-150), entry])
+    try {
+      fetch(`${API_BASE}/api/client-log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ msg: `[MIX] ${line}`, level: 'info' }),
+      }).catch(() => {})
+    } catch { /* best-effort */ }
+  }
+  // kickAnchor (toggle A/B): corre el arranque al ataque real del bombo.
+  // labRecipe: receta de transición del recetario — todas sobre la misma
+  // grilla y reloj; se aplican al PRÓXIMO play.
+  // kickAnchor OFF por defecto: la verificación objetiva (2026-08-02, script
+  // verify_anchors) midió que la grilla estadística ya está clavada (±10ms)
+  // en 7 de 10 temas buenos y el refinado "al bombo" le mete -30/-60ms de
+  // bias sistemático. Queda como experimento, no como default.
+  const [labOpts, setLabOpts] = useState({ kickAnchor: false })
+  // Buffers decodificados PERSISTENTES entre sesiones/seeks (adelantar no
+  // re-decodifica) + buffers resueltos y picos para dibujar la waveform.
+  const bufCacheRef = useRef(new Map())
+  const bufReadyRef = useRef(new Map())
+  const wavePeaksRef = useRef(new Map())
+  // Calibración de entrada (slider, pedido del dueño): corrimiento global en
+  // ms del punto de entrada del tema B. Positivo = B arranca más adentro del
+  // archivo -> sus golpes llegan ANTES (corrige "entra apenas atrás").
+  // Persiste y se lee por ref para poder ajustarlo EN VIVO entre segmentos.
+  // v14: la convención de ancla cambió a PICO del primer kick — el 55 viejo
+  // (calibrado con convención falda) ya no aplica; arranca en 25 (≈ priming
+  // MP3) y se recalibra a oído con el slider. La migración pisa el valor
+  // guardado UNA vez.
+  const [labOffsetMs, setLabOffsetMs] = useState(() => {
+    try {
+      if (localStorage.getItem('mix_offset_cal') !== 'v14') {
+        localStorage.setItem('mix_offset_cal', 'v14')
+        localStorage.setItem('mix_offset_ms', '25')
+        return 25
+      }
+      const v = localStorage.getItem('mix_offset_ms')
+      return v === null ? 25 : (parseInt(v, 10) || 0)
+    } catch { return 25 }
+  })
+  const labOffsetRef = useRef(labOffsetMs)
+  labOffsetRef.current = labOffsetMs
+  useEffect(() => {
+    try { localStorage.setItem('mix_offset_ms', String(labOffsetMs)) } catch { /* sin storage */ }
+  }, [labOffsetMs])
+  const [labRecipe, setLabRecipe] = useState('short2')
+  // Banco de FX para catar (pedido del dueño: "poné 10-20 tipos y te digo
+  // cuáles son los mejores"). Se elige en el dropdown, aplica al próximo
+  // enganche (ref para cambiarlo EN VIVO entre segmentos del Ensayo).
+  const [labFx, setLabFx] = useState('directo')
+  const labFxRef = useRef('directo')
+  labFxRef.current = labFx
+
+  // Auto: elige la receta por par con los datos del análisis. Prioridades:
+  // tempos incompatibles → cut; outro corto → loop (lo estira); grilla dudosa
+  // → corto con filtro (disimula, estilo AutoMix); grillas clavadas y outro
+  // largo → blend; default corto.
+  const autoRecipe = (A, B) => {
+    const qA = A.grid?.quality ?? 999
+    const qB = B.grid?.quality ?? 999
+    const bpmDelta = (A.bpm && B.bpm) ? Math.abs(A.bpm - B.bpm) / A.bpm : 0
+    const bar = A.grid?.barLen || 240 / (A.bpm || 125)
+    const outroWin = (A.duration_sec || 0) - A.mix.mixOut
+    if (bpmDelta > 0.06) return 'cut'
+    if (outroWin > 0 && outroWin < 8 * bar) return 'loop4'
+    if (qA > 60 || qB > 60) return 'short8'
+    if (outroWin >= 16 * bar && qA < 30 && qB < 30) return 'blend16'
+    return 'short8'
+  }
+  const RECIPE_LABELS = { short8: 'Corto 8c', loop4: 'Loop 4b', blend16: 'Blend 16c', eqmix: 'EQ Mix', cut: 'Cut', fade: 'Fade' }
+  const labRef = useRef(null)
+  // Guardia SINCRÓNICA de sesión (labState es async: el seek re-arranca a los
+  // 80ms y con el estado viejo la sesión nueva abortaba en silencio)
+  const labBusyRef = useRef(false)
+
+  const eqPowerCurve = (rising) => {
+    const N = 128
+    const c = new Float32Array(N)
+    for (let i = 0; i < N; i++) {
+      const x = i / (N - 1)
+      c[i] = rising ? Math.sin(x * Math.PI / 2) : Math.cos(x * Math.PI / 2)
+    }
+    return c
+  }
+
+  // Corrimiento de ancla: diferencia (con wrap al beat) entre el ancla afinada
+  // al bombo (kickOffset) y la estadística (offset). Corre el arranque del
+  // tema al golpe REAL manteniendo el marker musical.
+  const gridDelta = (t) => {
+    const g = t.grid
+    if (!g?.kickOffset || !g?.beatLen) return 0
+    let d = (g.kickOffset - g.offset) % g.beatLen
+    if (d > g.beatLen / 2) d -= g.beatLen
+    if (d < -g.beatLen / 2) d += g.beatLen
+    return d
+  }
+
+  // Posición segura para source.start(): si el corrimiento de ancla la dejó
+  // negativa, avanza de a UN BEAT (la grilla es periódica → misma fase).
+  const gridSafePos = (pos, t) => {
+    const bl = t.grid?.beatLen || 0.48
+    while (pos < 0) pos += bl
+    return pos
+  }
+
+  // FASE DE COMPÁS (fix del LLM del dueño, 2026-08-02): el enganche solo
+  // puede disparar en un "1". Beats contados desde el 0.0.0 del tema (su
+  // primer kick): si el mixOut cayó en beat 2/3/4 del compás (medido: Be The
+  // One mod4=2, Feeling Good mod4=1 → compás cruzado con beats perfectos),
+  // se corre al próximo 1. Sin esto, B entra con su 1 sobre cualquier beat de A.
+  const barSnapPos = (pos, t) => {
+    const g = t.grid
+    const ref = t.mix?.mixIn
+    if (!g?.beatLen || ref == null) return pos
+    const idx = Math.round((pos - ref) / g.beatLen)
+    const ph = ((idx % 4) + 4) % 4
+    return ph === 0 ? pos : pos + (4 - ph) * g.beatLen
+  }
+
+  const stopLabTransition = useCallback(() => {
+    const l = labRef.current
+    labRef.current = null
+    labBusyRef.current = false
+    if (l) {
+      l.active = false
+      try { l.srcA.stop() } catch { /* ya parado */ }
+      try { l.srcB.stop() } catch { /* ya parado */ }
+      try { l.ctx.close() } catch { /* ya cerrado */ }
+    }
+    setLabState(null)
+    setMixSessionInfo(null)
+  }, [])
+  useEffect(() => stopLabTransition, [stopLabTransition])
+
+  const playLabTransition = async () => {
+    if (labBusyRef.current) return
+    labBusyRef.current = true
+    // Cualquier par: los primeros 2 temas del set, enriquecidos con su
+    // análisis (propio del lab o del JSON de la cocina)
+    const A = trackAnalysis(setTracks[0])
+    const B = trackAnalysis(setTracks[1])
+    if (!A?.mix?.mixOut || !B?.mix) {
+      toast('Los primeros 2 temas del set no están analizados (cocina: Melodic House por ahora)', 'error', 3500)
+      return
+    }
+    onStop() // silenciar el player global de la app
+    setLabState('loading')
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      // Audio CRUDO del agente (sin ?fast=1): el transcode MP3 al vuelo mete
+      // delay de encoder al inicio y correría la grilla; el FLAC/MP3 original
+      // decodifica sin corrimiento.
+      const loadBuffer = async (t) => {
+        const url = agentUrl('audio/' + encodeURIComponent(t.subfolder) + '/' + encodeURIComponent(t.filename))
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`audio ${res.status}`)
+        return ctx.decodeAudioData(await res.arrayBuffer())
+      }
+      const [bufA, bufB] = await Promise.all([loadBuffer(A), loadBuffer(B)])
+      const master = ctx.createGain()
+      master.gain.value = 0.516 // 0.65 − 2dB exactos
+      master.connect(ctx.destination)
+      const gA = ctx.createGain()
+      const gB = ctx.createGain()
+      gA.connect(master)
+      gB.connect(master)
+      const srcA = ctx.createBufferSource()
+      srcA.buffer = bufA
+      const srcB = ctx.createBufferSource()
+      srcB.buffer = bufB
+      // Sync de tempo: B corre al BPM de A durante el solape (con el par del
+      // lab ambos son 125.000 -> rate 1.0 exacto). Tope de cordura ±8%.
+      let rate = (A.bpm && B.bpm) ? A.bpm / B.bpm : 1
+      if (!isFinite(rate) || Math.abs(rate - 1) > 0.08) rate = 1
+      srcB.playbackRate.value = rate
+      const T0 = ctx.currentTime + 0.25
+      // Directo al outro: A arranca EN su mixOut y B entra en el mismo
+      // instante en su mixIn (ambos golpes de grilla) -> beats clavados.
+      // Con "Ancla bombo" el arranque se corre al ataque real del kick.
+      const posA = barSnapPos(gridSafePos(A.mix.mixOut + (labOpts.kickAnchor ? gridDelta(A) : 0), A), A)
+      const posB = gridSafePos(B.mix.mixIn + (labOpts.kickAnchor ? gridDelta(B) : 0) + labOffsetRef.current / 1000, B)
+      const bar = A.grid?.barLen || 240 / (A.bpm || 125)
+      const beat = A.grid?.beatLen || bar / 4
+
+      // Cadena con bass swap: B entra por highpass (sin graves) y en swapT se
+      // cruzan los filtros — la entrega del bajo. Un solo bombo siempre.
+      // darkB (EQ mix): B además entra "oscuro" (lowpass) y se abre hasta la entrega.
+      const bassSwapChain = (swapT, darkB) => {
+        const hpB = ctx.createBiquadFilter()
+        hpB.type = 'highpass'
+        hpB.Q.value = 0.7
+        hpB.frequency.setValueAtTime(180, ctx.currentTime)
+        hpB.frequency.setValueAtTime(180, swapT - 0.1)
+        hpB.frequency.exponentialRampToValueAtTime(25, swapT + 0.4)
+        if (darkB) {
+          const lpB = ctx.createBiquadFilter()
+          lpB.type = 'lowpass'
+          lpB.frequency.setValueAtTime(900, ctx.currentTime)
+          lpB.frequency.exponentialRampToValueAtTime(18000, swapT)
+          srcB.connect(hpB)
+          hpB.connect(lpB)
+          lpB.connect(gB)
+        } else {
+          srcB.connect(hpB)
+          hpB.connect(gB)
+        }
+        const hpA = ctx.createBiquadFilter()
+        hpA.type = 'highpass'
+        hpA.Q.value = 0.7
+        hpA.frequency.setValueAtTime(25, ctx.currentTime)
+        hpA.frequency.setValueAtTime(25, swapT - 0.1)
+        hpA.frequency.exponentialRampToValueAtTime(220, swapT + 0.4)
+        srcA.connect(hpA)
+        hpA.connect(gA)
+      }
+      // Rampa estándar de entrada de B y salida de A alrededor de la entrega
+      const swapRamps = (swapT, endT, riseBar) => {
+        // B a nivel desde el arranque (micro-rampa anti-click); sin fade-in
+        gB.gain.setValueAtTime(0.0001, T0)
+        gB.gain.linearRampToValueAtTime(0.92, T0 + 0.08)
+        gB.gain.setValueAtTime(0.92, swapT)
+        gB.gain.linearRampToValueAtTime(1, swapT + riseBar)
+        gA.gain.setValueAtTime(1, ctx.currentTime)
+        gA.gain.setValueAtTime(1, swapT)
+        gA.gain.setValueCurveAtTime(eqPowerCurve(false), swapT + 0.01, endT - swapT - 0.01)
+      }
+
+      // Recetario de transiciones ('auto' resuelve por datos y avisa cuál)
+      const recipe = labRecipe === 'auto' ? autoRecipe(A, B) : labRecipe
+      if (labRecipe === 'auto') {
+        toast(`Auto eligió: ${RECIPE_LABELS[recipe]} (grillas ${A.grid?.quality ?? '?'}ms / ${B.grid?.quality ?? '?'}ms)`, 'info', 3000)
+      }
+      if (recipe === 'diag') {
+        // Diagnóstico: B fuerte y sin filtro — dos bombos juntos
+        srcA.connect(gA)
+        srcB.connect(gB)
+        gA.gain.setValueAtTime(1, ctx.currentTime)
+        gB.gain.setValueAtTime(0.95, ctx.currentTime)
+        srcA.stop(T0 + 8 * bar + 0.1)
+      } else if (recipe === 'fade') {
+        // Crossfade equal-power parejo (referencia)
+        srcA.connect(gA)
+        srcB.connect(gB)
+        const fade = A.mix.recommendedFade || 12
+        gA.gain.setValueAtTime(1, ctx.currentTime)
+        gB.gain.setValueAtTime(0, ctx.currentTime)
+        gA.gain.setValueCurveAtTime(eqPowerCurve(false), T0, fade)
+        gB.gain.setValueCurveAtTime(eqPowerCurve(true), T0, fade)
+        srcA.stop(T0 + fade + 0.1)
+      } else if (recipe === 'cut') {
+        // Corte en frase: B entra al palo, A muere en 1 beat
+        srcA.connect(gA)
+        srcB.connect(gB)
+        gA.gain.setValueAtTime(1, ctx.currentTime)
+        gB.gain.setValueAtTime(1, ctx.currentTime)
+        gA.gain.setValueCurveAtTime(eqPowerCurve(false), T0, beat)
+        srcA.stop(T0 + beat + 0.05)
+      } else if (recipe === 'blend16' || recipe === 'eqmix') {
+        // Blend largo de 16 compases, entrega del bajo en el 8; eqmix además
+        // trae a B oscuro abriéndose (estilo AutoMix largo)
+        const swapT = T0 + 8 * bar
+        const endT = T0 + 16 * bar
+        bassSwapChain(swapT, recipe === 'eqmix')
+        swapRamps(swapT, endT, 2 * bar)
+        srcA.stop(endT + 0.1)
+      } else if (recipe === 'loop4') {
+        // Loop out: A queda girando en 4 beats clavados a grilla mientras B
+        // se instala; A se va en fade a los 8 compases sin soltar el loop
+        srcA.loop = true
+        srcA.loopStart = posA
+        srcA.loopEnd = posA + 4 * beat
+        const swapT = T0 + 4 * bar
+        bassSwapChain(swapT, false)
+        gB.gain.setValueAtTime(0.0001, T0)
+        gB.gain.linearRampToValueAtTime(0.55, T0 + bar)
+        gB.gain.linearRampToValueAtTime(0.92, swapT)
+        gB.gain.linearRampToValueAtTime(1, swapT + bar)
+        gA.gain.setValueAtTime(1, ctx.currentTime)
+        gA.gain.setValueAtTime(1, T0 + 8 * bar)
+        gA.gain.setValueCurveAtTime(eqPowerCurve(false), T0 + 8 * bar + 0.01, 2 * bar)
+        srcA.stop(T0 + 10 * bar + 0.2)
+      } else {
+        // corto: 2 compases por defecto (~4-5s); 'short8' = versión de 8
+        const P = recipe === 'short8' ? [4, 8, 1] : [1, 2, 0.5]
+        const swapT = T0 + P[0] * bar
+        const endT = T0 + P[1] * bar
+        bassSwapChain(swapT, false)
+        swapRamps(swapT, endT, P[2] * bar)
+        srcA.stop(endT + 0.1)
+      }
+
+      srcA.start(T0, posA)
+      srcB.start(T0, posB)
+      srcB.onended = () => { if (labRef.current?.srcB === srcB) stopLabTransition() }
+      labRef.current = { ctx, srcA, srcB, baseRate: rate }
+      setLabState('playing')
+    } catch (e) {
+      console.error('[LAB WebAudio]', e)
+      toast('Error en la prueba de enganche', 'error', 3000)
+      stopLabTransition()
+    }
+  }
+
+  // Jog nudge en vivo: corre el tema B ±ms con un toque breve de playbackRate
+  // (como empujar el plato). Sirve para ENCONTRAR a oído el error de ancla
+  // residual: si con +30ms clava, ese es el corrimiento que falta corregir.
+  const nudgeLab = (ms) => {
+    const l = labRef.current
+    if (!l) return
+    const now = l.ctx.currentTime
+    const dur = 0.25
+    try {
+      l.srcB.playbackRate.cancelScheduledValues(now)
+      l.srcB.playbackRate.setValueAtTime(l.baseRate + (ms / 1000) / dur, now)
+      l.srcB.playbackRate.setValueAtTime(l.baseRate, now + dur)
+    } catch { /* source ya parado */ }
+  }
+
+  // ===== Editor de cues sobre WAVEFORM ("te lo marco yo", spec del dueño) ====
+  // Muestra la onda (intro de B: primeros 6s / outro de A: mixOut±4s), click
+  // = marker, ajuste fino, audición desde el marker, y guarda el cue manual
+  // que PISA al análisis para siempre (trackAnalysis, anchorSource 'user').
+  const [cueEdit, setCueEdit] = useState(null) // {track, which:'in'|'out', buf?, win, marker, loading}
+  const cueCanvasRef = useRef(null)
+  const cueCtxRef = useRef(null)
+  const cueAudRef = useRef(null)
+
+  const openCueEdit = async (t, which) => {
+    const ta = trackAnalysis(t)
+    if (!ta) { toast('El tema no está analizado', 'error', 2500); return }
+    const marker = which === 'in' ? ta.mix.mixIn : ta.mix.mixOut
+    setCueEdit({ track: ta, which, marker, loading: true })
+    try {
+      const ctx = cueCtxRef.current || new (window.AudioContext || window.webkitAudioContext)()
+      cueCtxRef.current = ctx
+      const url = agentUrl('audio/' + encodeURIComponent(ta.subfolder) + '/' + encodeURIComponent(ta.filename))
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`audio ${res.status}`)
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer())
+      // Ventana centrada en el marker actual (un mixIn puede estar a los 30s
+      // si la intro es melódica) — ±6s de contexto para ver el golpe.
+      const win = which === 'in'
+        ? [Math.max(0, marker - 6), Math.min(buf.duration, Math.max(marker + 6, 8))]
+        : [Math.max(0, marker - 4), Math.min(buf.duration, marker + 4)]
+      setCueEdit({ track: ta, which, buf, win, marker })
+    } catch (e) {
+      console.error('[CUE EDIT]', e)
+      toast('No pude cargar el audio del tema', 'error', 2500)
+      setCueEdit(null)
+    }
+  }
+
+  // Dibuja la waveform + marker cada vez que cambia el estado del editor
+  useEffect(() => {
+    const ce = cueEdit
+    const cv = cueCanvasRef.current
+    if (!ce?.buf || !cv) return
+    const W = cv.width
+    const H = cv.height
+    const g = cv.getContext('2d')
+    g.clearRect(0, 0, W, H)
+    const data = ce.buf.getChannelData(0)
+    const sr = ce.buf.sampleRate
+    const [t0, t1] = ce.win
+    const i0 = Math.floor(t0 * sr)
+    const i1 = Math.min(data.length, Math.floor(t1 * sr))
+    const spp = Math.max(1, Math.floor((i1 - i0) / W))
+    g.fillStyle = 'rgba(34,211,238,0.75)'
+    for (let x = 0; x < W; x++) {
+      let mn = 1
+      let mx = -1
+      const s = i0 + x * spp
+      for (let j = s; j < Math.min(i1, s + spp); j++) {
+        const v = data[j]
+        if (v < mn) mn = v
+        if (v > mx) mx = v
+      }
+      const y1 = ((1 - mx) * H) / 2
+      const y2 = ((1 - mn) * H) / 2
+      g.fillRect(x, y1, 1, Math.max(1, y2 - y1))
+    }
+    const xm = ((ce.marker - t0) / (t1 - t0)) * W
+    g.fillStyle = '#f43f5e'
+    g.fillRect(xm - 1, 0, 2, H)
+  }, [cueEdit])
+
+  const cueAudition = () => {
+    const ce = cueEdit
+    const ctx = cueCtxRef.current
+    if (!ce?.buf || !ctx) return
+    try { cueAudRef.current?.stop() } catch { /* ya parado */ }
+    const src = ctx.createBufferSource()
+    src.buffer = ce.buf
+    src.connect(ctx.destination)
+    src.start(ctx.currentTime, Math.max(0, ce.marker), 2.5)
+    cueAudRef.current = src
+  }
+
+  const saveCue = () => {
+    const ce = cueEdit
+    if (!ce) return
+    try { cueAudRef.current?.stop() } catch { /* ya parado */ }
+    const cues = readUserCues()
+    const c = cues[ce.track.filename] || {}
+    if (ce.which === 'in') c.mixIn = Math.round(ce.marker * 1000) / 1000
+    else c.mixOut = Math.round(ce.marker * 1000) / 1000
+    cues[ce.track.filename] = c
+    try { localStorage.setItem('mix_user_cues', JSON.stringify(cues)) } catch { /* sin storage */ }
+    setUserCues(cues)
+    toast('Cue guardado — tu marca manda sobre el análisis', 'success', 2500)
+    setCueEdit(null)
+  }
+
+  const clearCue = () => {
+    const ce = cueEdit
+    if (!ce) return
+    const cues = readUserCues()
+    if (cues[ce.track.filename]) {
+      delete cues[ce.track.filename][ce.which === 'in' ? 'mixIn' : 'mixOut']
+      if (!Object.keys(cues[ce.track.filename]).length) delete cues[ce.track.filename]
+      try { localStorage.setItem('mix_user_cues', JSON.stringify(cues)) } catch { /* sin storage */ }
+      setUserCues(cues)
+    }
+    toast('Marca manual borrada — vuelve el análisis automático', 'info', 2500)
+    setCueEdit(null)
+  }
+
+  // ===== Transporte de la sesión: barra de avance + seek + marcar 0.0.0 =====
+  const [mixProgress, setMixProgress] = useState(null) // {idx, pos, dur, title}
+  useEffect(() => {
+    if (labState !== 'playing') { setMixProgress(null); return }
+    const tick = setInterval(() => {
+      const l = labRef.current
+      const pi = l?.posInfo
+      if (!pi || !l?.ctx) return
+      const pos = pi.posRef + Math.max(0, l.ctx.currentTime - pi.tRef)
+      const dur = pi.dur || bufReadyRef.current.get(pi.track?.filename)?.duration || 0
+      setMixProgress({ idx: pi.idx, pos, dur, track: pi.track })
+    }, 500)
+    return () => clearInterval(tick)
+  }, [labState])
+
+  const seekMixSession = (frac) => {
+    const mp = mixProgress
+    if (!mp?.dur) return
+    const target = frac * mp.dur
+    const idx = mp.idx
+    stopLabTransition()
+    setTimeout(() => runMixSession('set', { startIdx: idx, startPos: target }), 80)
+  }
+
+  // Marcar 0.0.0 mientras suena: captura la posición actual del tema en
+  // reproducción como su mixIn manual (después se afina en el editor de cues)
+  const markZeroHere = () => {
+    const l = labRef.current
+    const pi = l?.posInfo
+    if (!pi?.track || !l?.ctx) return
+    const pos = pi.posRef + Math.max(0, l.ctx.currentTime - pi.tRef)
+    const cues = readUserCues()
+    cues[pi.track.filename] = { ...(cues[pi.track.filename] || {}), mixIn: Math.round(pos * 1000) / 1000 }
+    try { localStorage.setItem('mix_user_cues', JSON.stringify(cues)) } catch { /* sin storage */ }
+    setUserCues(cues)
+    logMix(`0.0.0 manual: "${pi.track.title || pi.track.filename}" en ${pos.toFixed(3)}s`)
+    toast(`0.0.0 marcado en ${pos.toFixed(2)}s — afinalo en Cue si hace falta`, 'success', 2500)
+  }
+
+  // Waveform-deck del tema sonando: picos pre-computados por tema, progreso
+  // pintado, markers visibles (ámbar = mixIn, rojo = mixOut), click = seek.
+  const progCanvasRef = useRef(null)
+  // Waveform estilo DAW: RMS (energía real, muestra las caídas) + silueta de
+  // picos tenue. El dibujo por picos absolutos era un "ladrillo" en masters
+  // comprimidos — el dueño no veía los valles ("está muy saturado").
+  const peaksFor = (fn) => {
+    let p = wavePeaksRef.current.get(fn)
+    if (p) return p
+    const buf = bufReadyRef.current.get(fn)
+    if (!buf) return null
+    const data = buf.getChannelData(0)
+    const N = 600
+    const spp = Math.max(1, Math.floor(data.length / N))
+    const pk = new Float32Array(N)
+    const rms = new Float32Array(N)
+    let maxR = 0
+    for (let i = 0; i < N; i++) {
+      let m = 0
+      let acc = 0
+      let cnt = 0
+      const s = i * spp
+      const e = Math.min(data.length, s + spp)
+      for (let j = s; j < e; j += 8) {
+        const v = data[j]
+        const a = Math.abs(v)
+        if (a > m) m = a
+        acc += v * v
+        cnt++
+      }
+      pk[i] = m
+      rms[i] = cnt ? Math.sqrt(acc / cnt) : 0
+      if (rms[i] > maxR) maxR = rms[i]
+    }
+    if (maxR > 0) {
+      for (let i = 0; i < N; i++) rms[i] = Math.pow(rms[i] / maxR, 0.7)
+    }
+    p = { pk, rms }
+    wavePeaksRef.current.set(fn, p)
+    return p
+  }
+
+  useEffect(() => {
+    const cv = progCanvasRef.current
+    const mp = mixProgress
+    if (!cv || !mp?.track || !mp.dur) return
+    const g = cv.getContext('2d')
+    const W = cv.width
+    const H = cv.height
+    g.clearRect(0, 0, W, H)
+    const frac = Math.min(1, mp.pos / mp.dur)
+    const peaks = peaksFor(mp.track.filename)
+    if (peaks) {
+      const NN = peaks.rms.length
+      for (let x = 0; x < W; x++) {
+        const k = Math.floor((x / W) * NN)
+        const played = x / W <= frac
+        // silueta de picos tenue (contexto) + cuerpo RMS sólido (dinámica real)
+        const hp = Math.max(1, (peaks.pk[k] || 0) * (H - 2))
+        g.fillStyle = played ? 'rgba(34,211,238,0.22)' : 'rgba(148,163,184,0.14)'
+        g.fillRect(x, (H - hp) / 2, 1, hp)
+        const hr = Math.max(1, (peaks.rms[k] || 0) * (H - 4))
+        g.fillStyle = played ? 'rgba(34,211,238,0.95)' : 'rgba(148,163,184,0.45)'
+        g.fillRect(x, (H - hr) / 2, 1, hr)
+      }
+    } else {
+      g.fillStyle = 'rgba(148,163,184,0.25)'
+      g.fillRect(0, H / 2 - 2, W, 4)
+      g.fillStyle = 'rgba(34,211,238,0.9)'
+      g.fillRect(0, H / 2 - 2, W * frac, 4)
+    }
+    const mark = (sec, color) => {
+      if (sec == null) return
+      const x = (sec / mp.dur) * W
+      g.fillStyle = color
+      g.fillRect(x - 1, 0, 2, H)
+    }
+    // Mapa de secciones: ticks sutiles en cada frontera estructural
+    for (const s of (mp.track.sections || [])) {
+      const x = (s[0] / mp.dur) * W
+      g.fillStyle = 'rgba(255,255,255,0.16)'
+      g.fillRect(x, 0, 1, H)
+    }
+    // Candidatos de mezcla (mapa de secciones): líneas finas rosadas; el
+    // mixOut elegido va sólido
+    for (const c of (mp.track.mix?.outCandidates || [])) {
+      const x = (c / mp.dur) * W
+      g.fillStyle = 'rgba(244,63,94,0.4)'
+      g.fillRect(x, 0, 1, H)
+    }
+    mark(mp.track.mix?.mixIn, '#fbbf24')
+    mark(mp.track.mix?.mixOut, '#f43f5e')
+  }, [mixProgress])
+
+  const jumpToMixOut = () => {
+    const mp = mixProgress
+    const mo = mp?.track?.mix?.mixOut
+    if (!mp?.dur || mo == null) return
+    seekMixSession(Math.max(0, mo - 10) / mp.dur)
+  }
+
+  // ===== Alineador visual de DOS waveforms (pedido del dueño: "hacé correr
+  // las dos waveforms así te ayudo") ==========================================
+  // Outro de A arriba, intro de B abajo, misma escala de tiempo, línea
+  // vertical = instante del enganche. Nudge de B (o A) en ms redibuja y se
+  // escucha el solape real; Guardar persiste como cues manuales.
+  const [alignEdit, setAlignEdit] = useState(null) // {A,B,bufA,bufB,offA,offB,loading}
+  const alignCanvasARef = useRef(null)
+  const alignCanvasBRef = useRef(null)
+  const alignAudRef = useRef(null)
+
+  const ALIGN_PRE = 2   // segundos antes del enganche visibles
+  const ALIGN_WIN = 12  // ancho total de la ventana en segundos
+
+  const drawWaveOn = (cv, buf, t0, t1, lineFrac, color) => {
+    if (!cv || !buf) return
+    const W = cv.width
+    const H = cv.height
+    const g = cv.getContext('2d')
+    g.clearRect(0, 0, W, H)
+    const data = buf.getChannelData(0)
+    const sr = buf.sampleRate
+    const i0 = Math.floor(Math.max(0, t0) * sr)
+    const i1 = Math.min(data.length, Math.floor(t1 * sr))
+    const spp = Math.max(1, Math.floor((i1 - i0) / W))
+    g.fillStyle = color
+    const xOff = t0 < 0 ? Math.floor((-t0 / (t1 - t0)) * W) : 0
+    for (let x = xOff; x < W; x++) {
+      let mn = 1
+      let mx = -1
+      const s = i0 + (x - xOff) * spp
+      if (s >= i1) break
+      for (let j = s; j < Math.min(i1, s + spp); j++) {
+        const v = data[j]
+        if (v < mn) mn = v
+        if (v > mx) mx = v
+      }
+      const y1 = ((1 - mx) * H) / 2
+      const y2 = ((1 - mn) * H) / 2
+      g.fillRect(x, y1, 1, Math.max(1, y2 - y1))
+    }
+    g.fillStyle = '#f43f5e'
+    g.fillRect(lineFrac * W - 1, 0, 2, H)
+  }
+
+  useEffect(() => {
+    const ae = alignEdit
+    if (!ae?.bufA || !ae?.bufB) return
+    const lineFrac = ALIGN_PRE / ALIGN_WIN
+    drawWaveOn(alignCanvasARef.current, ae.bufA, ae.offA - ALIGN_PRE, ae.offA + (ALIGN_WIN - ALIGN_PRE), lineFrac, 'rgba(251,191,36,0.8)')
+    drawWaveOn(alignCanvasBRef.current, ae.bufB, ae.offB - ALIGN_PRE, ae.offB + (ALIGN_WIN - ALIGN_PRE), lineFrac, 'rgba(34,211,238,0.8)')
+  }, [alignEdit])
+
+  const openAlignEdit = async () => {
+    const A = trackAnalysis(setTracks[0])
+    const B = trackAnalysis(setTracks[1])
+    if (!A?.mix?.mixOut || !B?.mix) { toast('Los primeros 2 temas tienen que estar analizados', 'error', 2500); return }
+    setAlignEdit({ A, B, loading: true, offA: A.mix.mixOut, offB: B.mix.mixIn })
+    try {
+      const ctx = cueCtxRef.current || new (window.AudioContext || window.webkitAudioContext)()
+      cueCtxRef.current = ctx
+      const load = async (t) => {
+        const res = await fetch(agentUrl('audio/' + encodeURIComponent(t.subfolder) + '/' + encodeURIComponent(t.filename)))
+        if (!res.ok) throw new Error(`audio ${res.status}`)
+        return ctx.decodeAudioData(await res.arrayBuffer())
+      }
+      const [bufA, bufB] = await Promise.all([load(A), load(B)])
+      setAlignEdit({ A, B, bufA, bufB, offA: A.mix.mixOut, offB: B.mix.mixIn })
+    } catch (e) {
+      console.error('[ALIGN]', e)
+      toast('No pude cargar los audios', 'error', 2500)
+      setAlignEdit(null)
+    }
+  }
+
+  const alignAudition = () => {
+    const ae = alignEdit
+    const ctx = cueCtxRef.current
+    if (!ae?.bufA || !ctx) return
+    try { alignAudRef.current?.forEach(s => s.stop()) } catch { /* ok */ }
+    const mk = (buf) => {
+      const g = ctx.createGain()
+      g.connect(ctx.destination)
+      const s = ctx.createBufferSource()
+      s.buffer = buf
+      s.connect(g)
+      return { s, g }
+    }
+    const dA = mk(ae.bufA)
+    const dB = mk(ae.bufB)
+    dB.s.playbackRate.value = (ae.A.bpm && ae.B.bpm) ? ae.A.bpm / ae.B.bpm : 1
+    dA.g.gain.value = 0.55
+    dB.g.gain.value = 0.55
+    const T0 = ctx.currentTime + 0.1
+    dA.s.start(T0, Math.max(0, ae.offA - ALIGN_PRE))
+    dB.s.start(T0 + ALIGN_PRE, Math.max(0, ae.offB))
+    dA.s.stop(T0 + 10)
+    dB.s.stop(T0 + 10)
+    alignAudRef.current = [dA.s, dB.s]
+  }
+
+  const alignStop = () => { try { alignAudRef.current?.forEach(s => s.stop()) } catch { /* ok */ } }
+
+  const alignSave = () => {
+    const ae = alignEdit
+    if (!ae) return
+    alignStop()
+    const cues = readUserCues()
+    cues[ae.A.filename] = { ...(cues[ae.A.filename] || {}), mixOut: Math.round(ae.offA * 1000) / 1000 }
+    cues[ae.B.filename] = { ...(cues[ae.B.filename] || {}), mixIn: Math.round(ae.offB * 1000) / 1000 }
+    try { localStorage.setItem('mix_user_cues', JSON.stringify(cues)) } catch { /* sin storage */ }
+    setUserCues(cues)
+    toast('Alineación guardada — tus cues mandan sobre el análisis', 'success', 2500)
+    setAlignEdit(null)
+  }
+
+  // ===== Motor Web Audio del SET COMPLETO (play real + modo Ensayo) =====
+  // Mismo principio que el lab pero encadenado: todo agendado sobre el reloj
+  // del AudioContext; el siguiente tema se decodifica mientras suena el
+  // actual; cada enganche usa la receta del selector de esa transición
+  // ('auto' decide por datos). El motor viejo queda para sets sin análisis.
+  // Versión del motor de mezcla: SIEMPRE en la primera línea del log de cada
+  // sesión — si el usuario reporta un problema y esta versión no coincide con
+  // el último deploy, está corriendo un bundle viejo cacheado (PWA).
+  const MIX_ENGINE_VERSION = 'v36-mapa-secciones'
+  const OLD2RECIPE = { auto: 'auto', quick: 'short8', long: 'blend16', cut: 'cut', eqmix: 'eqmix' }
+
+  // Auto-alineación por correlación (idea del dueño: "partir del primer bombo
+  // y corregir con RMS"): con ambos buffers en RAM se correlaciona la
+  // envolvente grave REAL de A alrededor del mixOut con la de B alrededor del
+  // mixIn (±1.2 beats) y se corrige la entrada al pico — cada par se alinea
+  // contra el audio, no contra el análisis. Mata errores de 1 beat y finos.
+  const lowEnvSeg = (buf, center, halfWin) => {
+    const sr = buf.sampleRate
+    const data = buf.getChannelData(0)
+    const from = Math.max(0, Math.floor((center - halfWin) * sr))
+    const to = Math.min(data.length, Math.floor((center + halfWin) * sr))
+    const step = Math.max(1, Math.floor(sr / 800))
+    const N = Math.max(1, Math.floor(sr / 150))
+    const out = []
+    let acc = 0
+    for (let i = from; i < to; i++) {
+      acc += data[i]
+      if (i - from >= N) acc -= data[i - N]
+      if ((i - from) % step === 0) out.push(Math.abs(acc / N))
+    }
+    return { env: out, fs: sr / step }
+  }
+  const xcorrAlign = (bufA, posA, bufB, posB, beatLen) => {
+    try {
+      const half = Math.max(1.5, beatLen * 3)
+      const A = lowEnvSeg(bufA, posA, half)
+      const B = lowEnvSeg(bufB, posB, half)
+      const fs = Math.min(A.fs, B.fs)
+      const n = Math.min(A.env.length, B.env.length)
+      const maxLag = Math.floor(beatLen * 1.2 * fs)
+      let best = 0
+      let bestV = -Infinity
+      for (let lag = -maxLag; lag <= maxLag; lag++) {
+        let s = 0
+        for (let i = Math.max(0, -lag); i < Math.min(n, n - lag); i += 2) {
+          s += A.env[i] * B.env[i + lag]
+        }
+        if (s > bestV) { bestV = s; best = lag }
+      }
+      return best / fs
+    } catch { return 0 }
+  }
+
+  const waitUntilCtx = (ctx, t, session) => new Promise((resolve) => {
+    const tick = () => {
+      if (!session.active) return resolve(false)
+      const remain = t - ctx.currentTime
+      if (remain <= 0) return resolve(true)
+      setTimeout(tick, Math.min(1000, Math.max(50, remain * 1000)))
+    }
+    tick()
+  })
+
+  // Agenda una transición receta-completa entre dos decks ya creados.
+  // posMixA = posición (en el archivo de A) del punto de mezcla, para loop4.
+  // Devuelve el ctx-time en que termina la transición. (El "dark B" del EQ
+  // mix del lab acá se simplifica a blend16.)
+  const scheduleTransition = (ctx, srcA, gA, srcB, gB, A, B, tMix, recipe, posMixA, master, fx = 'low') => {
+    const bar = A.grid?.barLen || 240 / (A.bpm || 125)
+    const beat = A.grid?.beatLen || bar / 4
+    const now = ctx.currentTime
+    const hpChain = (src, g, f0, f1, swapT) => {
+      const hp = ctx.createBiquadFilter()
+      hp.type = 'highpass'
+      hp.Q.value = 0.7
+      hp.frequency.setValueAtTime(f0, now)
+      hp.frequency.setValueAtTime(f0, swapT - 0.1)
+      hp.frequency.exponentialRampToValueAtTime(f1, swapT + 0.4)
+      src.connect(hp)
+      hp.connect(g)
+    }
+    let endT
+    if (recipe === 'diag') {
+      // Modo diagnóstico (pedido del dueño): B entra SIN filtro y casi a
+      // pleno volumen desde el primer instante — los dos bombos juntos, el
+      // corrimiento se escucha obvio.
+      srcA.connect(gA)
+      srcB.connect(gB)
+      gA.gain.setValueAtTime(1, now)
+      gB.gain.setValueAtTime(0.95, now)
+      endT = tMix + 8 * bar
+      gA.gain.setValueAtTime(1, endT - bar)
+      gA.gain.setValueCurveAtTime(eqPowerCurve(false), endT - bar + 0.01, bar - 0.02)
+    } else if (recipe === 'cut') {
+      srcA.connect(gA)
+      srcB.connect(gB)
+      gA.gain.setValueAtTime(1, now)
+      gB.gain.setValueAtTime(1, now)
+      gA.gain.setValueCurveAtTime(eqPowerCurve(false), tMix, beat)
+      endT = tMix + beat
+    } else if (recipe === 'fade') {
+      srcA.connect(gA)
+      srcB.connect(gB)
+      const fade = A.mix.recommendedFade || 12
+      gA.gain.setValueAtTime(1, now)
+      gB.gain.setValueAtTime(0, now)
+      gA.gain.setValueCurveAtTime(eqPowerCurve(false), tMix, fade)
+      gB.gain.setValueCurveAtTime(eqPowerCurve(true), tMix, fade)
+      endT = tMix + fade
+    } else if (recipe === 'loop4') {
+      srcA.loop = true
+      srcA.loopStart = posMixA
+      srcA.loopEnd = posMixA + 4 * beat
+      const swapT = tMix + 4 * bar
+      hpChain(srcB, gB, 180, 25, swapT)
+      hpChain(srcA, gA, 25, 220, swapT)
+      gB.gain.setValueAtTime(0.0001, now)
+      gB.gain.setValueAtTime(0.0001, tMix)
+      gB.gain.linearRampToValueAtTime(0.55, tMix + bar)
+      gB.gain.linearRampToValueAtTime(0.92, swapT)
+      gB.gain.linearRampToValueAtTime(1, swapT + bar)
+      gA.gain.setValueAtTime(1, now)
+      gA.gain.setValueAtTime(1, tMix + 8 * bar)
+      gA.gain.setValueCurveAtTime(eqPowerCurve(false), tMix + 8 * bar + 0.01, 2 * bar)
+      endT = tMix + 10 * bar
+    } else {
+      // short2 (default: mezcla de ~4-5s, pedido del dueño) / short8 / blend16/eqmix
+      const P = (recipe === 'blend16' || recipe === 'eqmix') ? [8, 16, 2]
+        : recipe === 'short8' ? [4, 8, 1] : [1, 2, 0.5]
+      const swapT = tMix + P[0] * bar
+      endT = tMix + P[1] * bar
+      const rise = P[2] * bar
+
+      // ===== Banco de FX (catálogo para catar) =====
+      const beatA = A.grid?.beatLen || bar / 4
+      const isEcho = String(fx).startsWith('echo') || fx === 'filtro+echo'
+      const sweepA = (type, f0, f1, q) => {
+        const fl = ctx.createBiquadFilter()
+        fl.type = type
+        fl.Q.value = q
+        fl.frequency.setValueAtTime(f0, now)
+        fl.frequency.setValueAtTime(f0, swapT - 0.05)
+        fl.frequency.exponentialRampToValueAtTime(f1, endT)
+        srcA.connect(fl)
+        fl.connect(gA)
+      }
+      const echoOut = (dtBeats, fbv, dark) => {
+        const dl = ctx.createDelay(3.0)
+        dl.delayTime.value = beatA * dtBeats
+        const fb = ctx.createGain()
+        fb.gain.value = fbv
+        const wet = ctx.createGain()
+        wet.gain.value = 0.0001
+        srcA.connect(dl)
+        if (dark) {
+          const lp = ctx.createBiquadFilter()
+          lp.type = 'lowpass'
+          lp.frequency.value = 1200
+          dl.connect(lp)
+          lp.connect(fb)
+        } else {
+          dl.connect(fb)
+        }
+        fb.connect(dl)
+        dl.connect(wet)
+        if (master) wet.connect(master)
+        wet.gain.setValueAtTime(0.0001, swapT - 0.05)
+        wet.gain.exponentialRampToValueAtTime(0.5, swapT + 0.1)
+        wet.gain.setValueAtTime(0.5, endT + 1)
+        wet.gain.linearRampToValueAtTime(0.0001, endT + 3)
+      }
+
+      switch (fx) {
+        case 'directo': srcB.connect(gB); srcA.connect(gA); break
+        case 'hp-suave': srcB.connect(gB); sweepA('highpass', 25, 900, 0.7); break
+        case 'hp-agresivo': srcB.connect(gB); sweepA('highpass', 25, 3200, 3); break
+        case 'lp-suave': srcB.connect(gB); sweepA('lowpass', 16000, 250, 0.7); break
+        case 'lp-reso': srcB.connect(gB); sweepA('lowpass', 16000, 300, 4); break
+        case 'cruzado': hpChain(srcB, gB, 1200, 25, swapT); sweepA('lowpass', 16000, 250, 0.9); break
+        case 'echo-slap': srcB.connect(gB); srcA.connect(gA); echoOut(0.5, 0.45, false); break
+        case 'echo-dotted': srcB.connect(gB); srcA.connect(gA); echoOut(0.75, 0.5, false); break
+        case 'echo-largo': srcB.connect(gB); srcA.connect(gA); echoOut(1, 0.6, false); break
+        case 'echo-dark': srcB.connect(gB); srcA.connect(gA); echoOut(0.75, 0.65, true); break
+        case 'echo-space': srcB.connect(gB); srcA.connect(gA); echoOut(2, 0.35, false); break
+        case 'filtro+echo': srcB.connect(gB); sweepA('highpass', 25, 1600, 0.8); echoOut(0.75, 0.5, false); break
+        case 'low':
+        default:
+          hpChain(srcB, gB, 180, 25, swapT)
+          hpChain(srcA, gA, 25, 220, swapT)
+      }
+
+      // B entra A NIVEL (sin fade-in, pedido del dueño): micro-rampa anti-click
+      // y listo — la "entrada" la hace el filtro, no el volumen. En 'directo'
+      // (debug): volumen pleno al instante, golpe desnudo.
+      gB.gain.setValueAtTime(0.0001, now)
+      gB.gain.setValueAtTime(0.0001, tMix)
+      // "Siempre con fade-in" (dueño): 1.2s de entrada real — 250ms sonaba a
+      // "sin fade" porque el bombo pegaba pleno enseguida.
+      if (fx === 'directo') {
+        gB.gain.linearRampToValueAtTime(1, tMix + 1.2)
+      } else {
+        gB.gain.linearRampToValueAtTime(0.92, tMix + 1.2)
+        gB.gain.setValueAtTime(0.92, Math.max(swapT, tMix + 1.25))
+        gB.gain.linearRampToValueAtTime(1, swapT + rise)
+      }
+      gA.gain.setValueAtTime(1, now)
+      gA.gain.setValueAtTime(1, swapT)
+      if (isEcho && fx !== 'filtro+echo') {
+        // corte seco: la cola del delay hace la despedida
+        gA.gain.linearRampToValueAtTime(0.0001, swapT + Math.min(0.4, rise))
+      } else {
+        gA.gain.setValueCurveAtTime(eqPowerCurve(false), swapT + 0.01, endT - swapT - 0.01)
+      }
+    }
+    srcA.stop(endT + 0.15)
+    logMix(`  agenda [${recipe}/${fx}]: transición ${(endT - tMix).toFixed(1)}s (bar ${bar.toFixed(3)}s) | A para en +${(endT - tMix + 0.15).toFixed(1)}s`)
+    return endT
+  }
+
+  const runMixSession = async (mode, opts = {}) => {
+    if (labBusyRef.current) return
+    labBusyRef.current = true
+    const tracks = setTracks.map(trackAnalysis)
+    if (tracks.length < 2 || tracks.some(t => !t)) {
+      toast('El set tiene temas sin analizar — no se puede mezclar', 'error', 3000)
+      return
+    }
+    onStop() // silenciar el player global
+    setLabState('loading')
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const session = { ctx, active: true, srcA: { stop() {} }, srcB: { stop() {} } }
+    labRef.current = session
+    const loadBuffer = async (t) => {
+      const tload = performance.now()
+      const url = agentUrl('audio/' + encodeURIComponent(t.subfolder) + '/' + encodeURIComponent(t.filename))
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`audio ${res.status}: ${t.filename}`)
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer())
+      bufReadyRef.current.set(t.filename, buf)
+      logMix(`decode "${t.title || t.filename}": ${((performance.now() - tload) / 1000).toFixed(1)}s (audio ${(buf.duration / 60).toFixed(1)}min)`)
+      return buf
+    }
+    // Cache PERSISTENTE (ref del componente): cada tema se decodifica UNA vez
+    // y sobrevive a seeks/re-sesiones. Cap de memoria: 10 temas.
+    const bufCache = bufCacheRef.current
+    const getBuffer = (t) => {
+      if (!bufCache.has(t.filename)) {
+        if (bufCache.size >= 10) {
+          const oldest = bufCache.keys().next().value
+          bufCache.delete(oldest)
+          bufReadyRef.current.delete(oldest)
+          wavePeaksRef.current.delete(oldest)
+        }
+        bufCache.set(t.filename, loadBuffer(t))
+      }
+      return bufCache.get(t.filename)
+    }
+    // Headroom: dos decks sumados a plena ganancia clipean el bus ("está
+    // saturadísimo") — master a 0.65 + limitador antes de la salida.
+    const master = ctx.createGain()
+    master.gain.value = 0.516 // 0.65 − 2dB exactos (pedido del dueño)
+    const limiter = ctx.createDynamicsCompressor()
+    limiter.threshold.value = -6
+    limiter.knee.value = 4
+    limiter.ratio.value = 12
+    limiter.attack.value = 0.003
+    limiter.release.value = 0.25
+    master.connect(limiter)
+    limiter.connect(ctx.destination)
+    const mkDeck = (buf) => {
+      const g = ctx.createGain()
+      g.connect(master)
+      const s = ctx.createBufferSource()
+      s.buffer = buf
+      return { s, g }
+    }
+    const recipeFor = (i, A, B) => {
+      // Modo Diag global: si la pill Diag está activa, TODA la sesión sale en
+      // diagnóstico (B fuerte sin filtro) para escuchar el corrimiento.
+      if (labRecipe === 'diag') return { recipe: 'diag', autoChosen: false }
+      // Default del producto (pedido del dueño): enganche CLÁSICO por outro
+      // (short8) para todas las transiciones. Otra receta solo si se eligió
+      // explícita en esa transición; 'auto' (por datos) también explícito.
+      const t = transitions[i]?.type
+      if (!t || t === 'auto') return { recipe: 'short2', autoChosen: true }
+      const sel = OLD2RECIPE[t] || 'short2'
+      return { recipe: sel === 'auto' ? autoRecipe(A, B) : sel, autoChosen: false }
+    }
+    const pairInfo = (A, B) => `"${A.title || A.filename}" (${A.bpm}bpm q${A.grid?.quality ?? '?'}ms) -> "${B.title || B.filename}" (${B.bpm}bpm q${B.grid?.quality ?? '?'}ms)`
+    logMix(`Sesión ${mode} [MOTOR ${MIX_ENGINE_VERSION}]: ${tracks.length} temas, anclaBombo=${labOpts.kickAnchor ? 'ON' : 'OFF'}`)
+    tracks.forEach((t, i) => logMix(`  ${i + 1}. "${t.title || t.filename}" | ${t.bpm}bpm | grilla q${t.grid?.quality ?? '?'}ms beat ${t.grid?.beatLen ?? '?'}s | mixIn ${t.mix?.mixIn}s mixOut ${t.mix?.mixOut}s | ancla ${(gridDelta(t) * 1000).toFixed(0)}ms`))
+    try {
+      if (mode === 'ensayo') {
+        // Solo los enganches: 8s de contexto -> transición real -> 6s del
+        // tema nuevo -> corte y siguiente enganche. Audita el set en minutos.
+        setLabState('playing')
+        for (let i = 0; i < tracks.length - 1; i++) {
+          if (!session.active) return
+          const A = tracks[i]
+          const B = tracks[i + 1]
+          setMixSessionInfo({ mode, idx: i, label: `Ensayo ${i + 1}/${tracks.length - 1}: ${A.title || A.filename} → ${B.title || B.filename}` })
+          const [bufA, bufB] = await Promise.all([getBuffer(A), getBuffer(B)])
+          if (!session.active) return
+          if (i + 2 < tracks.length) getBuffer(tracks[i + 2]) // prefetch del próximo segmento
+          const dA = mkDeck(bufA)
+          const dB = mkDeck(bufB)
+          session.srcA = dA.s
+          session.srcB = dB.s
+          let rate = (A.bpm && B.bpm) ? A.bpm / B.bpm : 1
+          // Sync SOLO con data confiable: si la grilla de cualquiera es
+          // ficción (q>80), su BPM es inventado (caso Feels Like Us "131.5"
+          // q151 → corrección del 7% basada en basura). Y tope ±8%.
+          const qA = A.grid?.quality ?? 999
+          const qB = B.grid?.quality ?? 999
+          if (qA > 80 || qB > 80) {
+            logMix(`AVISO: grilla no confiable (qA=${qA} qB=${qB}) — SIN sync de tempo, B nativo`)
+            rate = 1
+          } else if (!isFinite(rate) || Math.abs(rate - 1) > 0.08) {
+            logMix(`AVISO: BPMs incompatibles (${A.bpm} -> ${B.bpm}, rate ${rate.toFixed(3)}) — B entra a tempo NATIVO`)
+            rate = 1
+          }
+          dB.s.playbackRate.value = rate
+          const entryFix = labOffsetRef.current / 1000
+          const posA = barSnapPos(gridSafePos(A.mix.mixOut + (labOpts.kickAnchor ? gridDelta(A) : 0), A), A)
+          let posB = gridSafePos(B.mix.mixIn + (labOpts.kickAnchor ? gridDelta(B) : 0) + entryFix, B)
+          const alignFix = xcorrAlign(bufA, posA, bufB, posB, A.grid?.beatLen || 0.48)
+          if (Math.abs(alignFix) > 0.005) {
+            logMix(`  autoAlign RMS: ${(alignFix * 1000).toFixed(0)}ms`)
+            posB = gridSafePos(posB + alignFix, B)
+          }
+          const T0 = ctx.currentTime + 0.5 // respiro deliberado entre enganches
+          const preroll = 8
+          const tMix = T0 + preroll
+          dA.s.start(T0, Math.max(0, posA - preroll))
+          dB.s.start(tMix, posB)
+          session.posInfo = { idx: i, track: A, tRef: T0, posRef: Math.max(0, posA - preroll), dur: A.duration_sec || 0 }
+          const { recipe } = recipeFor(i, A, B)
+          const fx = labFxRef.current
+          logMix(`Ensayo ${i + 1}/${tracks.length - 1}: ${pairInfo(A, B)} | receta ${recipe} fx=${fx} | rate ${rate.toFixed(4)} | mixOut ${posA.toFixed(2)}s (dur ${A.duration_sec}s) -> mixIn ${posB.toFixed(2)}s | offsetEntrada ${labOffsetRef.current}ms`)
+          if (A.duration_sec && posA > A.duration_sec - 20) logMix(`AVISO: mixOut de "${A.title || A.filename}" está a ${(A.duration_sec - posA).toFixed(1)}s del final — probablemente cae en el fade`)
+          const endT = scheduleTransition(ctx, dA.s, dA.g, dB.s, dB.g, A, B, tMix, recipe, posA, master, fx)
+          const segEnd = endT + 6
+          // Rampa a tempo NATIVO dentro del segmento: sin esto, el próximo
+          // segmento arranca el mismo tema a otra velocidad ("acelera de golpe")
+          if (rate !== 1) {
+            dB.s.playbackRate.setValueAtTime(rate, endT)
+            dB.s.playbackRate.linearRampToValueAtTime(1, segEnd)
+          }
+          dB.g.gain.setValueAtTime(1, segEnd - 0.05)
+          dB.g.gain.linearRampToValueAtTime(0.0001, segEnd + 0.8)
+          dB.s.stop(segEnd + 0.9)
+          const ok = await waitUntilCtx(ctx, segEnd + 1, session)
+          try { dA.s.stop() } catch { /* ya parado */ }
+          try { dB.s.stop() } catch { /* ya parado */ }
+          if (!ok) return
+        }
+        if (session.active) stopLabTransition()
+      } else {
+        // Set completo de corrido con el motor nuevo (con seek: opts.startIdx
+        // + opts.startPos re-arman la cadena desde cualquier punto)
+        setLabState('playing')
+        const startIdx = Math.min(opts.startIdx || 0, tracks.length - 1)
+        let A = tracks[startIdx]
+        let deckA = mkDeck(await getBuffer(A))
+        if (!session.active) return
+        session.srcA = deckA.s
+        const T0 = ctx.currentTime + 0.2
+        const posStart = Math.max(0, opts.startPos != null
+          ? Math.min(opts.startPos, Math.max(0, (A.mix.mixOut || A.duration_sec || 60) - 2))
+          : (A.mix.mixIn || 0))
+        deckA.s.start(T0, posStart)
+        setMixSessionInfo({ mode, idx: startIdx, label: `Sonando: ${A.title || A.filename}` })
+        session.posInfo = { idx: startIdx, track: A, tRef: T0, posRef: posStart, dur: A.duration_sec || 0 }
+        logMix(`Play: "${A.title || A.filename}" desde ${posStart.toFixed(2)}s`)
+        // timeAt(p): ctx-time en que el deck actual pasa por la posición p
+        // (válido en el tramo post-rampa, cuando corre a rate 1)
+        let timeAt = (p) => T0 + (p - posStart)
+        for (let i = startIdx + 1; i < tracks.length; i++) {
+          const B = tracks[i]
+          const bufB = await getBuffer(B)
+          if (!session.active) return
+          if (i + 1 < tracks.length) getBuffer(tracks[i + 1]) // prefetch del que sigue
+          const deckB = mkDeck(bufB)
+          let rate = (A.bpm && B.bpm) ? A.bpm / B.bpm : 1
+          const qA2 = A.grid?.quality ?? 999
+          const qB2 = B.grid?.quality ?? 999
+          if (qA2 > 80 || qB2 > 80) {
+            logMix(`AVISO: grilla no confiable (qA=${qA2} qB=${qB2}) — SIN sync de tempo, B nativo`)
+            rate = 1
+          } else if (!isFinite(rate) || Math.abs(rate - 1) > 0.08) {
+            logMix(`AVISO: BPMs incompatibles (${A.bpm} -> ${B.bpm}, rate ${rate.toFixed(3)}) — B entra a tempo NATIVO`)
+            rate = 1
+          }
+          deckB.s.playbackRate.value = rate
+          const posMixA = barSnapPos(A.mix.mixOut + (labOpts.kickAnchor ? gridDelta(A) : 0), A)
+          let tMix = timeAt(posMixA)
+          if (tMix < ctx.currentTime + 1) {
+            // Decode tarde: NUNCA disparar en instante arbitrario (rompería la
+            // fase) — correr el enganche de a compases enteros de A.
+            const barA = A.grid?.barLen || 240 / (A.bpm || 125)
+            const bars = Math.ceil((ctx.currentTime + 1 - tMix) / barA)
+            tMix += bars * barA
+            logMix(`AVISO: decode tarde — enganche corrido ${bars} compás(es) para preservar la fase`)
+          }
+          let posB = gridSafePos(B.mix.mixIn + (labOpts.kickAnchor ? gridDelta(B) : 0) + labOffsetRef.current / 1000, B)
+          const bufAcur = bufReadyRef.current.get(A.filename)
+          if (bufAcur) {
+            const alignFix = xcorrAlign(bufAcur, posMixA, bufB, posB, A.grid?.beatLen || 0.48)
+            if (Math.abs(alignFix) > 0.005) {
+              logMix(`  autoAlign RMS: ${(alignFix * 1000).toFixed(0)}ms`)
+              posB = gridSafePos(posB + alignFix, B)
+            }
+          }
+          deckB.s.start(tMix, posB)
+          session.srcB = deckB.s
+          const { recipe } = recipeFor(i - 1, A, B)
+          const fx = labFxRef.current
+          logMix(`Enganche ${i}/${tracks.length - 1}: ${pairInfo(A, B)} | receta ${recipe} fx=${fx} | rate ${rate.toFixed(4)} | mixOut ${posMixA.toFixed(2)}s (dur ${A.duration_sec}s) -> mixIn ${posB.toFixed(2)}s | dispara en ${(tMix - ctx.currentTime).toFixed(1)}s`)
+          if (A.duration_sec && posMixA > A.duration_sec - 20) logMix(`AVISO: mixOut de "${A.title || A.filename}" está a ${(A.duration_sec - posMixA).toFixed(1)}s del final — probablemente cae en el fade`)
+          const endT = scheduleTransition(ctx, deckA.s, deckA.g, deckB.s, deckB.g, A, B, tMix, recipe, posMixA, master, fx)
+          // B vuelve a su tempo nativo con rampa de 16 compases (~30s):
+          // con el cap de ±8% queda <0.3%/s — imperceptible ("se acelera de
+          // golpe" era la rampa corta de 4 compases)
+          const D = 16 * (B.grid?.barLen || 240 / (B.bpm || 125))
+          deckB.s.playbackRate.setValueAtTime(rate, endT)
+          deckB.s.playbackRate.linearRampToValueAtTime(1, endT + D)
+          // posición exacta de B al final de la rampa (integral del rate lineal)
+          const posBRampEnd = posB + (endT - tMix) * rate + D * (rate + 1) / 2
+          const rampEnd = endT + D
+          const ok = await waitUntilCtx(ctx, endT + 0.5, session)
+          if (!ok) return
+          setMixSessionInfo({ mode, idx: i, label: `Sonando: ${B.title || B.filename}` })
+          session.posInfo = { idx: i, track: B, tRef: rampEnd, posRef: posBRampEnd, dur: B.duration_sec || 0 }
+          A = B
+          deckA = deckB
+          session.srcA = deckB.s
+          timeAt = (p) => rampEnd + (p - posBRampEnd)
+        }
+        deckA.s.onended = () => { if (labRef.current === session) stopLabTransition() }
+      }
+    } catch (e) {
+      console.error('[MIX SESSION]', e)
+      logMix(`ERROR: ${e?.message || e}`)
+      toast('Error en la mezcla del set', 'error', 3000)
+      stopLabTransition()
+    }
+  }
 
   // Generador de playlists (estrategia POP/LATIN de la barra polimórfica).
   // 'auto' respeta los filtros activos (géneros + estrellas); los presets
@@ -384,7 +1614,7 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
       currentSec += dur + gapSec
     }
 
-    setSetTracks(picked)
+    setSetTracks(orderSetByBpm(dedupeSetTracks(picked)))
     setTotalMin(Math.round(currentSec / 60))
     const presetName = preset === 'auto'
       ? `Playlist-${(collection || 'pop').toUpperCase()}`
@@ -464,6 +1694,13 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
       toast('Agregá temas a la lista antes de reproducir', 'info', 2000)
       return
     }
+    // Set analizado + Mixear ON (y sin grabación MD) -> motor Web Audio nuevo
+    // (grilla + recetas). El motor viejo queda para listas sin análisis y MD.
+    if (!recording && isMixMode && mixAvailable) {
+      runMixSession('set')
+      toast(`Mezclando el set con motor de grilla (${setTracks.length} temas)`, 'success', 3000)
+      return
+    }
     setIsRecordingMode(!!recording)
     onPlay(setTracks[0])
     toast(recording
@@ -473,6 +1710,12 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
   const startMDAutoplay = () => startPlayAll(true)
 
   const addToSet = (track) => {
+    // Bloquear otra versión/copia de una canción que ya está en el set
+    const k = normDupeKey(track.filename || track.title || '')
+    if (setTracks.some(t => normDupeKey(t.filename || t.title || '') === k)) {
+      toast('Ese tema ya está en el set (otra versión/copia)', 'info', 2500)
+      return
+    }
     setSetTracks(prev => [...prev, track])
     setTotalMin(prev => prev + 6)
     setSuggestions(prev => prev.filter(s => s.filename !== track.filename))
@@ -561,7 +1804,7 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
         body: JSON.stringify({ min_stars: overrideStars ?? minStars, selected_stars: selStars.length > 0 ? selStars : undefined, duration: overrideDuration ?? (isMd ? (parseInt(mdCapacity, 10) || 74) : duration), method: useMethod, genres: gens.length > 0 ? gens : undefined, collection: collection || 'edm', username: authUser?.name || '', seed: useMethod === 'pro' ? Math.floor(Math.random() * 1e9) : undefined, mode: useMethod === 'pro' ? (overrideMode ?? setProMode) : undefined }),
       })
       const data = await res.json()
-      setSetTracks(data.tracks || [])
+      setSetTracks(orderSetByBpm(dedupeSetTracks(data.tracks || [])))
       setTotalMin(data.total_minutes || 0)
       fetchSuggestions(data.tracks || [])
     } catch (e) {
@@ -625,36 +1868,64 @@ export default React.memo(forwardRef(function SetBuilder({ page, playingFile, on
 
   const runLabTest = async () => {
     setExporting(true)
-    try {
-      const t1 = {
-        filename: "57 Giv Me Luv Jerome IsmaAe Remix - Alcatraz Jerome Isma-Ae.mp3",
-        subfolder: "Melodic House"
-      }
-      const t2 = {
+    // Análisis pre-calculado en local (librosa 0.11 + grilla rígida, 2026-08-01)
+    // para estos 2 archivos exactos. Es el fallback cuando el agente instalado
+    // no expone /api/analyze-audio (el endpoint entró después de la v2.12.30).
+    // Par elegido POR MEDICIÓN: ambos a 125.000 BPM exacto y clavados a grilla
+    // (residuo 29.8ms / 8.4ms) — cero drift posible entre ellos.
+    const LAB_TRACKS = [
+      {
+        filename: "05 - Olivier Giacomotto, Mila Journée - Smash It (Extended Mix).flac",
+        subfolder: "Melodic Techno",
+        title: "Smash It (Extended Mix)",
+        artist: "Olivier Giacomotto, Mila Journée",
+        rating: 5,
+        precomputed: {
+          bpm: 125.0, duration: 278.82,
+          mix: { mixIn: 0.808, mixOut: 246.088, recommendedFade: 15.4 },
+          grid: { offset: 0.3283, kickOffset: 0.4462, beatLen: 0.48, barLen: 1.92, quality: 29.8 },
+        },
+      },
+      {
         filename: "DE SOFFER - Smalltown Boy.flac",
-        subfolder: "Nu Disco"
+        subfolder: "Nu Disco",
+        title: "Smalltown Boy",
+        artist: "DE SOFFER",
+        rating: 5,
+        precomputed: {
+          bpm: 125.0, duration: 226.56,
+          mix: { mixIn: 0.515, mixOut: 210.755, recommendedFade: 12.8 },
+          grid: { offset: 0.035, kickOffset: 0.023, beatLen: 0.48, barLen: 1.92, quality: 8.4 },
+        },
+      },
+    ]
+    try {
+      const loaded = []
+      for (const { precomputed, ...t } of LAB_TRACKS) {
+        let a = null
+        try {
+          const r = await agentFetch('analyze-audio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: t.filename, subfolder: t.subfolder }),
+          })
+          if (r.ok) {
+            const j = await r.json()
+            if (j && !j.error && j.bpm && j.mix) a = j
+          }
+        } catch { /* agente sin el endpoint -> pre-cálculo */ }
+        // Prioridad: agente vivo > cocina (JSON, tiene las anclas calibradas) > constante embebida
+        if (!a) a = mixAnalysis[t.filename] || precomputed
+        // in_subfolder es obligatorio: sin él getAudioUrl arma la URL sin la
+        // subcarpeta y el audio da 404 al reproducir.
+        loaded.push({ ...t, bpm: a.bpm, duration_sec: a.duration, mix: a.mix, grid: a.grid, in_subfolder: true })
       }
-      const a1 = await fetch(`${API_BASE}/api/analyze-audio`, {method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(t1)}).then(r=>r.json())
-      const a2 = await fetch(`${API_BASE}/api/analyze-audio`, {method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(t2)}).then(r=>r.json())
-      t1.bpm = a1.bpm
-      t1.mix = a1.mix
-      t1.duration_sec = a1.duration
-      t1.title = "Giv Me Luv (Jerome IsmaAe Remix)"
-      t1.artist = "Alcatraz"
-      t1.rating = 5
-      
-      t2.bpm = a2.bpm
-      t2.mix = a2.mix
-      t2.duration_sec = a2.duration
-      t2.title = "Smalltown Boy"
-      t2.artist = "DE SOFFER"
-      t2.rating = 5
-      
-      setSetTracks([t1, t2])
+      setSetTracks(loaded)
       setTransitions({ 0: { type: 'auto' } })
+      toast('Lab listo: 2 temas con markers de mezcla', 'success', 3000)
     } catch(e) {
       console.error(e)
-      toast.error('Error in Lab Test')
+      toast('Error preparando el lab', 'error', 3000)
     } finally {
       setExporting(false)
     }
@@ -1004,15 +2275,62 @@ ${playlistEntries}
 
           {/* Header Action Row (Spotify Exact Design) */}
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Circular Spotify Play Button */}
+            {/* Circular Spotify Play Button — se vuelve Stop con la sesión Web Audio activa */}
             <button
-              onClick={() => startPlayAll(false)}
-              disabled={!setTracks.length}
-              className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-40 flex-shrink-0"
-              title={isMixMode ? "Reproducir mezclado continuo (Modo Mixear ON)" : "Reproducir lista"}
+              onClick={() => (labState ? stopLabTransition() : startPlayAll(false))}
+              disabled={!setTracks.length && !labState}
+              className={`w-10 h-10 rounded-full ${labState ? 'bg-red-500 hover:bg-red-400' : 'bg-emerald-500 hover:bg-emerald-400'} text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-40 flex-shrink-0`}
+              title={labState ? 'Detener la mezcla' : (isMixMode && mixAvailable ? 'Mezclar el set con motor de grilla (Mixear ON)' : 'Reproducir lista')}
             >
-              <svg className="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              {labState
+                ? <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" /></svg>
+                : <svg className="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>}
             </button>
+            {mixSessionInfo && (
+              <span className="text-xs font-semibold text-cyan-300 truncate max-w-[340px]">{mixSessionInfo.label}</span>
+            )}
+            {mixProgress && (
+              <div className="w-full flex items-center gap-2">
+                <span className="text-[10px] font-mono text-gray-400 w-10 text-right">
+                  {Math.floor(mixProgress.pos / 60)}:{String(Math.floor(mixProgress.pos % 60)).padStart(2, '0')}
+                </span>
+                <canvas
+                  ref={progCanvasRef}
+                  width={600}
+                  height={36}
+                  className="flex-1 h-9 rounded-lg bg-black/30 cursor-pointer"
+                  title="Waveform del tema sonando — click para adelantar (ámbar = mixIn, rojo = mixOut)"
+                  onClick={(e) => {
+                    if (mixSessionInfo?.mode !== 'set') return // en Ensayo no hay seek
+                    const r = e.currentTarget.getBoundingClientRect()
+                    seekMixSession((e.clientX - r.left) / r.width)
+                  }}
+                />
+                <span className="text-[10px] font-mono text-gray-500 w-10">
+                  {mixProgress.dur > 0 ? `${Math.floor(mixProgress.dur / 60)}:${String(Math.floor(mixProgress.dur % 60)).padStart(2, '0')}` : '--:--'}
+                </span>
+                <button
+                  onClick={markZeroHere}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 transition-all active:scale-95"
+                  title="Marca la posición actual como 0.0.0 (mixIn manual) del tema que está sonando"
+                >
+                  0.0.0 acá
+                </button>
+                <button
+                  onClick={jumpToMixOut}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/50 transition-all active:scale-95"
+                  title="Saltar a 10 segundos antes del mixOut del tema que está sonando"
+                >
+                  Saltar al enganche
+                </button>
+              </div>
+            )}
+            {mixLog.length > 0 && (
+              <details className="w-full">
+                <summary className="text-[11px] text-[var(--text-muted)] cursor-pointer select-none">Log de mezcla ({mixLog.length})</summary>
+                <pre className="mt-1 max-h-44 overflow-y-auto text-[10px] leading-relaxed text-gray-400 bg-black/30 rounded-lg p-2 whitespace-pre-wrap">{mixLog.join('\n')}</pre>
+              </details>
+            )}
 
             {/* Action Pills */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -1027,18 +2345,58 @@ ${playlistEntries}
                 Agregar
               </button>
 
-              <button
-                onClick={() => setIsMixMode(!isMixMode)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
-                  isMixMode
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
-                    : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
-                }`}
-                title="Activar/Desactivar Modo Mezcla (Mixear)"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
-                {isMixMode ? '✨ Mixear' : 'Mixear'}
-              </button>
+              {/* Mixear solo aparece con el set completo analizado (la cocina):
+                  sin análisis no hay mezcla — reproducción lista simple. */}
+              {mixAvailable && (
+                <button
+                  onClick={() => setIsMixMode(!isMixMode)}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
+                    isMixMode
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                      : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
+                  }`}
+                  title="Activar/Desactivar Modo Mezcla (Mixear)"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                  {isMixMode ? 'Mixear ON' : 'Mixear'}
+                </button>
+              )}
+              {/* Ensayo: audita SOLO los enganches del set (8s antes de cada
+                  mixOut -> transición real -> 6s del entrante -> siguiente) */}
+              {mixAvailable && isMixMode && (
+                <>
+                  <button
+                    onClick={() => (labState ? stopLabTransition() : runMixSession('ensayo'))}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 transition-all active:scale-95"
+                    title="Escuchar solo las transiciones del set, una atrás de otra, sin los temas enteros"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                    Ensayo
+                  </button>
+                  {/* Slider de calibración: corre la ENTRADA del tema B en ms.
+                      Positivo = B entra antes (corrige "entra apenas atrás").
+                      Aplica al próximo play/segmento; persiste. */}
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10"
+                    title="Calibración de entrada del tema B. Positivo = entra antes. Se aplica al próximo play o al próximo enganche del Ensayo; queda guardado."
+                  >
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">Entrada</span>
+                    <input
+                      type="range"
+                      min="-100"
+                      max="100"
+                      step="5"
+                      value={labOffsetMs}
+                      onChange={(e) => setLabOffsetMs(parseInt(e.target.value, 10))}
+                      className="w-28 accent-cyan-400"
+                    />
+                    <span className="text-[10px] font-mono text-cyan-300 w-11 text-right">{labOffsetMs > 0 ? '+' : ''}{labOffsetMs}ms</span>
+                    {labOffsetMs !== 0 && (
+                      <button onClick={() => setLabOffsetMs(0)} className="text-[10px] text-gray-500 hover:text-white" title="Volver a 0">0</button>
+                    )}
+                  </div>
+                </>
+              )}
 
               <button
                 onClick={() => {
@@ -1181,6 +2539,13 @@ ${playlistEntries}
                       return t.duration_est ? `~${t.duration_est}m` : '—'
                     })()}</span>
 
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openCueEdit(t, 'in') }}
+                      className="flex-shrink-0 text-[9px] font-bold text-amber-300/80 hover:text-amber-200 border border-amber-500/30 hover:border-amber-400/60 rounded px-1.5 py-0.5 transition-all"
+                      title="Editor 0.0.0: marcar a mano el punto exacto de entrada (primer bombo) sobre la waveform — tu marca pisa al análisis"
+                    >
+                      0.0.0
+                    </button>
                     <button
                       onClick={() => removeFromSet(i)}
                       className="w-6 h-6 flex items-center justify-center rounded-full text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 active:scale-95 flex-shrink-0"
@@ -1564,23 +2929,260 @@ ${playlistEntries}
                 </>
               )}
             {exportTarget === 'lab' && (
-              <button
-                onClick={runLabTest}
-                disabled={exporting}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md transition-all active:scale-95 disabled:opacity-40"
-                title="Cargar los 2 temas de prueba, analizarlos con la IA y listos para reproducir"
-              >
-                {exporting ? (
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <span>🧪</span>
+              <>
+                <button
+                  onClick={runLabTest}
+                  disabled={exporting}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md transition-all active:scale-95 disabled:opacity-40"
+                  title="Cargar los 2 temas de prueba con sus markers de mezcla (mixIn/mixOut/BPM)"
+                >
+                  {exporting ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3h6M10 3v6.3L4.8 18a2 2 0 0 0 1.8 3h10.8a2 2 0 0 0 1.8-3L14 9.3V3" /></svg>
+                  )}
+                  Preparar Dual-Deck Automático
+                </button>
+                {setTracks.length >= 2 && !!trackAnalysis(setTracks[0]) && !!trackAnalysis(setTracks[1]) && (
+                  <>
+                    <button
+                      onClick={() => setLabOpts(o => ({ ...o, kickAnchor: !o.kickAnchor }))}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${labOpts.kickAnchor ? 'border-transparent text-emerald-400 bg-emerald-500/20' : 'bg-[var(--bg-input)] border-[var(--border-color)] text-gray-400 hover:text-white'}`}
+                      title="Corre el arranque de cada tema al ataque real del bombo (corrige el bias del ancla estadística; en este par son ~130ms). Aplica al próximo play."
+                    >
+                      Ancla bombo
+                    </button>
+                    {[
+                      { id: 'auto', label: 'Auto', tip: 'Elige la receta por datos: ΔBPM, calidad de grilla y largo del outro; el estándar (Corto 8c) es su fallback' },
+                      { id: 'short2', label: 'Corto 2c', tip: 'Mezcla de ~4-5 segundos: B entra sin graves 1 compás, entrega del bajo, A sale en 1 compás (default)' },
+                      { id: 'short8', label: 'Corto 8c', tip: 'Versión larga del clásico: B sin graves 4 compases, entrega del bajo en el 5, A sale 5-8' },
+                      { id: 'loop4', label: 'Loop 4b', tip: 'A queda girando en un loop de 4 beats clavado a grilla mientras B se instala' },
+                      { id: 'blend16', label: 'Blend 16c', tip: 'Blend largo progresivo, entrega del bajo en el compás 8' },
+                      { id: 'eqmix', label: 'EQ Mix', tip: 'Como Blend 16c pero B entra oscuro (lowpass) y se abre hasta la entrega' },
+                      { id: 'cut', label: 'Cut', tip: 'Corte en frase: B al palo, A muere en 1 beat' },
+                      { id: 'fade', label: 'Fade', tip: 'Crossfade parejo equal-power (referencia)' },
+                      { id: 'diag', label: 'Diag', tip: 'Diagnóstico: B entra fuerte y SIN filtro — los dos bombos juntos para escuchar el corrimiento. Aplica a toda la sesión (Ensayo incluido)' },
+                    ].map(r => (
+                      <button
+                        key={r.id}
+                        onClick={() => setLabRecipe(r.id)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${labRecipe === r.id ? 'border-transparent text-cyan-300 bg-cyan-500/20' : 'bg-[var(--bg-input)] border-[var(--border-color)] text-gray-400 hover:text-white'}`}
+                        title={`${r.tip}. Aplica al próximo play.`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                    <select
+                      value={labFx}
+                      onChange={(e) => setLabFx(e.target.value)}
+                      className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-purple-300"
+                      title="Banco de FX de transición — se cambia en vivo entre enganches del Ensayo; aplica al próximo"
+                    >
+                      <option value="directo">FX: Directo (debug — golpe desnudo)</option>
+                      <option value="low">FX: Low swap (clásico)</option>
+                      <option value="hp-suave">FX: Filtro HP suave</option>
+                      <option value="hp-agresivo">FX: Filtro HP agresivo</option>
+                      <option value="lp-suave">FX: Filtro LP (bajo el agua)</option>
+                      <option value="lp-reso">FX: Filtro LP resonante</option>
+                      <option value="cruzado">FX: Filtros cruzados</option>
+                      <option value="echo-slap">FX: Echo corto 1/2 beat</option>
+                      <option value="echo-dotted">FX: Echo 3/4 beat</option>
+                      <option value="echo-largo">FX: Echo 1 beat</option>
+                      <option value="echo-dark">FX: Echo oscuro (cola filtrada)</option>
+                      <option value="echo-space">FX: Echo 2 beats spacey</option>
+                      <option value="filtro+echo">FX: Filtro + Echo</option>
+                    </select>
+                    {setTracks.length >= 2 && (
+                      <>
+                        <button
+                          onClick={() => openCueEdit(setTracks[0], 'out')}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border bg-[var(--bg-input)] border-[var(--border-color)] text-amber-300 hover:text-amber-200 transition-all"
+                          title="Marcar a mano el punto de salida (mixOut) del primer tema sobre la waveform"
+                        >
+                          Cue fin A
+                        </button>
+                        <button
+                          onClick={() => openCueEdit(setTracks[1], 'in')}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border bg-[var(--bg-input)] border-[var(--border-color)] text-amber-300 hover:text-amber-200 transition-all"
+                          title="Marcar a mano el 0.0.0 (primer kick) del segundo tema sobre la waveform"
+                        >
+                          Cue inicio B
+                        </button>
+                        <button
+                          onClick={openAlignEdit}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-bold border bg-amber-500/20 border-amber-500/50 text-amber-300 transition-all active:scale-95"
+                          title="Ver las DOS waveforms alineadas en el punto de enganche y ajustar a mano"
+                        >
+                          Alinear waveforms
+                        </button>
+                      </>
+                    )}
+                    {labState === 'playing' ? (
+                      <>
+                        <button
+                          onClick={() => nudgeLab(-10)}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-input)] border border-[var(--border-color)] text-gray-300 hover:text-white transition-all active:scale-95"
+                          title="Atrasar el tema B 10ms (jog). Si nudgeando clava, ese es el error de ancla que queda."
+                        >
+                          -10ms
+                        </button>
+                        <button
+                          onClick={() => nudgeLab(10)}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-input)] border border-[var(--border-color)] text-gray-300 hover:text-white transition-all active:scale-95"
+                          title="Adelantar el tema B 10ms (jog)"
+                        >
+                          +10ms
+                        </button>
+                        <button
+                          onClick={stopLabTransition}
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-md transition-all active:scale-95"
+                          title="Detener la prueba de enganche"
+                        >
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1" /></svg>
+                          Detener prueba
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={playLabTransition}
+                        disabled={labState === 'loading'}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all active:scale-95 disabled:opacity-40"
+                        title="Web Audio dual-deck: A arranca en su outro y B entra clavado en grilla, mismo reloj de audio"
+                      >
+                        {labState === 'loading' ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                        )}
+                        {labState === 'loading' ? 'Decodificando...' : 'Probar enganche (Web Audio)'}
+                      </button>
+                    )}
+                  </>
                 )}
-                Preparar Dual-Deck Automático
-              </button>
+              </>
             )}
             </div>
           </div>
         </div>
+
+      {/* Alineador visual: outro de A + intro de B en la misma escala, línea
+          = instante del enganche; nudge en ms, audición del solape, guardar */}
+      {alignEdit && (
+        <div className="fixed inset-0 z-[130] bg-black/70 flex items-center justify-center p-4" onClick={() => { alignStop(); setAlignEdit(null) }}>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl shadow-2xl max-w-3xl w-full flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-[var(--border-color)]">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Alinear enganche — la línea roja es el instante donde entra B</div>
+            </div>
+            <div className="p-4">
+              {alignEdit.loading ? (
+                <div className="h-40 flex items-center justify-center text-sm text-gray-400">
+                  <div className="w-4 h-4 mr-2 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                  Decodificando los dos temas...
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-amber-300 truncate">{alignEdit.A.title || alignEdit.A.filename} — outro (mixOut {alignEdit.offA.toFixed(3)}s)</span>
+                    <div className="flex gap-1">
+                      {[-25, -5, 5, 25].map(ms => (
+                        <button key={`a${ms}`} onClick={() => setAlignEdit({ ...alignEdit, offA: Math.max(0, alignEdit.offA + ms / 1000) })} className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-input)] border border-[var(--border-color)] text-gray-300 hover:text-white">{ms > 0 ? `+${ms}` : ms}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <canvas ref={alignCanvasARef} width={720} height={80} className="w-full rounded-lg bg-black/40 mb-3" />
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-cyan-300 truncate">{alignEdit.B.title || alignEdit.B.filename} — intro (mixIn {alignEdit.offB.toFixed(3)}s)</span>
+                    <div className="flex gap-1">
+                      {[-25, -5, 5, 25].map(ms => (
+                        <button key={`b${ms}`} onClick={() => setAlignEdit({ ...alignEdit, offB: Math.max(0, alignEdit.offB + ms / 1000) })} className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-input)] border border-[var(--border-color)] text-gray-300 hover:text-white">{ms > 0 ? `+${ms}` : ms}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <canvas ref={alignCanvasBRef} width={720} height={80} className="w-full rounded-lg bg-black/40" />
+                  <div className="mt-3 flex items-center gap-2">
+                    <button onClick={alignAudition} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition-all" title="Escuchar el solape real desde 2s antes del enganche">
+                      Escuchar enganche
+                    </button>
+                    <button onClick={alignStop} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-input)] border border-[var(--border-color)] text-gray-300 hover:text-white transition-all">
+                      Parar
+                    </button>
+                    <div className="flex-1" />
+                    <button onClick={alignSave} className="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all">
+                      Guardar alineación
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Editor de cues sobre waveform: click = marker, ajuste fino, audición,
+          guardar (la marca manual PISA al análisis) */}
+      {cueEdit && (
+        <div className="fixed inset-0 z-[130] bg-black/70 flex items-center justify-center p-4" onClick={() => { try { cueAudRef.current?.stop() } catch { /* ok */ } setCueEdit(null) }}>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl shadow-2xl max-w-2xl w-full flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                  {cueEdit.which === 'in' ? 'Marcar 0.0.0 — inicio (primer kick)' : 'Marcar salida — mixOut (outro)'}
+                </div>
+                <div className="text-sm font-medium text-[var(--text-primary)] truncate">{cueEdit.track.title || cueEdit.track.filename}</div>
+              </div>
+              <span className="text-sm font-mono text-rose-400 whitespace-nowrap">{cueEdit.marker?.toFixed(3)}s</span>
+            </div>
+            <div className="p-4">
+              {cueEdit.loading ? (
+                <div className="h-24 flex items-center justify-center text-sm text-gray-400">
+                  <div className="w-4 h-4 mr-2 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                  Decodificando audio...
+                </div>
+              ) : (
+                <>
+                  <canvas
+                    ref={cueCanvasRef}
+                    width={640}
+                    height={96}
+                    className="w-full rounded-lg bg-black/40 cursor-crosshair"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const frac = (e.clientX - rect.left) / rect.width
+                      const [t0, t1] = cueEdit.win
+                      setCueEdit({ ...cueEdit, marker: t0 + frac * (t1 - t0) })
+                    }}
+                  />
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    {[-25, -5, 5, 25].map(ms => (
+                      <button
+                        key={ms}
+                        onClick={() => setCueEdit({ ...cueEdit, marker: Math.max(0, cueEdit.marker + ms / 1000) })}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-mono bg-[var(--bg-input)] border border-[var(--border-color)] text-gray-300 hover:text-white transition-all"
+                      >
+                        {ms > 0 ? `+${ms}` : ms}ms
+                      </button>
+                    ))}
+                    <button
+                      onClick={cueAudition}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition-all"
+                      title="Escuchar 2.5s desde el marker"
+                    >
+                      Escuchar
+                    </button>
+                    <div className="flex-1" />
+                    <button onClick={clearCue} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all" title="Borrar la marca manual y volver al análisis automático">
+                      Borrar marca
+                    </button>
+                    <button onClick={saveCue} className="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all">
+                      Guardar cue
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Right-click version-swap popover: other versions of the song with a
           play to preview + "Usar" to replace; footer removes from set or trashes. */}

@@ -8,8 +8,15 @@ import TrackThumb from '../components/ui/TrackThumb';
 import GenreCombo from '../components/ui/GenreCombo';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { API_BASE, agentFetch, agentUrl, formatSmallMeta, prettyMeta, normDupeKey, GENRE_COLORS, ScreenHint, useQS, IS_MOBILE_DEVICE, GenreCard } from '../App';
+import { API_BASE, agentFetch, agentUrl, formatSmallMeta, prettyMeta, normDupeKey, GENRE_COLORS, ScreenHint, useQS, IS_MOBILE_DEVICE, GenreCard, getCocina } from '../App';
 import { fsaBackend } from '../storage';
+
+// Dedup a nivel MÓDULO de los archivos que ya se mandaron a auto-clasificar:
+// sobrevive a los re-montajes del componente para que la IA no re-procese lo
+// mismo en loop. Se usaba en el efecto de auto-classify pero nunca se había
+// declarado → "ReferenceError: _autoClassifyAttempted is not defined" que
+// tumbaba la Biblioteca entera.
+const _autoClassifyAttempted = new Set();
 
 export default React.memo(forwardRef(function Library({ playingFile, onPlay, onPlayPause, onStop, onStartPreviewMode, previewMode, onStopPreviewMode, agentConnected, onRadio, authUser, collection }, ref) {
   const toast = useToast()
@@ -42,6 +49,26 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
   const [genreFilter, setGenreFilter] = useState([])
   const [deletingDupes, setDeletingDupes] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null) // { x, y, file }
+  // BPM confiable en todas las vistas: prioriza el BPM fino de la cocina
+  // (grilla sana q<=80) sobre el del manifest.
+  const [cocinaBpm, setCocinaBpm] = useState({})
+  useEffect(() => { getCocina().then(setCocinaBpm).catch(() => {}) }, [])
+  const bpmOf = (f) => {
+    const a = cocinaBpm[f?.filename]
+    if (a?.bpm && (a.grid?.quality == null || a.grid.quality <= 80)) return a.bpm
+    return f?.bpm || a?.bpm || null
+  }
+  // Visor del análisis de mezcla (la cocina): botón derecho -> Ver análisis
+  const [mixJson, setMixJson] = useState(null) // { title, data|null }
+  const showMixAnalysis = async (f) => {
+    setCtxMenu(null)
+    let data = null
+    try {
+      const r = await fetch('/mix-analysis.json')
+      if (r.ok) data = (await r.json())[f?.filename] || null
+    } catch { /* sin cocina */ }
+    setMixJson({ title: f?.title || f?.filename, data })
+  }
   // Ecosistema activo del recategorizador del menú contextual (la clínica):
   // arranca en el del tema y el toggle permite moverlo de ambiente en un click.
   const [ctxEco, setCtxEco] = useState('edm')
@@ -777,10 +804,27 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
         const ks = keep.size_mb || 0
         const identical = []
         const doubtful = []
+        // LOSSLESS vs LOSSY: un MP3 al lado de un FLAC/AIFF/WAV del MISMO tema
+        // (duración casi igual) es descarte OBVIO — antes caía en "dudoso" solo
+        // por tener otro formato y había que marcarlo a mano uno por uno.
+        const LOSSLESS = ['FLAC', 'WAV', 'AIFF', 'AIF']
+        const fmtOf = (x) => String(x.format || '').toUpperCase()
+        const isLossless = (x) => LOSSLESS.includes(fmtOf(x))
+        const durOf = (x) => x.duration_sec || x.duration || 0
+        const kd = durOf(keep)
+        // misma duración = mismo tema; distinta = otra versión (Extended vs
+        // Original) y ahí NO se toca: lo decide el usuario.
+        const sameDur = (d) => kd > 0 && durOf(d) > 0 && Math.abs(durOf(d) - kd) <= 3
+
         g.slice(1).forEach(d => {
-          const sameFmt = (d.format || '') === (keep.format || '')
+          const sameFmt = fmtOf(d) === fmtOf(keep)
           const closeSize = ks > 0 && Math.abs((d.size_mb || 0) - ks) / ks <= SIZE_TOL
-          if (sameFmt && closeSize) identical.push(d)
+          // 1) misma copia exacta   2) misma duración y calidad claramente peor
+          const copiaExacta = sameFmt && closeSize
+          const peorCalidad = sameDur(d) && isLossless(keep) && !isLossless(d)
+          // mismo formato lossy pero MUCHO más chico = bitrate bajo (128 vs 320)
+          const bitrateBajo = sameDur(d) && sameFmt && !isLossless(d) && ks > 0 && (d.size_mb || 0) < ks * 0.7
+          if (copiaExacta || peorCalidad || bitrateBajo) identical.push(d)
           else doubtful.push(d)
         })
         return { key: normDupe(keep.filename), keep, identical, doubtful, dupes: [...identical, ...doubtful] }
@@ -1441,6 +1485,21 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
                   </svg>
                   <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{group.keep.artist ? `${group.keep.artist} - ` : ''}{group.keep.title || group.keep.filename}</span>
                   <span className="text-xs text-gray-500 flex-shrink-0">{1 + group.dupes.length} versiones</span>
+                  {/* Descarte rápido de todo el grupo: para el dueño estas
+                      copias SON el mismo tema (aunque una diga "radio edit"),
+                      así que un click marca todas menos la mejor. */}
+                  <button
+                    onClick={() => setDupeRemove(prev => {
+                      const n = new Set(prev)
+                      const todas = group.dupes.every(d => n.has(d.filename))
+                      group.dupes.forEach(d => (todas ? n.delete(d.filename) : n.add(d.filename)))
+                      return n
+                    })}
+                    className="ml-auto flex-shrink-0 px-2 py-1 rounded-lg text-[11px] font-semibold bg-red-500/15 text-red-300 border border-red-500/40 hover:bg-red-500/25 transition-all active:scale-95"
+                    title="Marca TODAS las copias de este tema menos la mejor (volvé a tocar para desmarcar)"
+                  >
+                    Dejar solo la mejor
+                  </button>
                 </div>
                 {[group.keep, ...group.dupes].map((f, fi) => {
                   const isBest = fi === 0
@@ -1510,6 +1569,7 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
             <button onClick={() => toggleSort('title')} className={`flex-1 min-w-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'title' ? 'text-[var(--color-accent)]' : ''}`}>Título<SortArrow col="title" /></button>
             {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-left text-gray-600 normal-case">Filename</span>}
             <button onClick={() => toggleSort('genre')} className={`hidden md:block w-32 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'genre' ? 'text-[var(--color-accent)]' : ''}`}>Género<SortArrow col="genre" /></button>
+            <span className="hidden sm:block w-12 flex-shrink-0 text-center">BPM</span>
             <button onClick={() => toggleSort('key')} className={`hidden sm:block w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'key' ? 'text-[var(--color-accent)]' : ''}`}>Key<SortArrow col="key" /></button>
             {/* Columnas nuevas: el renglón 2 de la fila ("MB • hora • FLAC") era
                 confuso (la hora de DESCARGA parecía duración) — ahora son
@@ -1561,6 +1621,7 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
                   </div>
                   {showFilename && <span className="hidden sm:block flex-1 min-w-0 text-xs text-gray-600 truncate" title={f.filename}>{f.filename}</span>}
                   <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
+                  <span className="hidden sm:block w-12 flex-shrink-0 text-center text-xs font-mono text-emerald-400">{bpmOf(f) || '—'}</span>
                   <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
                   <span className="hidden md:block w-14 flex-shrink-0 text-center text-xs text-gray-500">{(f.format || f.filename?.split('.').pop() || '').toUpperCase()}</span>
                   <span className="hidden md:block w-14 flex-shrink-0 text-center text-xs text-gray-500 font-mono">{f.duration ? `${Math.floor(f.duration / 60)}:${String(Math.floor(f.duration % 60)).padStart(2, '0')}` : '—'}</span>
@@ -1654,6 +1715,7 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
             <button onClick={() => toggleSort('title')} className={`flex-1 min-w-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'title' ? 'text-[var(--color-accent)]' : ''}`}>Título<SortArrow col="title" /></button>
             <button onClick={() => toggleSort('artist')} className={`w-36 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'artist' ? 'text-[var(--color-accent)]' : ''}`}>Artista<SortArrow col="artist" /></button>
             <button onClick={() => toggleSort('genre')} className={`w-32 flex-shrink-0 text-left hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'genre' ? 'text-[var(--color-accent)]' : ''}`}>Género<SortArrow col="genre" /></button>
+            <span className="w-12 flex-shrink-0 text-center">BPM</span>
             <button onClick={() => toggleSort('key')} className={`w-14 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'key' ? 'text-[var(--color-accent)]' : ''}`}>Key<SortArrow col="key" /></button>
             <button onClick={() => toggleSort('rating')} className={`w-24 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'rating' ? 'text-[var(--color-accent)]' : ''}`}>Rating<SortArrow col="rating" /></button>
             <button onClick={() => toggleSort('date')} className={`w-20 flex-shrink-0 text-center hover:text-[var(--text-primary,white)] transition-colors ${sortCol === 'date' ? 'text-[var(--color-accent)]' : ''}`}>Added<SortArrow col="date" /></button>
@@ -1706,6 +1768,7 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
                       </div>
                       <span className="w-24 sm:w-36 flex-shrink-0 text-xs md:text-sm text-gray-400 truncate">{f.artist}</span>
                       <span title={f.genre_estimated ? 'Estimado por carpeta — falta clasificar con AI' : ''} className={`hidden md:block w-32 flex-shrink-0 text-xs truncate ${f.genre_estimated ? 'text-gray-600 italic' : 'text-gray-500'}`}>{f.genre || '-'}</span>
+                      <span className="hidden sm:block w-12 flex-shrink-0 text-center text-xs font-mono text-emerald-400">{bpmOf(f) || '—'}</span>
                       <span className={`hidden sm:block w-14 flex-shrink-0 text-center text-xs font-mono ${f.key ? 'text-amber-400' : 'text-gray-700'}`}>{f.key || '-'}</span>
                       <div className="hidden md:flex w-24 flex-shrink-0 justify-center" onClick={(e) => e.stopPropagation()}>
                         <StarRating rating={f.rating || 0} onRate={(r) => handleRate(f, r)} />
@@ -1761,6 +1824,26 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
       )}
 
       {/* Context menu for genre change */}
+      {mixJson && (
+        <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4" onClick={() => setMixJson(null)}>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl shadow-2xl max-w-lg w-full max-h-[75vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Análisis de mezcla (cocina)</div>
+                <div className="text-sm font-medium text-[var(--text-primary)] truncate">{mixJson.title}</div>
+              </div>
+              <button onClick={() => setMixJson(null)} className="text-gray-400 hover:text-white text-lg leading-none px-1">×</button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              {mixJson.data ? (
+                <pre className="text-[11px] leading-relaxed text-cyan-200/90 whitespace-pre-wrap font-mono">{JSON.stringify(mixJson.data, null, 2)}</pre>
+              ) : (
+                <div className="text-sm text-gray-400">Este tema todavía no está analizado — no está en la cocina (por ahora Melodic House + el par del lab).</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {ctxMenu && (<>
         {/* Backdrop: cierra al tocar fuera (oscurece en mobile) */}
         <div className="fixed inset-0 z-40 bg-black/50 md:bg-transparent animate-fade-in" onClick={() => setCtxMenu(null)} />
@@ -1863,6 +1946,16 @@ export default React.memo(forwardRef(function Library({ playingFile, onPlay, onP
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
               </svg>
               Abrir ubicación
+            </button>
+            <button
+              onClick={() => showMixAnalysis(ctxMenu.file)}
+              className="w-full text-left px-3 py-1.5 text-sm text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300 transition-colors flex items-center gap-2"
+              title="Ver el análisis de mezcla de la cocina: BPM fino, grilla, markers, calidad y corrección de ancla"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-2v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Ver análisis de mezcla
             </button>
             <button
               onClick={() => deleteFile(ctxMenu.file)}

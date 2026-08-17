@@ -284,3 +284,56 @@ input[type="color"]::-webkit-color-swatch {
 [data-theme="light"] .text-gray-300 { color: var(--text-secondary); }
 [data-theme="light"] .text-gray-400 { color: var(--text-muted); }
 [data-theme="light"] .text-gray-500 { color: var(--text-muted); }
+
+/* ---- Modo claro: superficies y acentos que faltaban --------------------
+   Todo lo de abajo son clases de Tailwind pensadas para fondo OSCURO que
+   sobre el marfil quedaban invisibles o manchaban: superficies blancas
+   translucidas (no se veian), negros translucidos (manchones), paneles y
+   bordes gris-700, y acentos -300/-400 sin contraste. */
+
+/* Superficies translucidas: en dark aclaran sobre negro; en light tienen que
+   OSCURECER sobre marfil, si no el panel/badge desaparece. */
+[data-theme="light"] .bg-white\/5  { background-color: rgba(22, 50, 79, 0.05); }
+[data-theme="light"] .bg-white\/10 { background-color: rgba(22, 50, 79, 0.08); }
+[data-theme="light"] .bg-white\/15 { background-color: rgba(22, 50, 79, 0.12); }
+[data-theme="light"] .bg-white\/20 { background-color: rgba(22, 50, 79, 0.15); }
+[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(22, 50, 79, 0.09); }
+[data-theme="light"] .hover\:bg-white\/20:hover { background-color: rgba(22, 50, 79, 0.14); }
+[data-theme="light"] .border-white\/10 { border-color: rgba(22, 50, 79, 0.12); }
+[data-theme="light"] .border-white\/25 { border-color: rgba(22, 50, 79, 0.22); }
+
+/* Negros translucidos (fondos de waveform, overlays de tarjetas): en light
+   van claros para no ensuciar el marfil. */
+[data-theme="light"] .bg-black\/20 { background-color: rgba(22, 50, 79, 0.06); }
+[data-theme="light"] .bg-black\/30 { background-color: rgba(22, 50, 79, 0.08); }
+[data-theme="light"] .bg-black\/40 { background-color: rgba(22, 50, 79, 0.10); }
+[data-theme="light"] .bg-black\/50 { background-color: rgba(22, 50, 79, 0.30); }
+[data-theme="light"] .bg-black\/60 { background-color: rgba(22, 50, 79, 0.38); }
+[data-theme="light"] .bg-black\/70 { background-color: rgba(22, 50, 79, 0.45); }
+
+/* Paneles y bordes gris oscuro -> superficies del tema */
+[data-theme="light"] .bg-gray-700 { background-color: var(--bg-genre-header); }
+[data-theme="light"] .bg-gray-800 { background-color: var(--bg-surface); }
+[data-theme="light"] .hover\:bg-gray-700:hover { background-color: var(--bg-hover); }
+[data-theme="light"] .border-gray-700 { border-color: var(--border-color); }
+[data-theme="light"] .border-gray-600 { border-color: var(--border-color); }
+
+/* Acentos claros -> tono con contraste sobre marfil (mismo criterio que los
+   verdes/rojos de arriba) */
+[data-theme="light"] .text-cyan-300 { color: #0e7490; }
+[data-theme="light"] .text-cyan-400 { color: #0891b2; }
+[data-theme="light"] .text-emerald-400 { color: #059669; }
+[data-theme="light"] .text-emerald-300 { color: #047857; }
+[data-theme="light"] .text-amber-300 { color: #b45309; }
+[data-theme="light"] .text-rose-400 { color: #e11d48; }
+[data-theme="light"] .text-indigo-400 { color: #4f46e5; }
+[data-theme="light"] .text-teal-400 { color: #0d9488; }
+[data-theme="light"] .text-gray-200 { color: var(--text-primary); }
+[data-theme="light"] .text-gray-600 { color: var(--text-muted); }
+[data-theme="light"] .text-gray-700 { color: var(--text-secondary); }
+
+/* Texto blanco: solo se corrige cuando NO esta sobre un boton de color
+   (los .btn-accent / bg-*-600 siguen con blanco, que ahi es correcto). */
+[data-theme="light"] .text-white:not([class*="bg-"]):not(.btn-accent) { color: var(--text-primary); }
+[data-theme="light"] .hover\:text-white:hover:not([class*="bg-"]) { color: var(--text-primary); }
+

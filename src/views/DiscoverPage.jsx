@@ -912,8 +912,9 @@ export default React.memo(function DiscoverPage({ wsRef, username, password, con
   }
 
   const searchAndDownload = (track) => {
-    // Discovery es un facilitador de ideas: al tocar Bajar, copia "Artista - Tema" al input
-    // de búsqueda, cambia a la pestaña Buscar y ejecuta la búsqueda manual inmediatamente.
+    // Discovery es un facilitador de ideas: al tocar Buscar, copia "Artista - Tema"
+    // al input de búsqueda y cambia a la pestaña Buscar. NO dispara la búsqueda:
+    // la ejecuta el dueño a mano (una búsqueda son ~20s de red).
     const query = `${track.artist || ''} ${track.title || ''}`.trim()
     if (!query) return
 
@@ -931,7 +932,7 @@ export default React.memo(function DiscoverPage({ wsRef, username, password, con
       }))
     }
 
-    toast(`🔍 Buscando "${query}"...`, 'info', 2500)
+    toast(`Tema cargado en el buscador: "${query}"`, 'info', 2500)
     if (onTriggerSearch) {
       onTriggerSearch(query)
     }
@@ -1063,6 +1064,24 @@ export default React.memo(function DiscoverPage({ wsRef, username, password, con
           {/* Category pills - single line with horizontal scroll */}
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full flex-nowrap">
             {discoverSource === 'beatport' ? (<>
+              {/* Listas de Spotify marcadas como EDM (ej. "Dance 2023"): antes
+                  la sección EDM solo mostraba géneros de Beatport, así que una
+                  playlist propia de dance no aparecía en ningún lado. */}
+              {spotifyCategories.filter(c => c.category === 'edm').map(cat => (
+                <button
+                  key={cat.key}
+                  onClick={() => { spotifyClicks.bump(cat.key); loadSpotifyPlaylist(cat) }}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                    selectedSpotifyCategory?.key === cat.key
+                      ? 'text-white ring-1 ring-white/40'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                  style={{ background: `${cat.color || '#1DB954'}33` }}
+                  title="Tu playlist de Spotify"
+                >
+                  {cat.name}
+                </button>
+              ))}
               <button
                 onClick={() => loadChart(null)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 active:scale-95 ${
@@ -1368,7 +1387,7 @@ export default React.memo(function DiscoverPage({ wsRef, username, password, con
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
                         <span className="hidden sm:inline md:hidden">A cola</span>
-                        <span className="hidden md:inline">Bajar</span>
+                        <span className="hidden md:inline">Buscar</span>
                       </button>
                     )
                     if (dl.status === 'searching') return (
@@ -1539,7 +1558,7 @@ export default React.memo(function DiscoverPage({ wsRef, username, password, con
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
-                            <span className="hidden sm:inline">Bajar</span>
+                            <span className="hidden sm:inline">Buscar</span>
                           </button>
                         )
                         if (dl.status === 'searching') return (

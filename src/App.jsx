@@ -8,7 +8,7 @@ import SkeletonRows from './components/ui/SkeletonRows';
 import StarFilterHover from './components/ui/StarFilterHover';
 import StarRating from './components/ui/StarRating';
 import TrackThumb from './components/ui/TrackThumb';
-import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, createContext, useContext } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo, useTransition, forwardRef, useImperativeHandle, createContext, useContext } from 'react'
 import { fsaBackend, makeStorage } from './storage'
 
 import { ToastProvider, useToast } from './contexts/ToastContext';
@@ -219,7 +219,10 @@ const TrackRow = React.memo(function TrackRow({ track, onCancel, onGoToLibrary }
          prev.track.progress === next.track.progress;
 });
 
-export const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.us-east4.run.app'
+// VITE_API_URL (env local) permite apuntar el front local al backend de Cloud
+// Run en vez del server local — sin eso, localhost siempre exige el 8899 vivo.
+export const API_BASE = import.meta.env?.VITE_API_URL
+  || ((typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) ? 'http://localhost:8899' : 'https://djfreeapp-api-730989854717.us-east4.run.app')
 
 // Stable per-browser device id + human label. Used para que el banner de
 // "temas en cola desde otros dispositivos" solo cuente los que realmente
@@ -312,6 +315,76 @@ async function createAudioElement(file, useAgent) {
   // Use Audio element directly — Chrome allows <audio> to load from localhost
   // even on HTTPS pages (unlike fetch which gets blocked by private network policy)
   return new Audio(url)
+}
+
+// Barra de búsqueda AISLADA: el texto vive acá adentro, no en App. Antes cada
+// tecla actualizaba el estado del componente raíz y re-renderizaba TODO
+// (biblioteca, resultados, set) + re-filtraba la lista entera de tracks → la
+// escritura se congelaba unos segundos. Ahora el padre se entera solo al
+// buscar (Enter o botón).
+const SlskSearchBar = React.memo(function SlskSearchBar({ initial = '', busy, onSearch, onClear }) {
+  const [q, setQ] = useState(initial)
+  // El estado local sirve para que tipear no re-renderice la app entera, pero
+  // hay que ESCUCHAR los cambios de afuera: Discovery manda el tema al
+  // buscador (setDlSearch) y sin esto el input se quedaba vacío ("no trae el
+  // tema al search"). useState(initial) solo corre en el primer montaje.
+  useEffect(() => { setQ(initial) }, [initial])
+  const submit = () => { const v = q.trim(); if (v && !busy) onSearch(v) }
+  return (
+    <>
+      <div className="relative flex-1">
+        <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-accent)] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') submit() }}
+          placeholder="Buscar artista, tema o álbum en SoulSeek (Ej: Daft Punk, Tech House 2026, Dua Lipa...)"
+          className="w-full pl-10 pr-10 py-2.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm font-medium text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] transition-all shadow-inner"
+        />
+        {q && (
+          <button
+            onClick={() => { setQ(''); onClear?.() }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      <button
+        onClick={submit}
+        disabled={!q.trim() || busy}
+        className="px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm text-white bg-[var(--color-accent)] hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2 flex-shrink-0 shadow-md"
+      >
+        {busy ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <span>Buscando...</span>
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span>Buscar</span>
+          </>
+        )}
+      </button>
+    </>
+  )
+})
+
+// Cocina (mix-analysis.json) compartida: waveform compacta + markers de mezcla
+// para que cualquier player los dibuje sin decodificar audio.
+let _cocinaCache = null
+export function getCocina() {
+  if (!_cocinaCache) {
+    _cocinaCache = fetch('/mix-analysis.json')
+      .then(r => (r.ok ? r.json() : {}))
+      .catch(() => ({}))
+  }
+  return _cocinaCache
 }
 
 // Detach handlers + pause + clear src so a stale audio element can't fire
@@ -622,13 +695,39 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
   // Reset to text mode whenever the track changes
   useEffect(() => { setWaveMode(false) }, [file?.filename])
 
+  const marksRef = useRef(null) // markers de mezcla de la cocina (mixIn/mixOut/candidatos)
+
   // Generate waveform from audio element using Web Audio API
   useEffect(() => {
-    if (!file) { waveformRef.current = null; return }
+    if (!file) { waveformRef.current = null; marksRef.current = null; return }
     const key = file.filename
     if (lastFileRef.current === key) return
     lastFileRef.current = key
     waveformRef.current = null
+    marksRef.current = null
+
+    // 1) Cocina primero: waveform compacta pre-analizada + markers — sirve
+    // para CUALQUIER origen (localhost incluido) y es instantánea.
+    getCocina().then(c => {
+      if (lastFileRef.current !== key) return
+      const entry = c[key]
+      if (entry?.wave?.length) {
+        const pk = new Float32Array(entry.wave.length)
+        for (let i = 0; i < entry.wave.length; i++) pk[i] = entry.wave[i] / 99
+        waveformRef.current = pk
+        // Los cues manuales del dueño (0.0.0 editado) pisan al análisis
+        let uc = null
+        try { uc = JSON.parse(localStorage.getItem('mix_user_cues') || '{}')[key] } catch { /* sin cues */ }
+        marksRef.current = {
+          mixIn: uc?.mixIn ?? entry.mix?.mixIn,
+          mixOut: uc?.mixOut ?? entry.mix?.mixOut,
+          cands: entry.mix?.outCandidates || [],
+          sections: entry.sections || [],
+          dur: entry.duration,
+        }
+        setWaveMode(true) // la pizarra se muestra sola cuando hay análisis
+      }
+    })
 
     if (!audio || !audio.src) return
 
@@ -724,6 +823,22 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
         ctx.fillRect(x, y, barW, barH)
       }
 
+      // Markers de la cocina: candidatos (rosa fino), mixIn (ámbar), mixOut (rojo)
+      const mk = marksRef.current
+      const durForMarks = (a && a.duration) || mk?.dur
+      if (mk && durForMarks) {
+        const line = (sec, color, wdt) => {
+          if (sec == null) return
+          const x = (sec / durForMarks) * w
+          ctx.fillStyle = color
+          ctx.fillRect(x - wdt / 2, 0, wdt, h)
+        }
+        for (const s of (mk.sections || [])) line(s[0], 'rgba(255,255,255,0.16)', 1)
+        for (const c of (mk.cands || [])) line(c, 'rgba(244,63,94,0.45)', 1)
+        line(mk.mixIn, '#fbbf24', 2)
+        line(mk.mixOut, '#f43f5e', 2)
+      }
+
       if (pct > 0) {
         const px = pct * w
         ctx.fillStyle = 'rgba(255,255,255,0.8)'
@@ -756,15 +871,17 @@ function AudioPlayerBar({ file, isPlaying, audio: audioProp, audioRef, onPlayPau
     const rect = e.currentTarget.getBoundingClientRect()
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const wasPlaying = !a.paused
+    a.__seekGuardUntil = Date.now() + 2000   // ver seekGuard en el motor de mezcla
     try {
       if (pct >= 0.98) {
         a.currentTime = Math.max(0, dur - 0.2)
       } else {
         a.currentTime = pct * dur
       }
-    } catch {}
+    } catch { /* stream sin seek */ }
     if (wasPlaying) {
-      a.play().catch(() => {})
+      const p = a.play()
+      if (p && p.catch) p.catch(() => {})
     }
   }
 
@@ -4679,6 +4796,23 @@ function App() {
   }, [authUser])
 
   const [page, setPage] = useQS('page', 'discover')
+  // NAVEGACIÓN CON FEEDBACK INMEDIATO: App es grande y todas las vistas están
+  // montadas, así que setPage() re-renderiza mucho y el click quedaba "muerto"
+  // 2-3s sin ninguna señal. Con useTransition el botón responde AL INSTANTE
+  // (isNavPending → pulso + skeleton) mientras React arma la pantalla nueva.
+  const [isNavPending, startNavTransition] = useTransition()
+  const [navTarget, setNavTarget] = useState(null)
+  // Vistas ya visitadas: se montan al primer uso y quedan montadas (no se
+  // pierde el estado al volver). Antes las 3 vistas grandes se montaban al
+  // arranque aunque nunca se abrieran — arranque lento y re-renders de más.
+  const [mountedPages, setMountedPages] = useState(() => new Set([page]))
+  const goPage = useCallback((p) => {
+    if (p === page) return
+    setNavTarget(p)
+    setMountedPages(prev => (prev.has(p) ? prev : new Set([...prev, p])))
+    startNavTransition(() => setPage(p))
+  }, [page, setPage])
+  useEffect(() => { if (!isNavPending) setNavTarget(null) }, [isNavPending])
   // When leaving Discover, strip its URL params (playlist/genre/label/chart)
   // so navegar a Biblioteca/Set no arrastra residuos del descubrimiento.
   useEffect(() => {
@@ -4697,6 +4831,19 @@ function App() {
   const [dlPanelOpen, setDlPanelOpen] = useState(false)
   const [logsExpanded, setLogsExpanded] = useState(false)
   const [pendingRadioTrack, setPendingRadioTrack] = useState(null)
+  // Callbacks ESTABLES para las vistas memoizadas: una función inline se
+  // re-crea en cada render y anula React.memo — la vista entera se re-renderiza
+  // aunque sus datos no hayan cambiado (era parte del delay entre clics).
+  const handleEditMix = useCallback((tracks) => { setMixTracks(tracks); goPage('mix') }, [goPage])
+  const handleGoToDownloads = useCallback(() => goPage('download'), [goPage])
+  const handleRadioConsumed = useCallback(() => setPendingRadioTrack(null), [])
+  // Callback ESTABLE para Library: pasarlo inline creaba una función nueva en
+  // cada render y anulaba su React.memo (la vista se re-renderizaba entera al
+  // tocar cualquier cosa de App).
+  const handleLibraryRadio = useCallback((file) => {
+    setPendingRadioTrack({ artist: file.artist || '', title: file.title || file.filename })
+    goPage('discover')
+  }, [goPage])
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [collection, setCollection] = useState(() => localStorage.getItem('collection') || 'edm')
   useEffect(() => { localStorage.setItem('collection', collection) }, [collection])
@@ -4744,6 +4891,8 @@ function App() {
   const agentFailRef = useRef(0)  // fallos consecutivos del polling — tolerar cold start de Cloud Run
   const [agentVersion, setAgentVersion] = useState('')
   const [agentHasSlsk, setAgentHasSlsk] = useState(false)
+  // Usuario para el que ya se escribió la config del agente (evita reescribirla en cada poll)
+  const agentConfiguredForRef = useRef(null)
   useEffect(() => {
     if (!authUser) return
     AGENT_USER = authUser.name
@@ -4759,7 +4908,14 @@ function App() {
         setAgentHasSlsk(!!status.slsk)
         // Expongo en window para debug (F12 → window.__agentDebug)
         window.__agentDebug = { connected: true, hasSlsk: !!status.slsk, version: status.version, mode }
-        await configFn()
+        // La config del agente se escribe SOLO si cambió el usuario vinculado.
+        // Antes se re-enviaba en cada poll (cada 15s, y duplicado por el doble
+        // chequeo local/proxy): escritura a disco del agente + log inundado de
+        // "Config saved" cada pocos segundos, sin que nada cambiara.
+        if (status.tunnel?.user !== authUser.name || agentConfiguredForRef.current !== authUser.name) {
+          agentConfiguredForRef.current = authUser.name
+          await configFn()
+        }
         return true
       }
       window.__agentDebug = { connected: false, reason: `status ${res.status}`, mode }
@@ -5123,9 +5279,13 @@ function App() {
       reconnectTimer.current = null
     }
 
-    const wsHost = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) ? 'localhost:8899' : 'djfreeapp-api-730989854717.us-east4.run.app'
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${wsHost}/ws`)
+    // El WS DEBE seguir al mismo backend que API_BASE. Antes tenía su propio
+    // check de hostname: en local pegaba al 8899 aunque la API apuntara a
+    // Cloud Run → la búsqueda (que viaja por WS) quedaba partida y "no
+    // buscaba nada".
+    const apiUrl = new URL(API_BASE, window.location.origin)
+    const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(`${protocol}//${apiUrl.host}/ws`)
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -5156,6 +5316,13 @@ function App() {
 
       if (data.type === 'tracks_parsed') {
         setTracks(data.tracks)
+        // El server solo PARSEA la lista; la búsqueda y descarga van por el
+        // agente (Cloud Run no puede abrir puertos SoulSeek — por eso existe
+        // el agente). Ver runBatchViaAgent.
+        if (pendingAgentBatchRef.current) {
+          pendingAgentBatchRef.current = false
+          runBatchViaAgentRef.current?.(data.tracks || [])
+        }
       }
 
       // Cross-device player sync: lo que esta sonando en OTRO device del
@@ -5821,11 +5988,84 @@ function App() {
     }
   }
 
+  // Batch de la lista de temas CORRIENDO EN EL AGENTE. El flujo viejo lo hacía
+  // el server (Cloud Run), que no puede abrir puertos SoulSeek → sus búsquedas
+  // vuelven vacías y la lista queda "buscando" para siempre. El agente sí ve
+  // la red (probado: 685 resultados/166 peers) y baja al disco local.
+  const pendingAgentBatchRef = useRef(false)
+  const runBatchViaAgentRef = useRef(null)
+  const agentBatchAbortRef = useRef(false)
+  const runBatchViaAgent = useCallback(async (list) => {
+    agentBatchAbortRef.current = false
+    const upd = (id, patch) => setTracks(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)))
+    const log = (m) => window.__addLog?.(m)
+    log(`[BATCH] ${list.length} temas — descarga por el AGENTE local`)
+    for (const t of list) {
+      if (agentBatchAbortRef.current) { log('[BATCH] detenido por el usuario'); break }
+      const q = `${t.artist || ''} ${t.title || ''}`.trim()
+      upd(t.id, { status: 'searching' })
+      log(`[BUSCANDO] ${q}`)
+      try {
+        const r = await agentFetch('slsk-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, query: q, wait: 20 }),
+        })
+        const data = await r.json()
+        const res = (data.results || [])
+        if (!res.length) {
+          log(`[SIN RESULTADOS] ${q}`)
+          upd(t.id, { status: 'not_found' })
+          continue
+        }
+        // Disponibilidad manda: primero slot libre y cola 0; FLAC solo desempata.
+        const ranked = [...res].sort((a, b) => {
+          const av = (a.free_slots ? 0 : 1) - (b.free_slots ? 0 : 1)
+          if (av) return av
+          const aq = (a.queue || 0) - (b.queue || 0)
+          if (aq) return aq
+          const fa = String(a.filename || '').toLowerCase().endsWith('.flac') ? 0 : 1
+          const fb = String(b.filename || '').toLowerCase().endsWith('.flac') ? 0 : 1
+          return fa - fb
+        })
+        const best = ranked[0]
+        log(`[ENCONTRADO] ${res.length} archivos · mejor: ${String(best.filename).slice(0, 45)} (peer ${best.username}, cola ${best.queue ?? 0})`)
+        upd(t.id, { status: 'downloading' })
+        await agentFetch('slsk-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username, password,
+            filename: best.filename,
+            sources: ranked.slice(0, 5),
+            callback_url: `${API_BASE}/api/agent-dl-callback`,
+            collection: collection || 'edm',
+          }),
+        })
+        log(`[BAJANDO] ${String(best.filename).slice(0, 50)}`)
+      } catch (e) {
+        log(`[ERROR] ${q}: ${e.message}`)
+        upd(t.id, { status: 'error' })
+      }
+    }
+    log('[BATCH] terminado')
+  }, [username, password, collection])
+  // El handler del WS es closure de la 1ra render: vía ref siempre corre la
+  // versión fresca (mismo patrón que handleAppPlayRef).
+  runBatchViaAgentRef.current = runBatchViaAgent
+
   const handleStart = () => {
     if (!wsRef.current || !inputText.trim() || !username || !password) return
     userSearchRef.current = false
     setSummary(null)
     setLogs([])
+    // Con agente disponible: parsear en el server (barato, no usa SoulSeek) y
+    // ejecutar el batch acá contra el agente.
+    if (agentConnected && agentHasSlsk) {
+      pendingAgentBatchRef.current = true
+      wsRef.current.send(JSON.stringify({ type: 'parse', tracks_text: inputText, genre }))
+      return
+    }
     wsRef.current.send(JSON.stringify({
       type: 'start',
       tracks_text: inputText,
@@ -5848,14 +6088,46 @@ function App() {
     setServerStatus('idle')
   }
 
-  const handleSearchSlsk = (overrideQuery) => {
+  const handleSearchSlsk = async (overrideQuery) => {
     const q = (typeof overrideQuery === 'string' ? overrideQuery : dlSearch).trim()
-    if (!wsRef.current || wsRef.current.readyState !== 1 || !q || !username || !password) return
+    if (!q || !username || !password) return
     userSearchRef.current = true
     searchReqIdRef.current = `${DEVICE?.id || 'dev'}-${Date.now()}`
     setSearchResults([])
     setSearchStatus('connecting')
     setSearchDlStatus({})
+
+    // TODO por el AGENTE: Cloud Run / Heroku no pueden abrir puertos SoulSeek
+    // (por eso existe el agente). Buscar desde el server devuelve listas
+    // vacías; el agente ve la red real desde la máquina del usuario.
+    if (agentConnected && agentHasSlsk) {
+      const t0 = Date.now()
+      window.__addLog?.(`[BUSCANDO] "${q}" por el agente local...`)
+      try {
+        const r = await agentFetch('slsk-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, query: q, wait: 20 }),
+        })
+        const data = await r.json()
+        const res = data.results || []
+        const peers = new Set(res.map(x => x.username)).size
+        const libres = res.filter(x => x.free_slots).length
+        window.__addLog?.(`[RESULTADOS] ${res.length} archivos de ${peers} peers en ${((Date.now() - t0) / 1000).toFixed(1)}s (${libres} con slot libre)`)
+        setSearchResults(res)
+        setSearchStatus('idle')
+        if (!res.length) toast('Sin resultados en SoulSeek para esa búsqueda', 'info', 3000)
+      } catch (e) {
+        window.__addLog?.(`[ERROR BUSQUEDA] ${e.message}`)
+        setSearchStatus('idle')
+        toast('Error buscando por el agente', 'error', 3000)
+      }
+      return
+    }
+
+    // Sin agente: camino viejo por el server (limitado, puede volver vacío)
+    if (!wsRef.current || wsRef.current.readyState !== 1) { setSearchStatus('idle'); return }
+    window.__addLog?.('[AVISO] Agente no disponible — busco por el server (resultados limitados)')
     wsRef.current.send(JSON.stringify({
       type: 'search_slsk',
       query: q,
@@ -6019,9 +6291,18 @@ function App() {
       const audio = await createAudioElement(file, agentConnected)
       audio.preload = 'auto'
       
-      // Beatmatching & Phase Alignment
-      if (file.mix && file.mix.mixIn) {
-        audio.currentTime = file.mix.mixIn
+      // Arranque en el mixIn del tema. Recién creado, el elemento no tiene
+      // metadata todavía (readyState 0) y un currentTime ahí se pierde — en
+      // ese caso el seek se difiere a loadedmetadata.
+      if (file.mix && file.mix.mixIn > 0) {
+        const seekTo = file.mix.mixIn
+        if (audio.readyState >= 1) {
+          audio.currentTime = seekTo
+        } else {
+          audio.addEventListener('loadedmetadata', () => {
+            try { audio.currentTime = seekTo } catch { /* stream sin seek */ }
+          }, { once: true })
+        }
       }
       
       // We need master BPM to sync speed. `nowPlaying` has the master track info if we are crossfading.
@@ -6045,6 +6326,22 @@ function App() {
             clearInterval(inFader)
             audio.volume = 1
             console.log('[CROSSFADE ENGINE] New audio fade in complete.')
+            // El sync de BPM solo hace falta durante el solape: terminado el
+            // fade, volver gradualmente (3s) al tempo nativo del tema.
+            const rampFrom = audio.playbackRate
+            if (rampFrom !== 1) {
+              const rampSteps = 60
+              let rs = 0
+              const ramp = setInterval(() => {
+                rs++
+                if (rs >= rampSteps || audio.paused) {
+                  clearInterval(ramp)
+                  audio.playbackRate = 1
+                } else {
+                  audio.playbackRate = rampFrom + (1 - rampFrom) * (rs / rampSteps)
+                }
+              }, 50)
+            }
           } else {
             audio.volume = Math.min(1, Math.sin(ratio * 0.5 * Math.PI))
           }
@@ -6071,7 +6368,12 @@ function App() {
           xfadeSec = file.mix.recommendedFade || 12
         }
         
-        if (audio.duration > 0 && audio.currentTime >= triggerTime && !audio.paused && !audio.seeking) {
+        // Un SEEK manual no debe disparar la mezcla: al adelantar más allá del
+        // mixOut se lanzaba el crossfade y mataba el audio en el mismo
+        // instante en que el seek pedía reproducir → "play() interrupted by
+        // pause()" y no se podía adelantar. 2s de gracia tras el salto.
+        const seekGuard = audio.__seekGuardUntil && Date.now() < audio.__seekGuardUntil
+        if (audio.duration > 0 && audio.currentTime >= triggerTime && !audio.paused && !audio.seeking && !seekGuard) {
           if (!audio.crossfadeTriggered) {
             audio.crossfadeTriggered = true
             console.log(`[CROSSFADE ENGINE] Trigger time reached (${triggerTime.toFixed(2)}s / ${audio.duration.toFixed(2)}s). Triggering crossfadeSec: ${xfadeSec}s`)
@@ -6261,24 +6563,39 @@ function App() {
     setPreviewLoading(filename)
     try {
       const clean = buildPreviewQuery(filename)
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(clean)}&media=music&limit=10`)
-      const data = await res.json()
-      // iTunes can return rows without a previewUrl — pick the first that has one.
-      const match = data.results?.find(r => r.previewUrl)
-      if (match) {
-        const audio = new Audio(match.previewUrl)
+      // CASCADA (la misma que la Biblioteca): SoundCloud primero — tiene los
+      // extended mixes / promos / bootlegs de SoulSeek y devuelve el tema
+      // largo; iTunes queda de respaldo (30s y muchas veces no lo tiene: los
+      // temas de DJ casi nunca están, por eso "ningún preview andaba").
+      const play = (src, meta) => {
+        const audio = new Audio(src)
         audio.preload = 'auto'
         audio.onended = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
-        audio.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
         audio.play().catch(() => {})
         audioRef.current = audio
         setPlayingFile(filename)
-        setNowPlaying({ filename, title: match.trackName || clean, artist: match.artistName || '', isPreview: true })
+        setNowPlaying({ filename, title: meta?.title || clean, artist: meta?.artist || '', isPreview: true })
         setIsAudioPlaying(true)
+        return audio
+      }
+
+      // iTunes PRIMERO: es una consulta directa y responde en ~200ms — es lo
+      // que siempre funcionó. SoundCloud queda de RESPALDO (el endpoint
+      // scrapea y tarda varios segundos): sirve para los extended mixes y
+      // bootlegs que iTunes no tiene, sin frenar el caso normal.
+      const itunes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(clean)}&media=music&limit=10`)
+        .then(r => r.json()).catch(() => null)
+      const match = itunes?.results?.find(r => r.previewUrl)
+      if (match) {
+        const a = play(match.previewUrl, { title: match.trackName, artist: match.artistName })
+        a.onerror = () => { setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false) }
       } else {
-        // No silent fail: the preview is an iTunes lookup, and bootlegs/edits
-        // often aren't there. Tell the user instead of looking frozen.
-        toast('Sin preview disponible — no está en iTunes (igual lo podés descargar)', 'info', 3500)
+        toast('No está en iTunes — probando SoundCloud...', 'info', 2500)
+        const a = play(`${API_BASE}/api/sc-audio?q=${encodeURIComponent(clean)}`, null)
+        a.onerror = () => {
+          setPlayingFile(null); setNowPlaying(null); setIsAudioPlaying(false)
+          toast('Sin preview en iTunes ni SoundCloud (igual lo podés descargar)', 'info', 3500)
+        }
       }
     } catch (e) {
       console.error('Preview error:', e)
@@ -6334,7 +6651,7 @@ function App() {
 
   const goToLibraryTrack = (filename) => {
     console.info('[goToLibraryTrack]', { filename, libraryReady: !!libraryRef.current })
-    setPage('library')
+    goPage('library')
     // Defer to next frame so Library is visible before applying the search.
     // Without this, the search filter can race with page switch on slow paths.
     requestAnimationFrame(() => {
@@ -7146,7 +7463,7 @@ function App() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              onClick={() => setPage('download')}
+              onClick={() => goPage('download')}
               className="px-3 py-1 rounded-full text-xs font-semibold bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:opacity-90 transition-all active:scale-95"
             >
               Ver y bajar
@@ -7298,10 +7615,10 @@ function App() {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setPage(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 ${
+                onClick={() => goPage(tab.id)}
+                className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 transition-all ${
                   page === tab.id ? 'btn-accent font-semibold' : 'btn-ghost'
-                }`}
+                } ${navTarget === tab.id ? 'opacity-70 animate-pulse ring-1 ring-[var(--color-accent)]' : ''}`}
               >
                 {tab.id === 'search' && (
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -7798,7 +8115,7 @@ function App() {
               ]).map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => { setPage(tab.id); setMobileMenuOpen(false) }}
+                  onClick={() => { goPage(tab.id); setMobileMenuOpen(false) }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                     page === tab.id ? 'bg-[var(--color-accent)] text-white font-semibold' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
@@ -7933,8 +8250,18 @@ function App() {
         </div>
       )}
 
+      {/* Skeleton de navegación: se ve APENAS tocás el menú, mientras React
+          arma la pantalla nueva (antes el click quedaba mudo 2-3s). */}
+      {isNavPending && (
+        <div className="flex-1 min-h-0 px-4 py-3">
+          <div className="h-6 w-40 mb-4 rounded bg-white/10 animate-pulse" />
+          <SkeletonRows rows={9} />
+        </div>
+      )}
+
       {/* Library - always mounted, hidden when not active */}
-      <div className={`flex-1 flex min-h-0 ${page !== 'library' ? 'hidden' : ''}`}>
+      {mountedPages.has('library') && (
+      <div className={`flex-1 flex min-h-0 ${page !== 'library' || isNavPending ? 'hidden' : ''}`}>
         <Library
           ref={libraryRef}
           playingFile={playingFile}
@@ -7945,57 +8272,25 @@ function App() {
           previewMode={previewMode}
           onStopPreviewMode={stopPreviewModeApp}
           agentConnected={agentConnected}
-          onRadio={(file) => { setPendingRadioTrack({ artist: file.artist || '', title: file.title || file.filename }); setPage('discover') }}
+          onRadio={handleLibraryRadio}
           authUser={authUser}
           collection={collection}
         />
       </div>
+      )}
 
       {/* Search / Download page */}
-      <div className={`flex-1 flex flex-col min-h-0 ${page !== 'download' && page !== 'search' ? 'hidden' : ''}`}>
+      <div className={`flex-1 flex flex-col min-h-0 ${page !== 'download' && page !== 'search' || isNavPending ? 'hidden' : ''}`}>
 
         {/* SoulSeek search bar - Modern & High Efficiency */}
         <div className="flex-shrink-0 flex flex-col gap-2 px-3 md:px-6 py-3 bg-[var(--bg-panel)] border-b border-[var(--border-color)] shadow-md">
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-accent)] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                value={dlSearch}
-                onChange={e => setDlSearch(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleSearchSlsk() }}
-                placeholder="Buscar artista, tema o álbum en SoulSeek (Ej: Daft Punk, Tech House 2026, Dua Lipa...)"
-                className="w-full pl-10 pr-10 py-2.5 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl text-sm font-medium text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] transition-all shadow-inner"
-              />
-              {dlSearch && (
-                <button
-                  onClick={() => { setDlSearch(''); setSearchResults(null); setSearchDlStatus({}) }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-            <button
-              onClick={handleSearchSlsk}
-              disabled={!dlSearch.trim() || searchStatus !== 'idle'}
-              className="px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm text-white bg-[var(--color-accent)] hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2 flex-shrink-0 shadow-md"
-            >
-              {searchStatus !== 'idle' ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Buscando...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <span>Buscar</span>
-                </>
-              )}
-            </button>
+            <SlskSearchBar
+              initial={dlSearch}
+              busy={searchStatus !== 'idle'}
+              onSearch={(q) => { setDlSearch(q); handleSearchSlsk(q) }}
+              onClear={() => { setDlSearch(''); setSearchResults(null); setSearchDlStatus({}) }}
+            />
             <button
               onClick={() => setDlPanelOpen(v => !v)}
               title="Pegar una lista de tracks (Beatport / Rekordbox)"
@@ -8286,7 +8581,11 @@ function App() {
 
           {/* Track list / Search results */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-            {searchResults !== null ? (
+            {/* La grilla de resultados NO se computa si la pantalla no está
+                visible: agrupar/ordenar cientos de resultados en cada render de
+                App era parte del delay entre clics del menú. Los datos siguen
+                en searchResults, así que al volver se re-arma al instante. */}
+            {searchResults !== null && (page === 'search' || page === 'download') ? (
               /* SoulSeek search results */
               searchResults.length === 0 && searchStatus !== 'idle' ? (
                 <div className="flex items-center justify-center h-full text-gray-500">
@@ -8828,19 +9127,22 @@ function App() {
       </div>
 
       {/* Set Builder page */}
-      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={(tracks) => { setMixTracks(tracks); setPage('mix') }} authUser={authUser} collection={collection} onGoToLibrary={goToLibraryTrack} playNextRef={playNextRef} libraryRoot={libraryRoot} />
+      {(mountedPages.has('set') || mountedPages.has('mix')) && (
+      <SetBuilder page={page} playingFile={playingFile} onPlay={handleAppPlay} onPlayPause={handleAppPlayPause} onStop={handleAppStop} agentConnected={agentConnected} onEditMix={handleEditMix} authUser={authUser} collection={collection} onGoToLibrary={goToLibraryTrack} playNextRef={playNextRef} libraryRoot={libraryRoot} />
+      )}
 
       {/* Mix Editor page */}
       {page === 'mix' && (
         <MixEditor
           tracks={mixTracks || []}
-          onBack={() => setPage('set')}
+          onBack={() => goPage('set')}
           agentConnected={agentConnected}
         />
       )}
 
       {/* Discover page */}
-      <div className={`flex-1 flex flex-col min-h-0 ${page !== 'discover' ? 'hidden' : ''}`}>
+      {mountedPages.has('discover') && (
+      <div className={`flex-1 flex flex-col min-h-0 ${page !== 'discover' || isNavPending ? 'hidden' : ''}`}>
         <ScreenHint id="discover" title="Descubrí música nueva" tips={[
           { icon: '🔍', text: <>Top 100 de <strong>Beatport</strong> + playlists curadas de <strong>Spotify</strong>. Filtrá por género en las pills de arriba.</> },
           { icon: '▶️', text: <>Click en cualquier track para preview 30s desde iTunes/Beatport — sin descarga.</> },
@@ -8853,7 +9155,7 @@ function App() {
           username={username}
           password={password}
           connected={connected}
-          onGoToDownloads={() => setPage('download')}
+          onGoToDownloads={handleGoToDownloads}
           audioRef={audioRef}
           autoplayCancelRef={autoplayCancelRef}
           playingFile={playingFile}
@@ -8865,7 +9167,7 @@ function App() {
           toggleFavorite={toggleFavorite}
           isGuest={isGuest}
           pendingRadioTrack={pendingRadioTrack}
-          onRadioConsumed={() => setPendingRadioTrack(null)}
+          onRadioConsumed={handleRadioConsumed}
           agentConnected={agentConnected}
           agentHasSlsk={agentHasSlsk}
           downloadMode={downloadMode}
@@ -8877,14 +9179,17 @@ function App() {
           discoverRemoteRef={discoverRemoteRef}
           outputDeviceName={(devices.find(d => d.id === playingDeviceId)?.name) || 'otro equipo'}
           onTriggerSearch={(query) => {
+            // Discovery dispara la búsqueda DIRECTO: llevar el tema al
+            // buscador y obligar a un segundo click era un paso al pedo.
             setDlSearch(query)
             setSearchResults(null)
             setActiveTab('all')
-            setPage('search')
+            goPage('search')
             handleSearchSlsk(query)
           }}
         />
       </div>
+      )}
 
       {/* Preview mode indicator */}
       {previewMode && (
@@ -8956,7 +9261,7 @@ function App() {
         onStop={handleAppStop}
         onRadio={(f) => {
           setPendingRadioTrack({ artist: f.artist || '', title: f.title || f.filename })
-          setPage('discover')
+          goPage('discover')
         }}
         agentConnected={agentConnected}
         crossfadeState={crossfadeState}

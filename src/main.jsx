@@ -14,12 +14,13 @@ const ownerSession = localStorage.getItem('gsync_maint_bypass') === '1' && !!loc
 const params = new URLSearchParams(window.location.search)
 const publicPath = window.location.pathname.startsWith('/s/') || params.has('k') || params.has('demorec')
 
-if (!ownerSession && !publicPath) {
-  window.location.replace('/maintenance.html')
-} else {
-  createRoot(document.getElementById('root')).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  )
-}
+// APP ABIERTA (2026-08-17): se saca la puerta de mantenimiento — la app
+// muestra su pantalla de login normal y entra quien tenga usuario. El acceso
+// lo controla el server (usuarios en Cloudinary), no un redirect del front.
+// El bypass del dueño (?k= / maintenance.html) sigue funcionando por si se
+// quiere volver a cerrar: alcanza con restaurar el redirect de abajo.
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
