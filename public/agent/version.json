@@ -1,6 +1,6 @@
 {
-  "version": "2.12.310",
-  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.310/GrooveSyncAgent.exe",
-  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.310/GrooveSyncAgent-macOS.dmg",
-  "notes": "v2.12.310: reglas configurables afuera + escalera agnostica + analisis obligatorio"
+  "version": "2.12.312",
+  "windows_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.312/GrooveSyncAgent.exe",
+  "macos_url": "https://github.com/arenazl/slsk-agent/releases/download/v2.12.312/GrooveSyncAgent-macOS.dmg",
+  "notes": "v2.12.312: escalera con artista/titulo separados + update que no deja el agente muerto + reglas afuera"
 }
